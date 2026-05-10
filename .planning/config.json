@@ -1,0 +1,11 @@
+{
+  "project_code": "ENG",
+  "commit_docs": true,
+  "branching_strategy": "none",
+  "workflow": {
+    "discuss_mode": "discuss",
+    "mvp_mode": false,
+    "post_planning_gaps": true,
+    "context_coverage_gate": true
+  }
+}
