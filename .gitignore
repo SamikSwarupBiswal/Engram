@@ -1,0 +1,14 @@
+.engram/
+.vs/
+bin/
+obj/
+TestResults/
+.planning/tmp/
+.planning/cache/
+.planning/worktrees/
+.cache/
+dist/
+coverage/
+*.user
+*.suo
+*.log
