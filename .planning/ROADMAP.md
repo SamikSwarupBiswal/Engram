@@ -14,18 +14,22 @@ Engram will be built as a Windows-first local semantic operating layer before ex
 - Integer phases (1, 2, 3): Planned milestone work.
 - Decimal phases (2.1, 2.2): Urgent insertions, if needed later.
 
-- [ ] **Phase 1: Repository and Runtime Foundation** - .NET solution skeleton plus `.engram` initializer and append-only raw event ledger.
-- [ ] **Phase 2: Immutable Raw Event Store** - Hardens raw event storage, replay, idempotency, and event processing boundaries.
-- [ ] **Phase 3: Local Ingestion MVP** - Adds low-risk local capture sources with consent, exclusions, and provider interfaces.
-- [ ] **Phase 4: Markdown Wiki Memory** - Metabolizes raw events into source-linked Markdown wiki nodes and an index.
-- [ ] **Phase 5: Local Search and Briefs** - Adds local semantic search, tray status, and morning/evening briefs.
-- [ ] **Phase 6: Identity Hardening** - Adds Discovery SOP and identity-policy gating for interventions.
-- [ ] **Phase 7: Salience and Drift Engine** - Adds salience decay, archival, and contradiction alerts.
-- [ ] **Phase 8: Cloud Reasoning and Tier Routing** - Adds audited Pro reasoning, local filtering, and cost controls.
-- [ ] **Phase 9: Google Workspace Metadata Ingestion** - Adds explicit Gmail, Calendar, and Drive metadata connectors.
-- [ ] **Phase 10: Agentic Research Workflow** - Adds browser-backed research runs with cited wiki summaries.
-- [ ] **Phase 11: Computer-Use Automation** - Adds controlled Windows automation with previews, approvals, and logs.
-- [ ] **Phase 12: Encryption, Sync, and Production Hardening** - Adds encryption, sync, export/delete, installer, and performance gates.
+**Tier Mapping:**
+- Phases 1-7: FREE TIER (local-only, $0/mo, no cloud required)
+- Phases 8-12: PRO TIER (cloud-enhanced, $20-$30/mo, managed credit pooling)
+
+- [ ] **Phase 1: Repository and Runtime Foundation** [FREE] - .NET solution skeleton plus `.engram` initializer and append-only raw event ledger.
+- [ ] **Phase 2: Immutable Raw Event Store** [FREE] - Hardens raw event storage, replay, idempotency, and event processing boundaries.
+- [ ] **Phase 3: Local Ingestion MVP** [FREE] - Adds low-risk local capture sources with consent, exclusions, and provider interfaces.
+- [ ] **Phase 4: Markdown Wiki Memory** [FREE] - Metabolizes raw events into source-linked Markdown wiki nodes and an index.
+- [ ] **Phase 5: Local Search and Briefs** [FREE] - Adds local semantic search, tray status, and morning/evening briefs.
+- [ ] **Phase 6: Identity Hardening** [FREE] - Adds Discovery SOP and identity-policy gating for interventions.
+- [ ] **Phase 7: Salience and Drift Engine** [FREE] - Adds salience decay, archival, and contradiction alerts.
+- [ ] **Phase 8: Cloud Reasoning and Tier Routing** [PRO] - Adds audited Pro reasoning, local filtering, and cost controls.
+- [ ] **Phase 9: Google Workspace Metadata Ingestion** [PRO] - Adds explicit Gmail, Calendar, and Drive metadata connectors.
+- [ ] **Phase 10: Agentic Research Workflow** [PRO] - Adds browser-backed research runs with cited wiki summaries.
+- [ ] **Phase 11: Computer-Use Automation** [PRO] - Adds controlled Windows automation with previews, approvals, and logs.
+- [ ] **Phase 12: Encryption, Sync, and Production Hardening** [PRO] - Adds encryption, sync, export/delete, installer, and performance gates.
 
 ## Phase Details
 
