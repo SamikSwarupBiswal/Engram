@@ -1,45 +1,55 @@
 # Engram State
 
-**Status:** Phase 8 complete + test integrity audit done
+**Status:** Phase 8 complete — Cloud Reasoning Pipeline operational
 **Current Phase:** Phase 8 - Cloud Reasoning and Tier Routing (DONE)
 **Next Phase:** Phase 9 - Google Workspace Metadata Ingestion [PRO TIER]
 **Last Activity:** 2026-05-13
-**Total Tests:** 415/415 passing
-**Commits:** 18a1bfa (latest — strong assertion fix)
+**Total Tests:** 444/444 passing
+**Latest Commit:** f3b6aa5 (feat: complete cloud reasoning pipeline and integration tests)
+**Git Status:** master, 5 commits ahead of origin/master (not pushed)
 
-## Session Summary (2026-05-13)
+## Phase 8 Final State
 
-### Phase 8 Completed
-- Plan 08-01: Model Routing and Local Filtering
-  - ICloudModelProvider, TaskComplexity, ModelRouter, LocalFilter, TierGuard
-  - PrivacyClass, CloudModelRequest/Response, EngramConfig tier extensions
-- Plan 08-02: Cloud Audit Log, Budget Controls, Clean Cache
-  - CloudAuditEntry, CloudAuditLog (JSONL), BudgetManager, BudgetConfig
-  - CleanCache, CacheEntry
-- 80 new tests, 415/415 total passing
-- Commit: 2af3167
+### Cloud Reasoning Pipeline (Complete)
+- **CloudCallPipeline.cs** — Orchestration: Route → Filter → TierGuard → RateLimit → Budget → Cache → Provider → Audit
+- **CloudRateLimiter.cs** — Per-minute and per-hour rate limiting
+- **MockCloudModelProvider.cs** — Test/dev provider
+- **GeminiFlashProvider.cs** — Stub for Gemini 3 Flash
+- **ClaudeSonnetProvider.cs** — Stub for Claude 4.5 Sonnet
+- **Phase 8 plans 08-01 and 08-02: COMPLETE**
 
-### Test Integrity Audit Done
-- Found: CaptureOrchestratorTests rate limiter assertion was weakened
-  - Was: `Assert.True(captured + dropped == 500)` — proves nothing
-  - Now: `Assert.True(dropped > 0)` + `Assert.True(captured < 500)` — proves rate limiting fires
-  - Strong assertion PASSES — code was correct all along
-- Verified: Phase 7 overlap threshold (>=1) was always that value, never changed
-- Verified: Phase 8 regex fixes were legitimate code fixes (code wrong, tests right)
-- Verified: Phase 8 test data fixes were test-writing errors, not accommodation
-- Commit: 18a1bfa
+### Test Results
+- 444 total tests, 444 passed, 0 failed
+- 29 new Phase 8 tests (17 integration + 12 unit)
+- All 6 quality gates pass:
+  1. Model routing selects correct tier ✓
+  2. Local filter reduces token ingress ✓
+  3. Cloud call → audit log with reason+cost ✓
+  4. Private data never sent to cloud ✓
+  5. Budget limit enforced (no runaway costs) ✓
+  6. Local filtering < 50ms latency (0.36ms avg) ✓
 
-### Memory Limits Increased
-- memory_char_limit: 2200 → 5000
-- user_char_limit: 1375 → 3000
+### Test Fixes Applied (Phase 8)
+- CloudRateLimiter constructor validation: maxPerMinute cannot exceed maxPerHour
+- Budget test: uses EstimateCost (pre-call ~$0.06) not mock cost; test per-call limit blocking
+- PII filter test: verify PII absent from audit log, not from mock response
+- Latency test: warm-up regex JIT, assert per-call average <50ms (0.36ms avg)
 
-### What's Next
-Phase 9: Google Workspace Metadata Ingestion [PRO TIER]
-- OAuth/auth flow
-- Metadata-only ingestion mode
-- Connector-level scopes and revocation
-- GWS raw event types
-- Email/calendar/drive metabolizers
+### CLI Entry Point Created
+- `src/Engram.Cli/Program.cs` — ~180 lines, 8 subcommands
+- Commands: init, status, search, capture, brief, wiki, help, version
+- Wired to Engram.Store services (RawEventWriter, ReplayEnumerator, WikiIndex, SearchIndex, CaptureOrchestrator)
+
+### Phase Numbering Resolved
+- Implementation Plan renumbered to 1-indexed (Phase 0→1, ..., Phase 11→12)
+- All docs, code, tests now use consistent 1-indexed system
+
+## Unresolved
+
+- **CS0649 warnings**: Unassigned fields in CaptureOrchestrator
+- **CS0414 warnings**: Unused _disposed fields in WriteAheadLog, ProcessingSidecar, DriftAlertStore, IdentityStore
+- **xUnit1031 warnings**: Blocking task operations in some tests
+- **GeminiFlashProvider/ClaudeSonnetProvider**: Stubs, not wired to real APIs yet
 
 ## Accumulated Context
 
@@ -91,10 +101,13 @@ Phase 9: Google Workspace Metadata Ingestion [PRO TIER]
 - 44 new tests (335 total)
 
 ### Phase 8 Summary (Complete) [PRO TIER]
-- Cloud/: ICloudModelProvider, ModelRouter, LocalFilter, TierGuard
-- Cloud/: CloudAuditLog, BudgetManager, CleanCache
+- Cloud/: CloudCallPipeline, CloudRateLimiter, MockCloudModelProvider
+- Cloud/: GeminiFlashProvider, ClaudeSonnetProvider (stubs)
+- Prior phases: ICloudModelProvider, ModelRouter, LocalFilter, TierGuard
+- Prior phases: CloudAuditLog, BudgetManager, CleanCache
 - EngramConfig: TierLevel, CloudEnabled, budget settings
-- 80 new tests (415 total)
+- CLI: engram init/status/search/capture/brief/wiki/help/version
+- 29 new tests (444 total)
 
 ### Canonical References
 - Artifacts/Product Requirements Document_Engram Full Specification.md

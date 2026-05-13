@@ -5,6 +5,28 @@
 Engram ships in two tiers. All code we build must work for BOTH tiers —
 the free tier uses the same codebase, just without cloud features enabled.
 
+## Onboarding Flow
+
+1. User downloads Engram installer (Windows .exe/.msi)
+2. Installer installs: Engram application + local SLM (Phi-4 via Windows Copilot Runtime)
+3. First launch → Discovery Skill activates
+   - 15-minute AI-guided interview
+   - Topics: anti-goals, comfort triggers, recurring anxieties
+   - Output: `user.md` (identity profile stored in `.engram/`)
+4. Engram enters Free tier by default
+5. Conversational GUI available immediately — user can start chatting
+6. Pro upgrade available in-app ($20-30/mo, 1 month activates instantly)
+
+## Conversational Interface
+
+Engram provides a ChatGPT-like GUI on top of its backend:
+
+- **Chat window**: Natural language queries ("What did we discuss?", "Summarize my week")
+- **Streaming responses**: Token-by-token via SLM (local) or cloud VLM (Pro)
+- **Sidebar**: Search, timeline, wiki navigation
+- **Backend**: Same Engram.Store services used by CLI — no code duplication
+- **Architecture**: GUI → API server → Engram.Store (interface-based, decoupled)
+
 ## Free Tier (The Local Hub) — $0/mo
 
 Everything runs locally on the user's NPU/CPU. No API keys, no cloud, no payment.
@@ -15,12 +37,16 @@ Everything runs locally on the user's NPU/CPU. No API keys, no cloud, no payment
 - Local file/clipboard/active-window capture
 - Local semantic search (Alt+Space)
 - Morning/evening briefs
-- Identity hardening (Discovery SOP)
+- Identity hardening (Discovery SOP → user.md)
 - Salience decay + drift detection
+- Conversational GUI (local SLM)
 
 ### Intelligence:
 - Windows Copilot Runtime (local SLM)
-- Phi-4 for local reasoning
+- **Tiered local inference (optimized for low-spec hardware):**
+  - Embeddings (always on): all-MiniLM-L6-v2 (~80MB, semantic search)
+  - Task SLM (on demand): Qwen2.5 0.5B (~0.5GB, classification/routing)
+  - Reasoning SLM (on demand): Phi-4-mini (~2.5GB, summarization/QA)
 - No cloud model calls
 
 ### Sensing:
@@ -43,6 +69,7 @@ Everything runs locally on the user's NPU/CPU. No API keys, no cloud, no payment
 ### Revenue Path:
 - Energy Units: 3 free Pro trials per week
 - Conversion funnel to Pro tier
+- In-app upgrade prompt after Energy Units consumed
 
 ## Pro Tier — $20-$30/mo
 
@@ -53,7 +80,9 @@ Cloud-enhanced intelligence with managed API keys. No user-provided keys.
 - Google Workspace metadata ingestion
 - Agentic research (browser automation)
 - Computer-use automation
-- Encrypted cloud sync
+- Encrypted cloud sync + multi-device continuity
+- Deep reasoning and conflict analysis
+- Multi-tab synthesis and structured reports
 
 ### Intelligence:
 - Hybrid: local SLM + cloud VLM
@@ -66,23 +95,44 @@ Cloud-enhanced intelligence with managed API keys. No user-provided keys.
 - + Gmail metadata (subjects, senders, dates)
 - + Calendar metadata (events, attendees)
 - + Drive metadata (file names, sharing)
+- + Microsoft 365 metadata (future)
 
 ### Research:
 - Multi-tab autonomous browsing via Playwright
 - Source collection + quality filtering
 - Cited wiki summaries
 - Side-by-side layout
+- Structured reports with citations
 
 ### Automation:
 - Read-only Windows automation first
 - Write/action automation with approval gates
 - Every action logged with timestamp + target + rationale
+- Full "Computer Use" capability
 
 ### Memory:
 - Everything in Free tier
 - + Encrypted cloud sync
 - + Multi-device continuity
 - + Shared clean cache for common research
+
+### Interventions:
+- Predictive pattern analysis
+- Proactive resolutions (not just alerts)
+- Conflict detection across data sources
+
+## Side-by-Side Comparison
+
+| Feature Domain | Free Tier (The Local Hub) | Pro Tier ($20-$30/mo) |
+|---|---|---|
+| Intelligence Model | 100% Local SLM (Phi-4/Copilot Runtime) | Hybrid SLM + Cloud VLM (Claude/Gemini) |
+| Primary Logic | Local Perception & Search | Deep Reasoning & Conflict Analysis |
+| Sensing Capabilities | Local OCR & File Watching | GWS/365 Metadata Cloud Ingestion |
+| Research Power | Search Links (Manual Research) | Multi-tab Synthesis & Structured Reports |
+| Automation | None (Read-only observation) | Full "Computer Use" & Executive Action |
+| Memory Sync | Single Device (Local) | Encrypted Cloud Sync & Multi-Device Continuity |
+| Interventions | Local Drift Alerts & Notifications | Predictive Pattern Analysis & Resolutions |
+| Cost Basis | $0 / mo (Runs on User NPU) | Managed Credit Pooling (Managed API) |
 
 ## Cost Management (Managed Credit Pooling)
 
@@ -96,16 +146,31 @@ Users NEVER provide API keys. Engram manages a credit pool.
 | Computer-use automation | Claude 4.5 Sonnet | ~$3/M input |
 
 ### Cost Reduction Strategies:
-1. Local filtering: SLM pre-processes screenshots, sends only
-   UI state changes to cloud (90% token reduction)
-2. Semantic caching: common research topics cached in CleanCache
-3. Batch processing: group similar queries
-4. Rate limiting: per-user budget caps
+1. **Local filtering**: SLM pre-processes screenshots, sends only UI state changes to cloud (85-90% token reduction)
+2. **Semantic caching**: common research topics cached in CleanCache globally
+3. **Batch processing**: group similar queries
+4. **Rate limiting**: per-user budget caps
+5. **Model routing**: Gemini for 90% routine, Claude only for complex tasks
 
 ### Revenue Model:
 - Pro tier: $20-$30/mo subscription
 - Energy Units: free users get 3/week Pro trials
 - Managed credit pooling: Engram buys API credits in bulk
+- No user API keys → lower adoption barrier
+
+## Energy Units System
+
+Free tier users receive 3 Energy Units per week.
+
+### What an Energy Unit Does:
+- 1 Energy Unit = 1 Pro-level action (deep research, complex QA, automation preview)
+- Enough to demonstrate Pro value without replacing subscription
+- Resets every Monday at 00:00 local time
+
+### Conversion Funnel:
+- User consumes Energy Units → experiences Pro quality
+- After units exhausted → "Upgrade to Pro for unlimited access"
+- In-app purchase flow → 1 month Pro activates instantly
 
 ## Architecture Requirements
 
@@ -127,6 +192,13 @@ Users NEVER provide API keys. Engram manages a credit pool.
 - Cloud calls: audited with reason, provider, payload summary, cost
 - Private data requires explicit policy approval
 - User can disable cloud features and stay on free tier forever
+
+### Installer Requirements:
+- Windows .exe/.msi installer
+- Bundles: Engram app + local SLM models + Windows Copilot Runtime integration
+- SLM models downloaded/cached on first install (~3GB total)
+- No internet required for Free tier after install
+- Pro tier activation requires internet (subscription validation)
 
 ## Phase-to-Tier Mapping
 
@@ -153,3 +225,5 @@ Users NEVER provide API keys. Engram manages a credit pool.
 - User MUST be able to disable all cloud features
 - No raw private data sent to cloud without explicit approval
 - Managed credit pooling — no user API keys ever
+- SLM must run on low-spec hardware (4GB RAM minimum)
+- Discovery Skill interview must complete before first use

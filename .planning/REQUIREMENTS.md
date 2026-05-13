@@ -26,6 +26,13 @@
 - [ ] **REQ-022** Implement agentic research workflow with Playwright, multi-tab source collection, cited wiki summaries, and resumable run logs. Phase: 10.
 - [ ] **REQ-023** Implement computer-use automation under strict permission, preview, approval, and action logging rules. Phase: 11.
 - [ ] **REQ-024** Add AES-256 local encryption, key management, export/delete flows, encrypted sync, installer, and production performance checks. Phase: 12.
+- [ ] **REQ-025** Implement Windows installer (.exe/.msi) that bundles Engram application, local SLM models, and Windows Copilot Runtime integration. Phase: 12.
+- [ ] **REQ-026** Implement Discovery Skill interview (15-minute AI-guided SOP) that captures anti-goals, comfort triggers, and recurring anxieties into `user.md`. Phase: 6.
+- [ ] **REQ-027** Integrate local SLM inference via tiered model strategy: embeddings (always on), task SLM (on demand), reasoning SLM (on demand). Must run on 4GB RAM minimum. Phase: 7.
+- [ ] **REQ-028** Implement conversational GUI with chat window, streaming responses, sidebar navigation, backed by API server over Engram.Store services. Phase: 5.
+- [ ] **REQ-029** Implement API server layer (ASP.NET Minimal API) exposing search, events, brief, wiki, status, and ask endpoints over Engram.Store services. Phase: 5.
+- [ ] **REQ-030** Implement Energy Units system: 3 free Pro-level actions per week for Free tier users, weekly reset, in-app upgrade prompt on exhaustion. Phase: 8.
+- [ ] **REQ-031** Implement in-app subscription flow: Free tier by default, Pro tier activation ($20-30/mo), 1 month subscription, no user API keys. Phase: 12.
 
 ## Non-Functional Requirements
 
@@ -62,6 +69,13 @@
 | REQ-022 | PRD section 6.1 | Phase 10 | Pending |
 | REQ-023 | PRD section 6 | Phase 11 | Pending |
 | REQ-024 | PRD section 10 and Implementation Plan section 5 | Phase 12 | Pending |
+| REQ-025 | Product Vision — installer-based distribution | Phase 12 | Pending |
+| REQ-026 | Product Vision — Discovery Skill identity hardening | Phase 6 | Pending |
+| REQ-027 | Product Vision — local SLM tiered inference | Phase 7 | Pending |
+| REQ-028 | Product Vision — ChatGPT-like conversational GUI | Phase 5 | Pending |
+| REQ-029 | Product Vision — API server layer | Phase 5 | Pending |
+| REQ-030 | Product Vision — Energy Units free trial system | Phase 8 | Pending |
+| REQ-031 | Product Vision — in-app subscription flow | Phase 12 | Pending |
 | NFR-001 | PRD section 10 | Phase 12 | Pending |
 | NFR-002 | PRD section 10 and Implementation Plan section 4 | Phase 1, Phase 10, Phase 11 | Pending |
 | NFR-003 | Implementation Plan section 5 | Phase 1 | Pending |
