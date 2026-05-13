@@ -35,6 +35,7 @@ The first proof is not cloud automation. The first proof is that Engram can make
 - Cloud calls must be auditable and policy-gated.
 - Proactive interventions must read identity constraints first.
 - Computer-use automation must start read-only and require approvals for risky actions.
+- **Every phase must pass the quality gate before it is considered deliverable.** See `docs/QUALITY-GATE-POLICY.md`. No phase ships without industry-grade testing relevant to that phase's scope.
 
 ## Architecture Commitments
 

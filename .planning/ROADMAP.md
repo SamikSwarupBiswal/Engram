@@ -4,6 +4,10 @@
 
 Engram will be built as a Windows-first local semantic operating layer before expanding into cloud reasoning, workspace ingestion, research automation, computer-use automation, and encrypted sync. The roadmap covers the full PRD, while Phase 1 intentionally combines runtime foundation with a minimal append-only raw store so the first implementation has an executable local memory spine.
 
+## Quality Gate
+
+**Every phase must pass the quality gate defined in `docs/QUALITY-GATE-POLICY.md` before it is considered deliverable.** The gate includes: unit test coverage, integration validation, performance budgets (where applicable), security checks, build verification, and manual smoke testing. No phase is marked "Done" until the gate passes.
+
 ## Phases
 
 **Phase Numbering:**

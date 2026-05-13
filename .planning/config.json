@@ -6,6 +6,8 @@
     "discuss_mode": "discuss",
     "mvp_mode": false,
     "post_planning_gaps": true,
-    "context_coverage_gate": true
+    "context_coverage_gate": true,
+    "verify_mode": "strict",
+    "quality_gate_required": true
   }
 }
