@@ -120,6 +120,11 @@ public class WikiNodeStore : IDisposable
         return File.Exists(GetFilePath(nodeId));
     }
 
+    /// <summary>
+    /// Get the wiki directory path.
+    /// </summary>
+    public string GetWikiPath() => _wikiPath;
+
     private string GetFilePath(string nodeId)
     {
         // Sanitize node ID for file system

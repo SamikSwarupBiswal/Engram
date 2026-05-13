@@ -1,9 +1,9 @@
 # Engram State
 
-**Status:** Phase 6 complete, ready for Phase 7
-**Current Phase:** Phase 6 - Identity Hardening (DONE)\n**Next Phase:** Phase 7 - Salience and Drift Engine
+**Status:** Phase 7 complete — FREE TIER COMPLETE
+**Current Phase:** Phase 7 - Salience and Drift Engine (DONE)\n**Next Phase:** Phase 8 - Cloud Reasoning and Tier Routing [PRO TIER]
 **Last Activity:** 2026-05-13
-**Total Tests:** 291/291 passing
+**Total Tests:** 335/335 passing
 
 ## Accumulated Context
 
