@@ -51,13 +51,13 @@ public class CaptureOrchestratorTests : IDisposable
     {
         var orch = CreateOrchestrator();
 
-        // Flood 500 events rapidly
+        // Flood 500 events rapidly — rate limiter has maxTokens=200
         for (int i = 0; i < 500; i++)
             orch.ProcessEvent(TestEvents.Create(text: $"flood {i}"));
 
-        // With maxTokens=200, some should be rate limited
-        // (refill gives ~100/sec, but 500 events in <1sec should exceed burst)
-        Assert.True(orch.EventsCaptured + orch.EventsDropped == 500);
+        // PROVES rate limiting actually fired — not just that math works
+        Assert.True(orch.EventsDropped > 0, "Rate limiter must drop events under flood");
+        Assert.True(orch.EventsCaptured < 500, "Not all events should pass under flood");
     }
 
     [Fact]
