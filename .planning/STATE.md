@@ -1,45 +1,26 @@
 # Engram State
 
-**Status:** Phase 1 complete, ready for Phase 2
-**Current Phase:** Phase 1 - Repository and Runtime Foundation
-**Current Plan:** All 3 plans complete
-**Total Plans in Phase:** 3
+**Status:** Phase 2 complete, ready for Phase 3
+**Current Phase:** Phase 2 - Immutable Raw Event Store
+**Current Plan:** All plans complete
 **Last Activity:** 2026-05-13
-**Resume File:** .planning/phases/02-immutable-raw-event-store/ (not yet created)
 
 ## Accumulated Context
 
-### Bootstrap Decisions
+### Phase 1 Summary
+- .NET solution skeleton with Store, CLI, Tests
+- .engram workspace initializer (idempotent)
+- Raw event schema, append-only writer, dedupe hash, replay
+- 56 tests passing
 
-- Current checkout root is `C:\projects\Engram\Engram`.
-- `Artifacts/` is canonical for this checkout.
-- Full PRD roadmap is in scope.
-- Phase 1 combines repository/runtime foundation with the first append-only raw store slice.
-- Stack is .NET/C# Windows-first.
-- Git is initialized before GSD planning artifacts are committed.
-- **Quality gate is mandatory for all phases.** See `docs/QUALITY-GATE-POLICY.md`.
+### Phase 2 Summary
+- Atomic writes via .tmp + rename
+- Per-event processing sidecar (.meta.json)
+- Filtered replay with ReplayQuery
+- Integrity verification on read
+- CLI filter flags (--from, --to, --source, --status)
+- 80 tests passing (56 existing + 24 new)
 
 ### Canonical References
-
-- `Artifacts/Product Requirements Document_Engram Full Specification.md`
-- `Artifacts/Engram Implementation Plan.md`
-
-### Phase 1 Completion Summary
-
-- 56 unit/integration tests passing (all categories)
-- .NET solution with Engram.Store, Engram.Cli, Engram.Store.Tests
-- .engram workspace initializer (idempotent)
-- Raw event schema (11 fields, snake_case JSON)
-- Append-only writer with content-addressed deduplication
-- Replay enumerator with deterministic ordering
-- CLI commands: `engram init`, `engram replay`
-- All tests run locally without cloud credentials
-- Manual smoke test passed
-
-### Roadmap Evolution
-
-- 2026-05-10: Bootstrapped GSD planning from PRD and implementation plan.
-- 2026-05-10: Created 12-phase roadmap covering full PRD scope.
-- 2026-05-10: Prepared Phase 1 context and plan artifacts.
-- 2026-05-13: Phase 1 executed with TDD approach (test-first, then implementation).
-- 2026-05-13: Quality gate passed: 56/56 tests, smoke test verified.
+- Artifacts/Product Requirements Document_Engram Full Specification.md
+- Artifacts/Engram Implementation Plan.md

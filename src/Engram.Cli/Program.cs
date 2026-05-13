@@ -57,7 +57,38 @@ public class Program
 
     private static int HandleReplay(string[] args)
     {
-        var root = args.Length > 1 ? args[1] : ".engram";
+        // Parse root path (first non-flag argument after "replay")
+        var root = ".engram";
+        var query = new ReplayQuery();
+
+        for (int i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--from" when i + 1 < args.Length:
+                    if (DateOnly.TryParse(args[++i], out var from))
+                        query.FromDate = from;
+                    else
+                        return Error($"Invalid date format: {args[i]}");
+                    break;
+                case "--to" when i + 1 < args.Length:
+                    if (DateOnly.TryParse(args[++i], out var to))
+                        query.ToDate = to;
+                    else
+                        return Error($"Invalid date format: {args[i]}");
+                    break;
+                case "--source" when i + 1 < args.Length:
+                    query.Source = args[++i];
+                    break;
+                case "--status" when i + 1 < args.Length:
+                    query.ProcessingStatus = args[++i];
+                    break;
+                default:
+                    if (!args[i].StartsWith("--"))
+                        root = args[i];
+                    break;
+            }
+        }
 
         try
         {
@@ -70,11 +101,11 @@ public class Program
             }
 
             var enumerator = new ReplayEnumerator(paths);
-            var events = enumerator.EnumerateAll();
+            var events = enumerator.Enumerate(query);
 
             if (events.Count == 0)
             {
-                Console.WriteLine("No raw events found.");
+                Console.WriteLine("No raw events found matching filters.");
                 return 0;
             }
 
@@ -108,9 +139,15 @@ public class Program
         Console.WriteLine("Engram - Personal Semantic Operating Layer");
         Console.WriteLine();
         Console.WriteLine("Usage:");
-        Console.WriteLine("  engram init [path]     Initialize .engram workspace (default: .engram)");
-        Console.WriteLine("  engram replay [path]   Enumerate and display raw events");
-        Console.WriteLine("  engram help            Show this help");
+        Console.WriteLine("  engram init [path]                     Initialize .engram workspace");
+        Console.WriteLine("  engram replay [path] [options]         Enumerate and display raw events");
+        Console.WriteLine("  engram help                            Show this help");
+        Console.WriteLine();
+        Console.WriteLine("Replay options:");
+        Console.WriteLine("  --from YYYY-MM-DD                      Include events from this date");
+        Console.WriteLine("  --to YYYY-MM-DD                        Include events up to this date");
+        Console.WriteLine("  --source <name>                        Filter by event source");
+        Console.WriteLine("  --status <status>                      Filter by processing status");
         return 0;
     }
 

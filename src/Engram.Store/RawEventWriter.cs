@@ -4,6 +4,7 @@ namespace Engram.Store;
 
 /// <summary>
 /// Writes raw events to .engram/raw/YYYY-MM-DD/[event_id].json.
+/// Uses atomic writes (temp + rename) to prevent corruption from partial failures.
 /// Append-only: never modifies existing files. Uses content hashing for deduplication.
 /// </summary>
 public class RawEventWriter
@@ -24,7 +25,7 @@ public class RawEventWriter
     }
 
     /// <summary>
-    /// Writes a raw event to the store.
+    /// Writes a raw event to the store using atomic write (temp + rename).
     /// Returns Created if the event was written, Duplicate if an equivalent event already exists.
     /// Never modifies existing files.
     /// </summary>
@@ -53,11 +54,14 @@ public class RawEventWriter
             };
         }
 
-        // Append-only write: create date directory if needed, then write
+        // Atomic write: create date directory, write to .tmp, then rename
         Directory.CreateDirectory(dateDir);
 
+        var tmpPath = filePath + ".tmp";
         var json = JsonSerializer.Serialize(rawEvent, JsonOptions);
-        File.WriteAllText(filePath, json);
+
+        File.WriteAllText(tmpPath, json);
+        File.Move(tmpPath, filePath, overwrite: false);
 
         return new WriteResult
         {
@@ -81,6 +85,10 @@ public class RawEventWriter
 
         foreach (var file in Directory.EnumerateFiles(dateDir, "*.json"))
         {
+            // Skip sidecar files and temp files
+            if (file.EndsWith(".meta.json") || file.EndsWith(".tmp"))
+                continue;
+
             try
             {
                 var json = File.ReadAllText(file);

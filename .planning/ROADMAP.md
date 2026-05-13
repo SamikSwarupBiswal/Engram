@@ -64,7 +64,7 @@ Plans:
 **Plans:** TBD
 
 Plans:
-- [ ] 02-01: Harden raw ledger atomicity, replay filters, and processing sidecars.
+- [x] 02-01: Harden raw ledger atomicity, replay filters, and processing sidecars.
 
 ### Phase 3: Local Ingestion MVP
 **Goal:** Capture low-risk local signals with explicit consent and durable source attribution.
@@ -249,7 +249,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Repository and Runtime Foundation | 3/3 | **Complete** | 2026-05-13 |
-| 2. Immutable Raw Event Store | 0/TBD | Not started | - |
+| 2. Immutable Raw Event Store | 1/1 | **Complete** | 2026-05-13 |
 | 3. Local Ingestion MVP | 0/TBD | Not started | - |
 | 4. Markdown Wiki Memory | 0/TBD | Not started | - |
 | 5. Local Search and Briefs | 0/TBD | Not started | - |
