@@ -148,7 +148,7 @@ Rules:
 
 ## 5. Phased Build Plan
 
-### Phase 0: Repository And Runtime Foundation
+### Phase 1: Repository And Runtime Foundation
 
 Goal: establish a buildable Windows-first project with test harnesses and local storage contracts.
 
@@ -166,7 +166,7 @@ Acceptance criteria:
 - App can start, stop, and report health without capturing data.
 - Tests run locally without requiring cloud credentials.
 
-### Phase 1: Immutable Raw Store
+### Phase 2: Immutable Raw Store
 
 Goal: implement the source-of-truth event ledger.
 
@@ -184,7 +184,7 @@ Acceptance criteria:
 - Existing raw events are never rewritten.
 - Replay can reprocess raw events into downstream indexes.
 
-### Phase 2: Local Ingestion MVP
+### Phase 3: Local Ingestion MVP
 
 Goal: capture low-risk local signals before continuous screenshots or cloud metadata.
 
@@ -202,7 +202,7 @@ Acceptance criteria:
 - Excluded apps are never captured.
 - Captured data is visible in raw event logs with source attribution.
 
-### Phase 3: Markdown Wiki Memory
+### Phase 4: Markdown Wiki Memory
 
 Goal: convert raw events into metabolized, queryable Markdown knowledge.
 
@@ -220,7 +220,7 @@ Acceptance criteria:
 - Every wiki fact can be traced back to one or more raw events.
 - `index.md` gives a useful navigation map without vector search.
 
-### Phase 4: Local Search And Briefs
+### Phase 5: Local Search And Briefs
 
 Goal: make the memory useful to the user without automation risk.
 
@@ -237,7 +237,7 @@ Acceptance criteria:
 - Briefs cite source wiki nodes and raw events.
 - UI exposes pause/resume and capture status clearly.
 
-### Phase 5: Identity Hardening
+### Phase 6: Identity Hardening
 
 Goal: make interventions constrained by explicit user identity rules.
 
@@ -254,7 +254,7 @@ Acceptance criteria:
 - User can edit identity constraints directly.
 - No proactive intervention bypasses the identity policy evaluator.
 
-### Phase 6: Salience And Drift Engine
+### Phase 7: Salience And Drift Engine
 
 Goal: detect stale, important, or contradictory knowledge.
 
@@ -272,7 +272,7 @@ Acceptance criteria:
 - New contradictory events create drift alerts with source evidence.
 - Alerts can be dismissed, accepted, or converted into wiki updates.
 
-### Phase 7: Cloud Reasoning And Tier Routing
+### Phase 8: Cloud Reasoning And Tier Routing
 
 Goal: add Pro reasoning without compromising local trust.
 
@@ -290,7 +290,7 @@ Acceptance criteria:
 - Every cloud call has a reason, payload summary, provider, cost estimate, and result.
 - Private raw screen/clipboard/email data is never sent without explicit policy approval.
 
-### Phase 8: Google Workspace And Cloud Metadata Ingestion
+### Phase 9: Google Workspace And Cloud Metadata Ingestion
 
 Goal: add Gmail, Calendar, and Drive context as explicit connectors.
 
@@ -308,7 +308,7 @@ Acceptance criteria:
 - GWS ingestion creates source-linked raw events and wiki updates.
 - Connector scopes are minimal and visible.
 
-### Phase 9: Agentic Research Workflow
+### Phase 10: Agentic Research Workflow
 
 Goal: implement high-signal research automation before broader computer control.
 
@@ -328,7 +328,7 @@ Acceptance criteria:
 - Failed runs can resume from log state.
 - User can inspect all visited sources.
 
-### Phase 10: Computer Use Automation
+### Phase 11: Computer Use Automation
 
 Goal: allow the system to operate the Windows environment under strict controls.
 
@@ -346,7 +346,7 @@ Acceptance criteria:
 - Risky actions require user approval.
 - Every automation action is logged with timestamp, target, and rationale.
 
-### Phase 11: Encryption, Sync, And Production Hardening
+### Phase 12: Encryption, Sync, And Production Hardening
 
 Goal: make the local and Pro experiences safe enough for real personal data.
 
@@ -368,7 +368,7 @@ Acceptance criteria:
 
 ## 6. MVP Recommendation
 
-The MVP should stop at Phase 6.
+The MVP should stop at Phase 7.
 
 MVP definition:
 
