@@ -120,9 +120,9 @@ Plans:
 **Plans:** TBD
 
 Plans:
-- [ ] 05-01: Implement local search index and query path.
-- [ ] 05-02: Implement briefs from promises, intentions, stale items, and changed facts.
-- [ ] 05-03: Implement tray status and pause/resume controls.
+- [x] 05-01: Implement local search index and query path.
+- [x] 05-02: Implement briefs from promises, intentions, stale items, and changed facts.
+- [x] 05-03: Implement tray status and pause/resume controls.
 
 ### Phase 6: Identity Hardening
 **Goal:** Capture explicit user identity constraints and use them to gate proactive behavior.
@@ -256,7 +256,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Immutable Raw Event Store | 1/1 | **Complete** | 2026-05-13 |
 | 3. Local Ingestion MVP | 2/2 | **Complete** | 2026-05-13 |
 | 4. Markdown Wiki Memory | 3/3 | **Complete** | 2026-05-13 |
-| 5. Local Search and Briefs | 0/TBD | Not started | - |
+| 5. Local Search and Briefs | 3/3 | **Complete** | 2026-05-13 |
 | 6. Identity Hardening | 0/TBD | Not started | - |
 | 7. Salience and Drift Engine | 0/TBD | Not started | - |
 | 8. Cloud Reasoning and Tier Routing | 0/TBD | Not started | - |
