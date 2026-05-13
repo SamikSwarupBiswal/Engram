@@ -46,9 +46,9 @@ Engram will be built as a Windows-first local semantic operating layer before ex
 **Plans:** 3 plans
 
 Plans:
-- [ ] 01-01: Create .NET solution skeleton, shared project layout, test harness, and developer commands.
-- [ ] 01-02: Implement `.engram` workspace initializer and configuration model.
-- [ ] 01-03: Implement raw event schema, append-only writer, dedupe hash, and replay command.
+- [x] 01-01: Create .NET solution skeleton, shared project layout, test harness, and developer commands.
+- [x] 01-02: Implement `.engram` workspace initializer and configuration model.
+- [x] 01-03: Implement raw event schema, append-only writer, dedupe hash, and replay command.
 
 ### Phase 2: Immutable Raw Event Store
 **Goal:** Make the raw event ledger robust enough to support future passive ingestion and reprocessing.
@@ -248,7 +248,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Repository and Runtime Foundation | 0/3 | Planned | - |
+| 1. Repository and Runtime Foundation | 3/3 | **Complete** | 2026-05-13 |
 | 2. Immutable Raw Event Store | 0/TBD | Not started | - |
 | 3. Local Ingestion MVP | 0/TBD | Not started | - |
 | 4. Markdown Wiki Memory | 0/TBD | Not started | - |
