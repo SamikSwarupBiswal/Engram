@@ -25,7 +25,7 @@ Engram will be built as a Windows-first local semantic operating layer before ex
 - [ ] **Phase 5: Local Search and Briefs** [FREE] - Adds local semantic search, tray status, and morning/evening briefs.
 - [ ] **Phase 6: Identity Hardening** [FREE] - Adds Discovery SOP and identity-policy gating for interventions.
 - [ ] **Phase 7: Salience and Drift Engine** [FREE] - Adds salience decay, archival, and contradiction alerts.
-- [ ] **Phase 8: Cloud Reasoning and Tier Routing** [PRO] - Adds audited Pro reasoning, local filtering, and cost controls.
+- [x] **Phase 8: Cloud Reasoning and Tier Routing** [PRO] - Adds audited Pro reasoning, local filtering, and cost controls.
 - [ ] **Phase 9: Google Workspace Metadata Ingestion** [PRO] - Adds explicit Gmail, Calendar, and Drive metadata connectors.
 - [ ] **Phase 10: Agentic Research Workflow** [PRO] - Adds browser-backed research runs with cited wiki summaries.
 - [ ] **Phase 11: Computer-Use Automation** [PRO] - Adds controlled Windows automation with previews, approvals, and logs.
@@ -259,7 +259,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Local Search and Briefs | 3/3 | **Complete** | 2026-05-13 |
 | 6. Identity Hardening | 2/2 | **Complete** | 2026-05-13 |
 | 7. Salience and Drift Engine | 2/2 | **Complete** | 2026-05-13 |
-| 8. Cloud Reasoning and Tier Routing | 0/TBD | Not started | - |
+| 8. Cloud Reasoning and Tier Routing | 2/2 | **Complete** | 2026-05-13 |
 | 9. Google Workspace Metadata Ingestion | 0/TBD | Not started | - |
 | 10. Agentic Research Workflow | 0/TBD | Not started | - |
 | 11. Computer-Use Automation | 0/TBD | Not started | - |

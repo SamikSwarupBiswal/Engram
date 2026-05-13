@@ -1,9 +1,10 @@
 # Engram State
 
-**Status:** Phase 7 complete — FREE TIER COMPLETE
-**Current Phase:** Phase 7 - Salience and Drift Engine (DONE)\n**Next Phase:** Phase 8 - Cloud Reasoning and Tier Routing [PRO TIER]
+**Status:** Phase 8 complete — CLOUD REASONING (PRO TIER) COMPLETE
+**Current Phase:** Phase 8 - Cloud Reasoning and Tier Routing (DONE)
+**Next Phase:** Phase 9 - Google Workspace Metadata Ingestion [PRO TIER]
 **Last Activity:** 2026-05-13
-**Total Tests:** 335/335 passing
+**Total Tests:** 415/415 passing
 
 ## Accumulated Context
 
@@ -55,16 +56,60 @@
 - Source-linked facts (every fact traces to raw event evidence)
 - 43 new tests (216 total)
 
+### Phase 5 Summary (Complete)
+- SearchEngine: keyword search, TF-IDF scoring, AND semantics
+- BriefGenerator: morning/evening briefs with citations
+- CaptureStatus: pause/resume, per-source toggle
+- SearchResult model
+- CLI commands: engram search, engram brief, engram status
+- 44 new tests (260 total)
+
+### Phase 6 Summary (Complete)
+- UserProfile, Priority, AntiGoal models
+- IdentityStore: thread-safe persistence
+- DiscoverySOP: interview flow for identity extraction
+- InterventionPolicy: gates ALL proactive behavior
+- CLI commands: engram discover, engram identity
+- 31 new tests (291 total)
+
+### Phase 7 Summary (Complete)
+- SalienceScorer: power law decay
+- ArchiveManager: move/restore stale nodes
+- DriftDetector: keyword contradiction + status change
+- DriftAlertStore: persist, resolve, statistics
+- CLI commands: engram salience, engram drift
+- 44 new tests (335 total)
+
+### Phase 8 Summary (Complete) [PRO TIER]
+- ICloudModelProvider interface (mirrors IOcrProvider pattern)
+- TaskComplexity enum (Low/Medium/High)
+- ModelRouter: classifies tasks, routes to local/GeminiFlash/ClaudeSonnet
+- LocalFilter: strips private data, redacts PII (email/phone/tokens)
+- TierGuard: blocks cloud for Free tier, allows for Pro
+- PrivacyClass enum (Public/Internal/Private/Sensitive)
+- CloudModelRequest/Response models
+- CloudAuditEntry: full audit trail (reason, provider, cost, tokens)
+- CloudAuditLog: append-only JSONL at .engram/logs/cloud-audit.jsonl
+- BudgetManager: daily/monthly/per-call cost limits
+- BudgetConfig: configurable limits from EngramConfig
+- CleanCache: semantic cache for non-private topics with TTL eviction
+- CacheEntry: hit counting, expiration, persistence
+- EngramConfig extensions (Tier, CloudEnabled, budget settings)
+- TierLevel enum (Free/Pro)
+- 80 new tests (415 total)
+
 ### Canonical References
 - Artifacts/Product Requirements Document_Engram Full Specification.md
 - Artifacts/Engram Implementation Plan.md
 - docs/QUALITY-GATE-POLICY.md
+- docs/TIER-ARCHITECTURE.md
 
 ### Decisions Log
 - D-001..D-010: Phase 1 foundation decisions
 - D-011..D-015: Phase 2 hardening decisions
 - D-016..D-022: Phase 3 capture decisions
 - D-023..D-027: Phase 4 wiki decisions
+- D-028..D-032: Phase 8 cloud reasoning decisions
 
 ### Roadmap Evolution
 - 2026-05-10: Bootstrapped GSD planning from PRD
@@ -73,3 +118,7 @@
 - 2026-05-13: Production hardening (125 tests)
 - 2026-05-13: Phase 3 executed (TDD, 173 tests)
 - 2026-05-13: Phase 4 executed (TDD, 216 tests)
+- 2026-05-13: Phase 5 executed (TDD, 260 tests)
+- 2026-05-13: Phase 6 executed (TDD, 291 tests)
+- 2026-05-13: Phase 7 executed (TDD, 335 tests)
+- 2026-05-13: Phase 8 executed (TDD, 415 tests) [PRO TIER]
