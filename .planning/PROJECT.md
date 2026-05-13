@@ -40,25 +40,63 @@ Engram provides a ChatGPT-like GUI interface on top of its backend:
 
 ## SLM Strategy (Free Tier)
 
-Local inference uses tiered SLMs optimized for low-spec hardware:
+Local inference uses LLamaSharp with Vulkan backend, running Phi-4-mini
+GGUF Q4_K_M in-process. No external SLM process (no Ollama, no LocalAI).
 
-| Model | Size | RAM (Q4) | Use Case |
-|-------|------|----------|----------|
-| all-MiniLM-L6-v2 | 22M | ~80MB | Semantic search, embeddings (always on) |
-| Qwen2.5 0.5B | 500M | ~0.5GB | Classification, routing, entity extraction |
-| Phi-4-mini | 3.8B | ~2.5GB | Summarization, QA, reasoning (on demand) |
+| Component | Technology | Size | Purpose |
+|-----------|-----------|------|---------|
+| Inference Engine | LLamaSharp (.NET native) | ~15-25MB libs | Runs GGUF models in-process |
+| GPU Backend | Vulkan | — | Works on AMD, Intel, NVIDIA (no CUDA dependency) |
+| Brain | Phi-4-mini GGUF Q4_K_M | ~2.2GB | 3.8B params, 4-bit quantized |
+| Fallback | CPU + SIMD | — | If no Vulkan GPU detected |
 
-Key: Don't use SLM for what algorithms can do. PII filtering = regex. Dedup = SHA-256. Routing = rules + embeddings. SLM only for summarization, QA, entity extraction.
+### Hardware Requirements:
+| Spec | Minimum | Recommended |
+|------|---------|-------------|
+| RAM | 8GB | 16GB |
+| CPU | Modern quad-core | Ryzen 5 / i5+ |
+| GPU | None (CPU fallback) | GTX 1650+ / RX 5500+ / Intel Arc |
+| Storage | 5GB free | 10GB free |
+| OS | Windows 10 (64-bit) | Windows 11 |
+
+Key: Don't use SLM for what algorithms can do. PII filtering = regex.
+Dedup = SHA-256. Routing = rules + embeddings. SLM only for
+summarization, QA, entity extraction, tool calling.
+
+## Power Mode Toggle
+
+| Mode | Brain | Cost | Requires |
+|------|-------|------|----------|
+| Eco Mode (default) | Local Phi-4-mini via LLamaSharp/Vulkan | $0, works offline | Nothing |
+| Turbo Mode | Gemini 3 Flash + Claude 4.5 Sonnet | Managed credit pool | Internet + Pro subscription |
+
+.NET sidecar acts as inference router. CopilotKit talks to ONE endpoint
+(`http://localhost:5000/v1/chat/completions`). The sidecar decides:
+Eco → LLamaSharp local, Turbo → cloud pipeline.
+
+## Frontend Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Shell | Tauri (Rust) — ~10MB, native Windows, system tray, auto-update |
+| UI | React + Tailwind CSS + shadcn/ui |
+| AI Chat | CopilotKit — streaming, markdown, tool calling |
+| Backend | .NET 8 sidecar (ASP.NET Minimal API) |
 
 ## Locked Direction
 
 - Stack: .NET/C# Windows-first app.
+- **Frontend: Tauri + React + Tailwind + shadcn/ui + CopilotKit.**
+- **Local inference: LLamaSharp with Vulkan backend (not Ollama).**
+- **Brain: Phi-4-mini GGUF Q4_K_M (~2.2GB, downloaded on first run).**
+- **Power Mode: Eco (local) / Turbo (cloud) toggle in settings.**
 - App shape: background service plus tray/search surfaces.
 - Local store root: `.engram`.
 - Source-of-truth event ledger: `.engram/raw/YYYY-MM-DD/[event_id].json`.
 - Metabolized memory: `.engram/wiki/*.md`.
 - **Tier model: Free tier (local-only, $0) + Pro tier (cloud-enhanced, $20-$30/mo).**
 - **Managed credit pooling: users NEVER provide API keys.**
+- **Installer: ~130MB (model downloaded separately on first run).**
 - Canonical artifacts for this checkout:
   - `Artifacts/Product Requirements Document_Engram Full Specification.md`
   - `Artifacts/Engram Implementation Plan.md`

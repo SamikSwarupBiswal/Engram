@@ -33,6 +33,13 @@
 - [ ] **REQ-029** Implement API server layer (ASP.NET Minimal API) exposing search, events, brief, wiki, status, and ask endpoints over Engram.Store services. Phase: 5.
 - [ ] **REQ-030** Implement Energy Units system: 3 free Pro-level actions per week for Free tier users, weekly reset, in-app upgrade prompt on exhaustion. Phase: 8.
 - [ ] **REQ-031** Implement in-app subscription flow: Free tier by default, Pro tier activation ($20-30/mo), 1 month subscription, no user API keys. Phase: 12.
+- [ ] **REQ-032** Integrate LLamaSharp with Vulkan backend for local SLM inference (native .NET, in-process, no external SLM process). Must support AMD, Intel, and NVIDIA GPUs via Vulkan. Phase: 7.
+- [ ] **REQ-033** Implement Vulkan GPU detection with fallback chain: discrete GPU → integrated GPU → CPU+SIMD. Must work on laptops with no discrete GPU. Phase: 7.
+- [ ] **REQ-034** Bundle Phi-4-mini GGUF Q4_K_M as downloadable model (~2.2GB) on first run, not in installer. Cache at `%LOCALAPPDATA%/Engram/models/`. Phase: 7.
+- [ ] **REQ-035** Implement Power Mode toggle (Eco/Turbo) in settings. Eco = local LLamaSharp, Turbo = cloud pipeline. Default to Eco. Phase: 8.
+- [ ] **REQ-036** Implement .NET inference router: POST /v1/chat/completions endpoint that routes to LLamaSharp (Eco) or cloud pipeline (Turbo) based on Power Mode and license status. Phase: 8.
+- [ ] **REQ-037** Build Tauri (Rust) desktop shell with React frontend, Tailwind CSS, shadcn/ui components, and CopilotKit integration. Tauri spawns .NET sidecar as child process. Phase: 5.
+- [ ] **REQ-038** Implement installer variants: Standard (~130MB, model on first run), Offline (~2.4GB, bundled model), Runtime-Dependent (~50MB, requires .NET 8). Phase: 12.
 
 ## Non-Functional Requirements
 
@@ -76,6 +83,13 @@
 | REQ-029 | Product Vision — API server layer | Phase 5 | Pending |
 | REQ-030 | Product Vision — Energy Units free trial system | Phase 8 | Pending |
 | REQ-031 | Product Vision — in-app subscription flow | Phase 12 | Pending |
+| REQ-032 | Product Vision — LLamaSharp Vulkan inference | Phase 7 | Pending |
+| REQ-033 | Product Vision — Vulkan GPU detection fallback | Phase 7 | Pending |
+| REQ-034 | Product Vision — model download on first run | Phase 7 | Pending |
+| REQ-035 | Product Vision — Power Mode Eco/Turbo toggle | Phase 8 | Pending |
+| REQ-036 | Product Vision — .NET inference router | Phase 8 | Pending |
+| REQ-037 | Product Vision — Tauri + React + CopilotKit shell | Phase 5 | Pending |
+| REQ-038 | Product Vision — installer variants (Standard/Offline/RT-dep) | Phase 12 | Pending |
 | NFR-001 | PRD section 10 | Phase 12 | Pending |
 | NFR-002 | PRD section 10 and Implementation Plan section 4 | Phase 1, Phase 10, Phase 11 | Pending |
 | NFR-003 | Implementation Plan section 5 | Phase 1 | Pending |

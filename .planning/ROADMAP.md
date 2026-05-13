@@ -4,7 +4,7 @@
 
 Engram will be built as a Windows-first local semantic operating layer before expanding into cloud reasoning, workspace ingestion, research automation, computer-use automation, and encrypted sync. The roadmap covers the full PRD, while Phase 1 intentionally combines runtime foundation with a minimal append-only raw store so the first implementation has an executable local memory spine.
 
-Engram ships as an installer-based desktop application with a ChatGPT-like conversational GUI. Free tier runs 100% locally on the user's NPU. Pro tier adds cloud-enhanced intelligence via managed credit pooling.
+Engram ships as an installer-based desktop application with a ChatGPT-like conversational GUI. Free tier runs 100% locally via LLamaSharp (Vulkan backend) with Phi-4-mini GGUF. Pro tier adds cloud-enhanced intelligence via managed credit pooling. Frontend: Tauri + React + Tailwind + shadcn + CopilotKit. Backend: .NET 8 sidecar as inference router.
 
 ## Quality Gate
 

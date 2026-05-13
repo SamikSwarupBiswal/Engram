@@ -121,3 +121,14 @@
 - D-016..D-022: Phase 3 capture decisions
 - D-023..D-027: Phase 4 wiki decisions
 - D-028..D-032: Phase 8 cloud reasoning decisions
+- D-033: Frontend stack = Tauri + React + Tailwind + shadcn/ui + CopilotKit
+- D-034: Local inference = LLamaSharp with Vulkan (not Ollama, not LocalAI)
+- D-035: Brain = Phi-4-mini GGUF Q4_K_M (~2.2GB, downloaded on first run)
+- D-036: Power Mode toggle = Eco (local) / Turbo (cloud), default Eco
+- D-037: .NET sidecar as inference router (single endpoint for CopilotKit)
+- D-038: Installer = ~130MB standard, ~2.4GB offline, ~50MB runtime-dependent
+- D-039: Model cached at %LOCALAPPDATA%/Engram/models/, not bundled in installer
+- D-040: Vulkan fallback chain: discrete GPU → iGPU → CPU+SIMD
+- D-041: Hardware minimum: 8GB RAM, modern quad-core, Windows 10 64-bit
+- D-042: CopilotKit runtimeUrl points to .NET sidecar localhost endpoint
+- D-043: Tauri spawns .NET sidecar as child process (sidecar pattern)

@@ -5,31 +5,248 @@
 Engram ships in two tiers. All code we build must work for BOTH tiers —
 the free tier uses the same codebase, just without cloud features enabled.
 
+This is a PRODUCTION product, not an MVP. Target audience: users with
+decent laptops (8GB+ RAM, modern CPU, optional discrete GPU).
+
+## Tech Stack
+
+| Layer | Technology | Rationale |
+|-------|-----------|-----------|
+| Frontend Shell | Tauri (Rust) | ~10MB installer, native Windows perf, system tray, auto-update |
+| UI Framework | React | Huge ecosystem, works with Tauri, good for chat interfaces |
+| Styling | Tailwind CSS + shadcn/ui | Rapid development, accessible components, copy-paste ownership |
+| AI Chat UI | CopilotKit | Built-in streaming, markdown rendering, tool calling hooks |
+| Backend Sidecar | .NET 8 (ASP.NET Minimal API) | Existing Engram.Store services, interface-based, decoupled |
+| Local Inference | LLamaSharp (Vulkan backend) | Native .NET, GPU acceleration on AMD/Intel/NVIDIA, no CUDA dependency |
+| Brain (Free) | Phi-4-mini GGUF Q4_K_M | 3.8B params, ~2.2GB, runs on decent laptops |
+| Cloud Inference | Gemini 3 Flash + Claude 4.5 Sonnet | Managed credit pooling, no user API keys |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Tauri Shell (~10-20MB)                                     │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  React + Tailwind + shadcn/ui + CopilotKit            │  │
+│  │  Chat window | Sidebar (search, timeline, wiki)       │  │
+│  │  runtimeUrl="http://localhost:5000"                    │  │
+│  └────────────────────┬──────────────────────────────────┘  │
+│                       │ HTTP/SSE                            │
+│  ┌────────────────────┴──────────────────────────────────┐  │
+│  │  .NET Sidecar (Engram.Api)                            │  │
+│  │  ┌─────────────────────────────────────────────────┐  │  │
+│  │  │  Inference Router                               │  │  │
+│  │  │  POST /v1/chat/completions                      │  │  │
+│  │  │  ├─ Eco Mode  → LLamaSharp (local Phi-4-mini)  │  │  │
+│  │  │  └─ Turbo Mode → Gemini/Claude cloud pipeline  │  │  │
+│  │  └─────────────────────────────────────────────────┘  │  │
+│  │  ┌─────────────────────────────────────────────────┐  │  │
+│  │  │  API Endpoints                                  │  │  │
+│  │  │  /api/search  /api/brief  /api/wiki             │  │  │
+│  │  │  /api/events  /api/status /api/identity         │  │  │
+│  │  │  /api/stream (WebSocket for real-time)          │  │  │
+│  │  └─────────────────────────────────────────────────┘  │  │
+│  │                                                        │  │
+│  │  ┌─────────────────────────────────────────────────┐  │  │
+│  │  │  LLamaSharp Engine (Vulkan backend)             │  │  │
+│  │  │  Phi-4-mini GGUF Q4_K_M loaded in-process      │  │  │
+│  │  │  Vulkan auto-detects: iGPU, discrete GPU, CPU   │  │  │
+│  │  └─────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Engram.Store (existing services, shared library)     │  │
+│  │  SearchIndex | WikiIndex | BriefGenerator             │  │
+│  │  CloudCallPipeline | IdentityStore | CaptureOrch      │  │
+│  └───────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Power Mode Toggle
+
+User-facing setting that controls inference routing:
+
+```
+┌─────────────────────────────────────────┐
+│  ⚡ Power Mode                          │
+│                                         │
+│  ○ Eco Mode    Local Phi-4-mini (3B)   │
+│    Zero cost, works offline, ~3GB RAM   │
+│    Runs on GPU via Vulkan               │
+│                                         │
+│  ○ Turbo Mode  Cloud API (Pro)          │
+│    Gemini 3 Flash / Claude 4.5 Sonnet   │
+│    Complex tasks, deep reasoning        │
+│    Requires internet + Pro subscription │
+└─────────────────────────────────────────┘
+```
+
+### Eco Mode (Default, Free Tier):
+- LLamaSharp loads Phi-4-mini GGUF Q4_K_M into memory
+- Vulkan backend auto-detects best GPU (iGPU or discrete)
+- All inference local, zero network calls
+- Works offline, works on airplane, works in bunker
+- ~3GB RAM footprint, acceptable on 8GB+ laptops
+- If no Vulkan GPU detected, falls back to CPU (slower but works)
+
+### Turbo Mode (Pro Tier):
+- Unlocked after subscription activation
+- .NET sidecar routes to cloud pipeline (existing CloudCallPipeline)
+- Gemini 3 Flash for 90% routine work
+- Claude 4.5 Sonnet for complex reasoning
+- Model routing already built in Phase 8
+
+### Inference Router (.NET Sidecar):
+
+```csharp
+[Route("v1/chat/completions")]
+[HttpPost]
+public async Task<IActionResult> Chat([FromBody] ChatRequest req)
+{
+    var mode = await _settings.GetPowerMode();
+
+    if (mode == PowerMode.Turbo && _license.IsPro())
+    {
+        // Cloud pipeline (Phase 8 — already built)
+        return await _cloudPipeline.Forward(req);
+    }
+
+    // Eco mode — local LLamaSharp with Vulkan
+    var response = await _llamaEngine.Complete(req);
+    return Ok(response);
+}
+```
+
+### CopilotKit Configuration (Frontend):
+
+```tsx
+<CopilotKit runtimeUrl="http://localhost:5000/api/copilotkit">
+  <YourApp />
+</CopilotKit>
+```
+
+CopilotKit talks to ONE endpoint. The .NET sidecar decides where the
+"brain" is located. Frontend doesn't know or care.
+
+## LLamaSharp + Vulkan Details
+
+### Why LLamaSharp (not Ollama):
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Ollama | Easy setup, auto model management | Separate process, IPC overhead, two things to manage |
+| LLamaSharp | Native .NET, in-process, Vulkan GPU, direct memory control | More integration work |
+
+**LLamaSharp wins** because:
+- Runs IN the .NET sidecar process (no IPC)
+- Vulkan backend = GPU acceleration on AMD, Intel, AND NVIDIA
+- No CUDA dependency (works on any decent laptop with a GPU)
+- Direct memory management, no separate process lifecycle
+- One process, one memory model
+
+### Vulkan GPU Detection:
+1. Check for discrete GPU (NVIDIA/AMD) → use it
+2. Fallback to integrated GPU (Intel/AMD APU) → use it
+3. Fallback to CPU with SIMD → slower but works everywhere
+
+### Model Format:
+- Phi-4-mini GGUF Q4_K_M (~2.2GB)
+- 4-bit quantization = good quality/speed tradeoff
+- Tool calling support: use GGUF with tool-use chat template
+- Fallback: if tool calling fails, use regex-based intent parsing
+
+### Hardware Requirements:
+
+| Spec | Minimum | Recommended |
+|------|---------|-------------|
+| RAM | 8GB | 16GB |
+| CPU | Modern quad-core | Ryzen 5 / i5+ |
+| GPU | None (CPU fallback) | GTX 1650+ / RX 5500+ / Intel Arc |
+| Storage | 5GB free | 10GB free |
+| OS | Windows 10 (64-bit) | Windows 11 |
+
 ## Onboarding Flow
 
-1. User downloads Engram installer (Windows .exe/.msi)
-2. Installer installs: Engram application + local SLM (Phi-4 via Windows Copilot Runtime)
-3. First launch → Discovery Skill activates
+1. User downloads Engram installer (~130MB, Windows .exe/.msi)
+2. Installer installs:
+   - Tauri shell + React frontend
+   - .NET 8 self-contained sidecar
+   - LLamaSharp + Vulkan native libraries
+   - Engram.Store + all backend services
+3. First launch → "Enable AI?" prompt
+   - User clicks "Enable AI"
+   - Downloads Phi-4-mini GGUF Q4_K_M (~2.2GB)
+   - Progress bar shown during download
+   - Model cached at `%LOCALAPPDATA%/Engram/models/`
+4. Discovery Skill activates
    - 15-minute AI-guided interview
    - Topics: anti-goals, comfort triggers, recurring anxieties
    - Output: `user.md` (identity profile stored in `.engram/`)
-4. Engram enters Free tier by default
-5. Conversational GUI available immediately — user can start chatting
-6. Pro upgrade available in-app ($20-30/mo, 1 month activates instantly)
+5. Engram enters Free tier (Eco Mode) by default
+6. Conversational GUI available immediately
+7. Pro upgrade available in-app ($20-30/mo, 1 month activates instantly)
+
+## Installer Bundle
+
+### Standard Installer (~130MB):
+
+| Component | Size |
+|-----------|------|
+| Tauri shell (Rust binary) | ~5-8 MB |
+| React + Tailwind + shadcn (bundled JS/CSS) | ~2-5 MB |
+| CopilotKit (bundled) | ~1-2 MB |
+| .NET 8 self-contained runtime | ~60-80 MB |
+| Engram.Store + Engram.Api DLLs | ~5-10 MB |
+| LLamaSharp + Vulkan native libs | ~15-25 MB |
+| Discovery Skill assets + config | ~1.5 MB |
+| **Installer Total** | **~100-130 MB** |
+
+### First-Run Download:
+
+| Component | Size |
+|-----------|------|
+| Phi-4-mini GGUF Q4_K_M model | ~2.2 GB |
+
+### Total Installed Size:
+
+| Component | Size |
+|-----------|------|
+| Application + runtime | ~130 MB |
+| SLM model | ~2.2 GB |
+| .engram workspace (empty) | ~5 MB |
+| **Total on Disk** | **~2.4 GB** |
+
+### Installer Variants:
+
+| Variant | Size | Use Case |
+|---------|------|----------|
+| Standard (recommended) | ~130 MB | Download model on first run |
+| Offline Installer | ~2.4 GB | Enterprise, restricted networks, USB/SD card |
+| .NET Runtime-Dependent | ~50 MB | If user already has .NET 8 installed |
+
+### Comparison to Competitors:
+
+| App | Installer | Installed |
+|-----|-----------|-----------|
+| **Engram (Standard)** | **~130 MB** | **~2.4 GB** |
+| Obsidian | ~80 MB | ~300 MB |
+| Notion | ~150 MB | ~500 MB |
+| Electron apps (avg) | ~150 MB | ~400 MB |
+| Ollama | ~200 MB | ~3+ GB |
 
 ## Conversational Interface
 
 Engram provides a ChatGPT-like GUI on top of its backend:
 
 - **Chat window**: Natural language queries ("What did we discuss?", "Summarize my week")
-- **Streaming responses**: Token-by-token via SLM (local) or cloud VLM (Pro)
+- **Streaming responses**: Token-by-token via LLamaSharp (Eco) or cloud API (Turbo)
 - **Sidebar**: Search, timeline, wiki navigation
 - **Backend**: Same Engram.Store services used by CLI — no code duplication
-- **Architecture**: GUI → API server → Engram.Store (interface-based, decoupled)
+- **Architecture**: Tauri → React/CopilotKit → .NET sidecar → Engram.Store
 
 ## Free Tier (The Local Hub) — $0/mo
 
-Everything runs locally on the user's NPU/CPU. No API keys, no cloud, no payment.
+Everything runs locally. No API keys, no cloud, no payment.
 
 ### What Ships (Phases 1-7):
 - Local raw event store (.engram/raw/)
@@ -39,14 +256,12 @@ Everything runs locally on the user's NPU/CPU. No API keys, no cloud, no payment
 - Morning/evening briefs
 - Identity hardening (Discovery SOP → user.md)
 - Salience decay + drift detection
-- Conversational GUI (local SLM)
+- Conversational GUI (Eco Mode — local LLamaSharp)
 
 ### Intelligence:
-- Windows Copilot Runtime (local SLM)
-- **Tiered local inference (optimized for low-spec hardware):**
-  - Embeddings (always on): all-MiniLM-L6-v2 (~80MB, semantic search)
-  - Task SLM (on demand): Qwen2.5 0.5B (~0.5GB, classification/routing)
-  - Reasoning SLM (on demand): Phi-4-mini (~2.5GB, summarization/QA)
+- LLamaSharp with Vulkan backend (in-process, native .NET)
+- Phi-4-mini GGUF Q4_K_M (3.8B params, 4-bit quantized)
+- Vulkan auto-detects: discrete GPU → iGPU → CPU fallback
 - No cloud model calls
 
 ### Sensing:
@@ -85,10 +300,10 @@ Cloud-enhanced intelligence with managed API keys. No user-provided keys.
 - Multi-tab synthesis and structured reports
 
 ### Intelligence:
-- Hybrid: local SLM + cloud VLM
+- Turbo Mode: cloud VLM via managed credit pooling
 - Gemini 3 Flash for 90% of routine work (cheap)
 - Claude 4.5 Sonnet for complex research/automation (expensive)
-- Model routing based on task complexity
+- Model routing based on task complexity (Phase 8 CloudCallPipeline)
 
 ### Sensing:
 - Everything in Free tier
@@ -125,14 +340,14 @@ Cloud-enhanced intelligence with managed API keys. No user-provided keys.
 
 | Feature Domain | Free Tier (The Local Hub) | Pro Tier ($20-$30/mo) |
 |---|---|---|
-| Intelligence Model | 100% Local SLM (Phi-4/Copilot Runtime) | Hybrid SLM + Cloud VLM (Claude/Gemini) |
+| Intelligence Model | 100% Local SLM (Phi-4-mini via LLamaSharp/Vulkan) | Hybrid: Eco Mode + Turbo Mode (Gemini/Claude) |
 | Primary Logic | Local Perception & Search | Deep Reasoning & Conflict Analysis |
 | Sensing Capabilities | Local OCR & File Watching | GWS/365 Metadata Cloud Ingestion |
 | Research Power | Search Links (Manual Research) | Multi-tab Synthesis & Structured Reports |
 | Automation | None (Read-only observation) | Full "Computer Use" & Executive Action |
 | Memory Sync | Single Device (Local) | Encrypted Cloud Sync & Multi-Device Continuity |
 | Interventions | Local Drift Alerts & Notifications | Predictive Pattern Analysis & Resolutions |
-| Cost Basis | $0 / mo (Runs on User NPU) | Managed Credit Pooling (Managed API) |
+| Cost Basis | $0 / mo (Runs on User GPU via Vulkan) | Managed Credit Pooling (Managed API) |
 
 ## Cost Management (Managed Credit Pooling)
 
@@ -164,6 +379,7 @@ Free tier users receive 3 Energy Units per week.
 
 ### What an Energy Unit Does:
 - 1 Energy Unit = 1 Pro-level action (deep research, complex QA, automation preview)
+- Temporarily switches from Eco Mode to Turbo Mode for that action
 - Enough to demonstrate Pro value without replacing subscription
 - Resets every Monday at 00:00 local time
 
@@ -193,13 +409,6 @@ Free tier users receive 3 Energy Units per week.
 - Private data requires explicit policy approval
 - User can disable cloud features and stay on free tier forever
 
-### Installer Requirements:
-- Windows .exe/.msi installer
-- Bundles: Engram app + local SLM models + Windows Copilot Runtime integration
-- SLM models downloaded/cached on first install (~3GB total)
-- No internet required for Free tier after install
-- Pro tier activation requires internet (subscription validation)
-
 ## Phase-to-Tier Mapping
 
 | Phase | Tier | Cloud Required |
@@ -225,5 +434,8 @@ Free tier users receive 3 Energy Units per week.
 - User MUST be able to disable all cloud features
 - No raw private data sent to cloud without explicit approval
 - Managed credit pooling — no user API keys ever
-- SLM must run on low-spec hardware (4GB RAM minimum)
+- SLM must run on decent laptops (8GB RAM, modern CPU)
+- LLamaSharp with Vulkan for GPU acceleration (no CUDA dependency)
 - Discovery Skill interview must complete before first use
+- Installer must be under 150MB (model downloaded separately)
+- Power Mode toggle must be clear and accessible in settings
