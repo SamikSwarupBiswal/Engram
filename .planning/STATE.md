@@ -1,10 +1,9 @@
 # Engram State
 
-**Status:** Phase 5 complete, ready for Phase 6
-**Current Phase:** Phase 5 - Local Search and Briefs (DONE)
-**Next Phase:** Phase 6 - Identity Hardening
+**Status:** Phase 6 complete, ready for Phase 7
+**Current Phase:** Phase 6 - Identity Hardening (DONE)\n**Next Phase:** Phase 7 - Salience and Drift Engine
 **Last Activity:** 2026-05-13
-**Total Tests:** 260/260 passing
+**Total Tests:** 291/291 passing
 
 ## Accumulated Context
 

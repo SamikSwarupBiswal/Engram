@@ -138,8 +138,8 @@ Plans:
 **Plans:** TBD
 
 Plans:
-- [ ] 06-01: Implement Discovery SOP and identity files.
-- [ ] 06-02: Implement intervention policy evaluator.
+- [x] 06-01: Implement Discovery SOP and identity files.
+- [x] 06-02: Implement intervention policy evaluator.
 
 ### Phase 7: Salience and Drift Engine
 **Goal:** Detect stale knowledge and contradictions between new events, wiki facts, and priorities.
@@ -257,7 +257,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. Local Ingestion MVP | 2/2 | **Complete** | 2026-05-13 |
 | 4. Markdown Wiki Memory | 3/3 | **Complete** | 2026-05-13 |
 | 5. Local Search and Briefs | 3/3 | **Complete** | 2026-05-13 |
-| 6. Identity Hardening | 0/TBD | Not started | - |
+| 6. Identity Hardening | 2/2 | **Complete** | 2026-05-13 |
 | 7. Salience and Drift Engine | 0/TBD | Not started | - |
 | 8. Cloud Reasoning and Tier Routing | 0/TBD | Not started | - |
 | 9. Google Workspace Metadata Ingestion | 0/TBD | Not started | - |
