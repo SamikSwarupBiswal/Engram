@@ -98,9 +98,9 @@ Plans:
 **Plans:** TBD
 
 Plans:
-- [ ] 04-01: Define wiki node schema and front matter.
-- [ ] 04-02: Implement raw-to-wiki metabolizer and merge rules.
-- [ ] 04-03: Generate wiki index and backlinks.
+- [x] 04-01: Define wiki node schema and front matter.
+- [x] 04-02: Implement raw-to-wiki metabolizer and merge rules.
+- [x] 04-03: Generate wiki index and backlinks.
 
 ### Phase 5: Local Search and Briefs
 **Goal:** Make local Engram memory useful through search, status, and brief surfaces.
@@ -251,7 +251,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Repository and Runtime Foundation | 3/3 | **Complete** | 2026-05-13 |
 | 2. Immutable Raw Event Store | 1/1 | **Complete** | 2026-05-13 |
 | 3. Local Ingestion MVP | 2/2 | **Complete** | 2026-05-13 |
-| 4. Markdown Wiki Memory | 0/TBD | Not started | - |
+| 4. Markdown Wiki Memory | 3/3 | **Complete** | 2026-05-13 |
 | 5. Local Search and Briefs | 0/TBD | Not started | - |
 | 6. Identity Hardening | 0/TBD | Not started | - |
 | 7. Salience and Drift Engine | 0/TBD | Not started | - |
