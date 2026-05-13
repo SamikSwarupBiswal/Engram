@@ -1,0 +1,56 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=cRLF
+
+# C# sources
+*.cs text diff=csharp
+*.csx text diff=csharp
+*.csproj text
+*.sln text eol=cRLF
+*.props text
+*.targets text
+
+# Markdown / docs
+*.md text diff=markdown
+*.txt text
+
+# JSON / YAML
+*.json text
+*.yml text
+*.yaml text
+
+# XML
+*.xml text
+
+# Scripts
+*.sh text eol=lf
+*.bash text eol=lf
+*.cmd text eol=cRLF
+*.bat text eol=cRLF
+*.ps1 text eol=cRLF
+
+# Images (binary)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.bmp binary
+*.svg text
+
+# Office documents (binary)
+*.docx binary
+*.xlsx binary
+*.pptx binary
+
+# Archives (binary)
+*.zip binary
+*.tar.gz binary
+*.7z binary
+
+# .NET build outputs
+*.dll binary
+*.exe binary
+*.pdb binary
+
+# Generated / lock files
+*.lock text
