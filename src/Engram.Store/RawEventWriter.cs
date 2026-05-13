@@ -1,16 +1,22 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Engram.Store.Validation;
 
 namespace Engram.Store;
 
 /// <summary>
-/// Writes raw events to .engram/raw/YYYY-MM-DD/[event_id].json.
-/// Uses atomic writes (temp + rename) to prevent corruption from partial failures.
-/// Append-only: never modifies existing files. Uses content hashing for deduplication.
+/// Production-grade raw event writer.
+/// Features: atomic writes, hash index dedup, file locking, WAL, input validation, structured logging.
 /// </summary>
-public class RawEventWriter
+public class RawEventWriter : IDisposable
 {
     private readonly WorkspacePaths _paths;
     private readonly ContentHasher _hasher;
+    private readonly HashIndex _hashIndex;
+    private readonly WriteAheadLog _wal;
+    private readonly ILogger<RawEventWriter>? _logger;
+    private readonly SemaphoreSlim _concurrencyLock = new(1, 1);
+    private bool _disposed;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -18,64 +24,117 @@ public class RawEventWriter
         WriteIndented = true
     };
 
-    public RawEventWriter(WorkspacePaths paths, ContentHasher hasher)
+    public RawEventWriter(WorkspacePaths paths, ContentHasher hasher, ILogger<RawEventWriter>? logger = null)
     {
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
         _hasher = hasher ?? throw new ArgumentNullException(nameof(hasher));
+        _logger = logger;
+        _hashIndex = new HashIndex(paths.Raw);
+        _wal = new WriteAheadLog(paths.Raw);
     }
 
     /// <summary>
-    /// Writes a raw event to the store using atomic write (temp + rename).
-    /// Returns Created if the event was written, Duplicate if an equivalent event already exists.
-    /// Never modifies existing files.
+    /// Writes a raw event to the store using atomic write with full crash recovery.
     /// </summary>
     public WriteResult Write(RawEvent rawEvent)
     {
         ArgumentNullException.ThrowIfNull(rawEvent);
+        InputValidator.ValidateRawEvent(rawEvent);
 
-        // Compute deterministic hash
+        _concurrencyLock.Wait();
+        try
+        {
+            return WriteInternal(rawEvent);
+        }
+        finally
+        {
+            _concurrencyLock.Release();
+        }
+    }
+
+    private WriteResult WriteInternal(RawEvent rawEvent)
+    {
         var hash = _hasher.ComputeHash(rawEvent);
         rawEvent.Hash = hash;
 
-        // Determine file path: .engram/raw/YYYY-MM-DD/[event_id].json
         var dateFolder = rawEvent.CapturedAt.ToString("yyyy-MM-dd");
         var dateDir = Path.Combine(_paths.Raw, dateFolder);
         var filePath = Path.Combine(dateDir, $"{rawEvent.EventId}.json");
 
-        // Check if an equivalent event already exists (by hash)
-        if (TryFindDuplicateByHash(dateDir, hash, out var existingFilePath))
+        _logger?.LogDebug("Writing event {EventId} (hash={Hash}, type={Type})",
+            rawEvent.EventId, hash[..16], rawEvent.EventType);
+
+        // O(1) dedup via hash index
+        if (_hashIndex.TryGet(hash, out var existingPath) && File.Exists(existingPath))
         {
+            _logger?.LogInformation("Duplicate event detected (hash={Hash}), existing={Path}", hash[..16], existingPath);
             return new WriteResult
             {
                 Outcome = WriteOutcome.Duplicate,
                 EventId = rawEvent.EventId,
-                FilePath = existingFilePath,
+                FilePath = existingPath,
                 Hash = hash
             };
         }
 
-        // Atomic write: create date directory, write to .tmp, then rename
+        // Fallback: scan date directory for legacy events not in index
+        if (TryFindDuplicateByHash(dateDir, hash, out var legacyPath))
+        {
+            _hashIndex.Add(hash, legacyPath); // Backfill index
+            _logger?.LogInformation("Duplicate found via scan (hash={Hash}), backfilled index", hash[..16]);
+            return new WriteResult
+            {
+                Outcome = WriteOutcome.Duplicate,
+                EventId = rawEvent.EventId,
+                FilePath = legacyPath,
+                Hash = hash
+            };
+        }
+
+        // Atomic write with file locking and WAL
         Directory.CreateDirectory(dateDir);
 
-        var tmpPath = filePath + ".tmp";
-        var json = JsonSerializer.Serialize(rawEvent, JsonOptions);
-
-        File.WriteAllText(tmpPath, json);
-        File.Move(tmpPath, filePath, overwrite: false);
-
-        return new WriteResult
+        FileLock? fileLock = null;
+        try
         {
-            Outcome = WriteOutcome.Created,
-            EventId = rawEvent.EventId,
-            FilePath = filePath,
-            Hash = hash
-        };
+            fileLock = FileLock.Acquire(filePath);
+
+            // WAL: log write intent
+            _wal.LogWrite(rawEvent.EventId, hash, filePath);
+
+            // Atomic write: .tmp then rename
+            var tmpPath = filePath + ".tmp";
+            var json = JsonSerializer.Serialize(rawEvent, JsonOptions);
+            File.WriteAllText(tmpPath, json);
+            File.Move(tmpPath, filePath, overwrite: false);
+
+            // WAL: log commit
+            _wal.LogCommit(rawEvent.EventId);
+
+            // Update hash index
+            _hashIndex.Add(hash, filePath);
+
+            _logger?.LogInformation("Event written: {EventId} -> {Path}", rawEvent.EventId, filePath);
+
+            return new WriteResult
+            {
+                Outcome = WriteOutcome.Created,
+                EventId = rawEvent.EventId,
+                FilePath = filePath,
+                Hash = hash
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to write event {EventId}", rawEvent.EventId);
+            throw;
+        }
+        finally
+        {
+            fileLock?.Dispose();
+        }
     }
 
-    /// <summary>
-    /// Scans the date directory for an existing event with the same hash.
-    /// Returns true if a duplicate is found without modifying any files.
-    /// </summary>
     private bool TryFindDuplicateByHash(string dateDir, string hash, out string existingFilePath)
     {
         existingFilePath = string.Empty;
@@ -85,7 +144,6 @@ public class RawEventWriter
 
         foreach (var file in Directory.EnumerateFiles(dateDir, "*.json"))
         {
-            // Skip sidecar files and temp files
             if (file.EndsWith(".meta.json") || file.EndsWith(".tmp"))
                 continue;
 
@@ -101,11 +159,21 @@ public class RawEventWriter
             }
             catch
             {
-                // Skip malformed JSON files
                 continue;
             }
         }
 
         return false;
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _concurrencyLock.Dispose();
+            _hashIndex.Dispose();
+            _wal.Dispose();
+            _disposed = true;
+        }
     }
 }

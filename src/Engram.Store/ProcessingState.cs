@@ -6,6 +6,11 @@ namespace Engram.Store;
 /// </summary>
 public class ProcessingState
 {
+    public const int CurrentVersion = 1;
+
+    [System.Text.Json.Serialization.JsonPropertyName("version")]
+    public int Version { get; set; } = CurrentVersion;
+
     [System.Text.Json.Serialization.JsonPropertyName("processing_status")]
     public string Status { get; set; } = "pending";
 

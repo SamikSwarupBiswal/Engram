@@ -1,3 +1,5 @@
+using Engram.Store.Validation;
+
 namespace Engram.Store;
 
 /// <summary>
@@ -16,7 +18,13 @@ public class WorkspacePaths
 
     public WorkspacePaths(string root)
     {
-        Root = root ?? throw new ArgumentNullException(nameof(root));
+        // Validate before assigning
+        if (root is null)
+            throw new ArgumentNullException(nameof(root));
+
+        InputValidator.ValidateRootPath(root);
+
+        Root = root;
     }
 
     public string[] GetAllRequiredPaths() => new[]
