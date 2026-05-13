@@ -80,8 +80,8 @@ Plans:
 **Plans:** TBD
 
 Plans:
-- [ ] 03-01: Implement local file watcher and source attribution.
-- [ ] 03-02: Implement opt-in clipboard and active-window capture policies.
+- [x] 03-01: Implement local file watcher and source attribution.
+- [x] 03-02: Implement opt-in clipboard and active-window capture policies.
 - [ ] 03-03: Add OCR provider interface and development fallback.
 
 ### Phase 4: Markdown Wiki Memory
@@ -250,7 +250,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 |-------|----------------|--------|-----------|
 | 1. Repository and Runtime Foundation | 3/3 | **Complete** | 2026-05-13 |
 | 2. Immutable Raw Event Store | 1/1 | **Complete** | 2026-05-13 |
-| 3. Local Ingestion MVP | 0/TBD | Not started | - |
+| 3. Local Ingestion MVP | 2/2 | **Complete** | 2026-05-13 |
 | 4. Markdown Wiki Memory | 0/TBD | Not started | - |
 | 5. Local Search and Briefs | 0/TBD | Not started | - |
 | 6. Identity Hardening | 0/TBD | Not started | - |
