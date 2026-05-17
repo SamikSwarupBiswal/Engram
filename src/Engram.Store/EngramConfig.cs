@@ -29,6 +29,19 @@ public class EngramConfig
 
     /// <summary>Maximum cost per single cloud call in USD.</summary>
     public decimal PerCallLimitUsd { get; set; } = 0.50m;
+
+    // --- Custom Provider Settings ---
+    /// <summary>Custom provider API key (OpenAI, Groq, Together, etc.)</summary>
+    public string? CustomProviderApiKey { get; set; }
+
+    /// <summary>Custom provider base URL (e.g., "https://api.openai.com/v1")</summary>
+    public string? CustomProviderBaseUrl { get; set; }
+
+    /// <summary>Custom provider model name (e.g., "gpt-4o")</summary>
+    public string? CustomProviderModel { get; set; }
+
+    /// <summary>Custom provider friendly name (e.g., "openai", "groq")</summary>
+    public string? CustomProviderName { get; set; }
 }
 
 /// <summary>

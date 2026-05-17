@@ -620,6 +620,68 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
           <p className="mt-2 text-[11px] text-[#666]">All capture sources are off by default for privacy.</p>
         </div>
 
+        {/* Custom Provider (Turbo Mode) */}
+        {powerMode === "turbo" && (
+          <div>
+            <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Cloud Provider</h3>
+            <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4 space-y-3">
+              <p className="text-[12px] text-[#888]">Connect any OpenAI-compatible API (OpenAI, Groq, Together, Ollama, etc.)</p>
+              <div>
+                <label className="text-[11px] text-[#888]">Provider Name</label>
+                <input
+                  type="text"
+                  placeholder="openai / groq / together / ollama"
+                  className="mt-1 w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-sm text-[#ececec] placeholder:text-[#666] focus:outline-none"
+                  id="provider-name"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#888]">Base URL</label>
+                <input
+                  type="text"
+                  placeholder="https://api.openai.com/v1"
+                  className="mt-1 w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-sm text-[#ececec] placeholder:text-[#666] focus:outline-none"
+                  id="provider-url"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#888]">Model</label>
+                <input
+                  type="text"
+                  placeholder="gpt-4o / llama-3.3-70b / mixtral-8x7b"
+                  className="mt-1 w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-sm text-[#ececec] placeholder:text-[#666] focus:outline-none"
+                  id="provider-model"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[#888]">API Key</label>
+                <input
+                  type="password"
+                  placeholder="sk-... (leave empty for local APIs like Ollama)"
+                  className="mt-1 w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-sm text-[#ececec] placeholder:text-[#666] focus:outline-none"
+                  id="provider-key"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  const name = (document.getElementById('provider-name') as HTMLInputElement)?.value;
+                  const url = (document.getElementById('provider-url') as HTMLInputElement)?.value;
+                  const model = (document.getElementById('provider-model') as HTMLInputElement)?.value;
+                  const key = (document.getElementById('provider-key') as HTMLInputElement)?.value;
+                  await fetch('http://127.0.0.1:5000/api/provider', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ providerName: name, baseUrl: url, model: model, apiKey: key }),
+                  });
+                }}
+                className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700"
+              >
+                Save Provider
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Data */}
         <div>
           <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Data</h3>

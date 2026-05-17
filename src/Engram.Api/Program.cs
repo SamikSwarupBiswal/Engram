@@ -494,6 +494,32 @@ app.MapGet("/api/archive/candidates", () =>
     });
 });
 
+// --- Provider Configuration ---
+app.MapGet("/api/provider", () =>
+{
+    var config = new EngramConfigStore(paths).Load();
+    return Results.Ok(new
+    {
+        hasCustomProvider = !string.IsNullOrEmpty(config.CustomProviderApiKey) || !string.IsNullOrEmpty(config.CustomProviderBaseUrl),
+        providerName = config.CustomProviderName ?? "none",
+        baseUrl = config.CustomProviderBaseUrl ?? "",
+        model = config.CustomProviderModel ?? "",
+        hasApiKey = !string.IsNullOrEmpty(config.CustomProviderApiKey)
+    });
+});
+
+app.MapPost("/api/provider", (ProviderConfigRequest request) =>
+{
+    var store = new EngramConfigStore(paths);
+    var config = store.Load();
+    config.CustomProviderApiKey = request.ApiKey;
+    config.CustomProviderBaseUrl = request.BaseUrl;
+    config.CustomProviderModel = request.Model;
+    config.CustomProviderName = request.ProviderName;
+    store.Save(config);
+    return Results.Ok(new { saved = true });
+});
+
 // --- CopilotKit Runtime (mock) ---
 app.MapPost("/v1/copilotkit", async (HttpContext context) =>
 {
@@ -520,6 +546,7 @@ app.Run();
 record ChatRequest(ChatMessage[]? Messages, int MaxTokens = 1024);
 record ChatMessage(string Role, string Content);
 record PowerModeRequest(string Mode);
+record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, string? ProviderName);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
