@@ -103,6 +103,23 @@ export function ChatPanel({ sessionId, onFirstMessage }: ChatPanelProps) {
         ...updated.slice(-10).map((m) => ({ role: m.role, content: m.content })),
         { role: "user", content: userContent },
       ];
+
+      // Check token budget before sending
+      const estimatedInput = chatMessages.reduce((sum, m) => sum + m.content.length, 0) / 4;
+      const tokenCheck = await api.checkTokens("gemini-flash", Math.round(estimatedInput), 500);
+      if (!tokenCheck.allowed) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: `Token budget exceeded. ${tokenCheck.reason || "Upgrade to Pro or buy a token pack in Settings."}`,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
+
       const data = await api.chat(chatMessages);
       const assistantContent = (data.choices?.[0]?.message as unknown as { content: string })?.content ?? "No response.";
       setMessages((prev) => [

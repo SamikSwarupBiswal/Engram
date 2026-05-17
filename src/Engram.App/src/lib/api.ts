@@ -222,6 +222,41 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ mode }),
     }),
+
+  // Token budget
+  tokenStatus: () =>
+    apiFetch<{ tier: string; monthlyAllowance: number; tokensRemaining: number; tokensUsedThisMonth: number; bonusTokens: number; cycleStart: string; cycleEnd: string; usageByProvider: Record<string, number>; history: { timestamp: string; provider: string; inputTokens: number; outputTokens: number; proTokensCost: number; balanceAfter: number }[]; usagePercent: number; daysRemaining: number }>("/api/tokens"),
+
+  checkTokens: (provider: string, inputTokens: number, outputTokens: number) =>
+    apiFetch<{ allowed: boolean; cost: number; reason: string | null; remainingAfter: number }>("/api/tokens/check", {
+      method: "POST",
+      body: JSON.stringify({ provider, inputTokens, outputTokens }),
+    }),
+
+  buyTokenPack: (size: "small" | "large") =>
+    apiFetch<{ added: number; remaining: number }>("/api/tokens/pack", {
+      method: "POST",
+      body: JSON.stringify({ size }),
+    }),
+
+  setTier: (tier: "free" | "pro") =>
+    apiFetch<{ tier: string; monthlyAllowance: number; tokensRemaining: number }>("/api/tokens/tier", {
+      method: "POST",
+      body: JSON.stringify({ tier }),
+    }),
+
+  tokenPricing: () =>
+    apiFetch<{ plans: { name: string; price: string; tokens: number; period: string }[]; packs: { name: string; tokens: number; price: string }[]; rates: { provider: string; inputCost: string; outputCost: string; description: string }[] }>("/api/tokens/pricing"),
+
+  // Provider config
+  getProvider: () =>
+    apiFetch<{ hasCustomProvider: boolean; providerName: string; baseUrl: string; model: string; hasApiKey: boolean }>("/api/provider"),
+
+  setProvider: (config: { apiKey?: string; baseUrl?: string; model?: string; providerName?: string }) =>
+    apiFetch<{ saved: boolean }>("/api/provider", {
+      method: "POST",
+      body: JSON.stringify(config),
+    }),
 };
 
 export async function checkApiHealth(): Promise<boolean> {

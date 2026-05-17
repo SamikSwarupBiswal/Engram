@@ -410,6 +410,7 @@ function ArchiveView() {
 
 // ─── Settings View ───
 function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
+  const [tokenStatus, setTokenStatus] = useState<{ tier: string; monthlyAllowance: number; tokensRemaining: number; tokensUsedThisMonth: number; bonusTokens: number; usagePercent: number; daysRemaining: number; usageByProvider: Record<string, number>; history: { timestamp: string; provider: string; proTokensCost: number; balanceAfter: number }[] } | null>(null);
   const [powerMode, setPowerMode] = useState<"eco" | "turbo">("eco");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [identity, setIdentity] = useState<IdentityResponse | null>(null);
@@ -417,6 +418,7 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
 
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
+    api.tokenStatus().then(setTokenStatus).catch(() => {});
     api.identity().then(setIdentity).catch(() => {});
     api.drift().then(d => setAlerts(d.alerts)).catch(() => {});
   }, []);
@@ -619,6 +621,85 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
           </div>
           <p className="mt-2 text-[11px] text-[#666]">All capture sources are off by default for privacy.</p>
         </div>
+
+        {/* Token Budget Dashboard */}
+        {tokenStatus && (
+          <div>
+            <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Token Budget</h3>
+            <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5">
+              {/* Usage bar */}
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[13px] font-medium">{tokenStatus.tier === "pro" ? "Pro" : "Free"} Tier</span>
+                  <span className="text-[11px] text-[#888]">{tokenStatus.daysRemaining} days left</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-white/[0.06]">
+                  <div
+                    className={`h-2 rounded-full transition-all ${tokenStatus.usagePercent > 80 ? "bg-red-500" : tokenStatus.usagePercent > 50 ? "bg-yellow-500" : "bg-emerald-500"}`}
+                    style={{ width: `${Math.min(100, tokenStatus.usagePercent)}%` }}
+                  />
+                </div>
+                <div className="mt-1 flex justify-between text-[11px] text-[#888]">
+                  <span>{tokenStatus.tokensUsedThisMonth.toLocaleString()} used</span>
+                  <span>{tokenStatus.tokensRemaining.toLocaleString()} remaining</span>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div className="rounded-lg bg-white/[0.04] p-2 text-center">
+                  <div className="text-sm font-medium">{tokenStatus.monthlyAllowance.toLocaleString()}</div>
+                  <div className="text-[10px] text-[#888]">Monthly</div>
+                </div>
+                <div className="rounded-lg bg-white/[0.04] p-2 text-center">
+                  <div className="text-sm font-medium">{tokenStatus.bonusTokens.toLocaleString()}</div>
+                  <div className="text-[10px] text-[#888]">Bonus</div>
+                </div>
+                <div className="rounded-lg bg-white/[0.04] p-2 text-center">
+                  <div className="text-sm font-medium">{Math.round(tokenStatus.usagePercent)}%</div>
+                  <div className="text-[10px] text-[#888]">Used</div>
+                </div>
+              </div>
+
+              {/* Provider breakdown */}
+              {Object.keys(tokenStatus.usageByProvider).length > 0 && (
+                <div className="mb-3">
+                  <div className="text-[11px] text-[#888] mb-1">Usage by Provider</div>
+                  {Object.entries(tokenStatus.usageByProvider).map(([provider, tokens]) => (
+                    <div key={provider} className="flex justify-between text-[12px] py-0.5">
+                      <span className="text-[#b4b4b4]">{provider}</span>
+                      <span className="text-[#888]">{tokens.toLocaleString()} tokens</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                {tokenStatus.tier === "free" && (
+                  <button
+                    onClick={async () => { await api.setTier("pro"); const s = await api.tokenStatus(); setTokenStatus(s); }}
+                    className="flex-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] text-white hover:bg-emerald-700"
+                  >
+                    Upgrade to Pro
+                  </button>
+                )}
+                <button
+                  onClick={async () => { await api.buyTokenPack("small"); const s = await api.tokenStatus(); setTokenStatus(s); }}
+                  className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.08]"
+                >
+                  +100K tokens ($5)
+                </button>
+                <button
+                  onClick={async () => { await api.buyTokenPack("large"); const s = await api.tokenStatus(); setTokenStatus(s); }}
+                  className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.08]"
+                >
+                  +500K tokens ($20)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Custom Provider (Turbo Mode) */}
         {powerMode === "turbo" && (
