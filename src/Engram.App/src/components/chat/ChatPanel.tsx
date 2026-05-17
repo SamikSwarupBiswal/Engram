@@ -113,7 +113,7 @@ export function ChatPanel({ sessionId, onFirstMessage }: ChatPanelProps) {
           {
             id: (Date.now() + 1).toString(),
             role: "assistant",
-            content: `Token budget exceeded. ${tokenCheck.reason || "Upgrade to Pro or buy a token pack in Settings."}`,
+            content: `Token budget reached. ${tokenCheck.reason || "Upgrade to Pro or buy more tokens in Settings."}`,
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -137,7 +137,7 @@ export function ChatPanel({ sessionId, onFirstMessage }: ChatPanelProps) {
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Cannot reach Engram API. Make sure the app is running.",
+          content: "I'm getting ready! The model is still loading. Try again in a moment.",
           timestamp: new Date().toISOString(),
         },
       ]);

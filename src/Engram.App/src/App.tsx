@@ -4,6 +4,7 @@ import { ChatPanel } from "./components/chat/ChatPanel";
 import { Titlebar } from "./components/layout/Titlebar";
 import { api, checkApiHealth } from "./lib/api";
 import { DiscoveryInterview } from "./components/discovery/DiscoveryInterview";
+import { ModelDownloadBar } from "./components/chat/ModelDownloadBar";
 import type { SearchResult, WikiNodeSummary, RawEvent, StatusResponse, IdentityResponse, DriftAlert } from "./lib/api";
 
 export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive";
@@ -28,6 +29,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [discoveryDone, setDiscoveryDone] = useState<boolean | null>(null);
+  const [modelReady, setModelReady] = useState(false);
 
   useEffect(() => {
     checkApiHealth().then((online) => {
@@ -93,6 +95,9 @@ export default function App() {
               onComplete={() => setDiscoveryDone(true)}
               onSkip={() => setDiscoveryDone(true)}
             />
+          )}
+          {discoveryDone && activeView === "chat" && !modelReady && (
+            <ModelDownloadBar onComplete={() => setModelReady(true)} />
           )}
           {discoveryDone && activeView === "chat" && (
             <ChatPanel

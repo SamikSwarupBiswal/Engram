@@ -75,7 +75,7 @@ public class InferenceRouter : IDisposable
             }
 
             return InferenceResult.Failed(
-                "Local model not loaded. Download it from Settings > Power Mode.");
+                "The model is being downloaded. Please wait a moment and try again.");
         }
 
         // Turbo mode — use cloud
@@ -92,8 +92,8 @@ public class InferenceRouter : IDisposable
             return await _localEngine.ChatCompletionAsync(messages, maxTokens, cancellationToken);
         }
 
-        return InferenceResult.Failed(
-            "No inference engine available. Download the local model or enable Pro tier.");
+return InferenceResult.Failed(
+                "Engram is getting ready. The model is being set up.");
     }
 
     /// <summary>

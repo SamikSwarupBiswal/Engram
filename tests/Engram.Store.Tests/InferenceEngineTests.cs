@@ -141,7 +141,7 @@ public class InferenceEngineTests : IDisposable
 
         Assert.False(result.Success);
         Assert.NotNull(result.ErrorMessage);
-        Assert.Contains("not loaded", result.ErrorMessage);
+        Assert.Contains("model", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public class InferenceEngineTests : IDisposable
         });
 
         Assert.False(result.Success);
-        Assert.Contains("not loaded", result.ErrorMessage);
+        Assert.Contains("model", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
