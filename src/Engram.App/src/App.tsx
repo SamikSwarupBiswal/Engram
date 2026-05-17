@@ -6,7 +6,7 @@ import { api, checkApiHealth } from "./lib/api";
 import { DiscoveryInterview } from "./components/discovery/DiscoveryInterview";
 import type { SearchResult, WikiNodeSummary, RawEvent, StatusResponse, IdentityResponse, DriftAlert } from "./lib/api";
 
-export type View = "chat" | "search" | "wiki" | "timeline" | "settings";
+export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive";
 
 const SESSIONS_KEY = "engram-chat-sessions";
 
@@ -106,6 +106,7 @@ export default function App() {
           {activeView === "wiki" && <WikiView />}
           {activeView === "timeline" && <TimelineView />}
           {discoveryDone && activeView === "settings" && <SettingsView onRedoDiscovery={() => setDiscoveryDone(false)} />}
+          {discoveryDone && activeView === "archive" && <ArchiveView />}
         </main>
       </div>
     </div>
@@ -320,6 +321,93 @@ function TimelineView() {
   );
 }
 
+// ─── Archive View ───
+function ArchiveView() {
+  const [archived, setArchived] = useState<{nodeId: string; title: string; nodeType: string; salience: number; lastTouchedAt: string}[]>([]);
+  const [candidates, setCandidates] = useState<{nodeId: string; title: string; nodeType: string; salience: number; lastTouchedAt: string}[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.archiveList().then(d => setArchived(d.nodes)).catch(() => {}),
+      api.archiveCandidates().then(d => setCandidates(d.nodes)).catch(() => {}),
+    ]).finally(() => setLoading(false));
+  }, []);
+
+  const handleArchiveStale = async () => {
+    const result = await api.archiveStale();
+    if (result.archived > 0) {
+      setCandidates([]);
+      const refreshed = await api.archiveList();
+      setArchived(refreshed.nodes);
+    }
+  };
+
+  const handleRestore = async (nodeId: string) => {
+    await api.restoreArchive(nodeId);
+    setArchived(archived.filter(n => n.nodeId !== nodeId));
+    const refreshed = await api.archiveCandidates();
+    setCandidates(refreshed.nodes);
+  };
+
+  return (
+    <div className="flex h-full flex-col p-6">
+      <h2 className="text-base font-medium">Archive</h2>
+      <p className="mt-1 text-[13px] text-[#888]">Stale knowledge moved from wiki. Nodes with low salience.</p>
+
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center"><div className="animate-pulse text-sm text-[#888]">Loading...</div></div>
+      ) : (
+        <div className="mt-4 flex-1 overflow-y-auto space-y-6">
+          {/* Candidates for archival */}
+          {candidates.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[13px] font-medium text-[#b4b4b4]">Candidates for Archival ({candidates.length})</h3>
+                <button onClick={handleArchiveStale} className="rounded-lg bg-yellow-600/20 px-3 py-1.5 text-[12px] text-yellow-400 hover:bg-yellow-600/30">
+                  Archive All Stale
+                </button>
+              </div>
+              <div className="space-y-2">
+                {candidates.map(n => (
+                  <div key={n.nodeId} className="flex items-center justify-between rounded-xl border border-yellow-900/20 bg-yellow-900/5 p-3">
+                    <div>
+                      <div className="text-sm">{n.title}</div>
+                      <div className="text-[11px] text-[#888]">{n.nodeType} · Salience: {n.salience.toFixed(2)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Archived nodes */}
+          <div>
+            <h3 className="text-[13px] font-medium text-[#b4b4b4] mb-3">Archived ({archived.length})</h3>
+            {archived.length === 0 ? (
+              <div className="py-8 text-center text-sm text-[#888]">No archived nodes.</div>
+            ) : (
+              <div className="space-y-2">
+                {archived.map(n => (
+                  <div key={n.nodeId} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-3">
+                    <div>
+                      <div className="text-sm">{n.title}</div>
+                      <div className="text-[11px] text-[#888]">{n.nodeType} · Salience: {n.salience.toFixed(2)}</div>
+                    </div>
+                    <button onClick={() => handleRestore(n.nodeId)} className="rounded-lg bg-emerald-600/20 px-3 py-1 text-[11px] text-emerald-400 hover:bg-emerald-600/30">
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Settings View ───
 function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
   const [powerMode, setPowerMode] = useState<"eco" | "turbo">("eco");
@@ -483,6 +571,28 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
                     <span className="text-[11px] text-[#888]">{a.status}</span>
                   </div>
                   <p className="mt-1 text-[13px] text-[#b4b4b4]">{a.description}</p>
+                  {a.status === "Pending" && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={async () => { await api.acceptDrift(a.alertId); setAlerts(alerts.filter(x => x.alertId !== a.alertId)); }}
+                        className="rounded-lg bg-emerald-600/20 px-3 py-1 text-[11px] text-emerald-400 hover:bg-emerald-600/30"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={async () => { await api.dismissDrift(a.alertId); setAlerts(alerts.filter(x => x.alertId !== a.alertId)); }}
+                        className="rounded-lg bg-zinc-600/20 px-3 py-1 text-[11px] text-zinc-400 hover:bg-zinc-600/30"
+                      >
+                        Dismiss
+                      </button>
+                      <button
+                        onClick={async () => { await api.convertDrift(a.alertId); setAlerts(alerts.filter(x => x.alertId !== a.alertId)); }}
+                        className="rounded-lg bg-blue-600/20 px-3 py-1 text-[11px] text-blue-400 hover:bg-blue-600/30"
+                      >
+                        Convert to Wiki
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

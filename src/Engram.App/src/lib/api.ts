@@ -9,8 +9,6 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// ─── Types ───
-
 export interface SearchResult {
   title: string;
   snippet: string;
@@ -99,8 +97,6 @@ export interface WikiResponse {
   nodes: WikiNodeSummary[];
 }
 
-// ─── Types (extended) ───
-
 export interface DiscoveryAnswers {
   displayName: string;
   goals: string[];
@@ -110,8 +106,6 @@ export interface DiscoveryAnswers {
   priorities: { description: string; category: string }[];
   antiGoals: { description: string; severity: string; context?: string }[];
 }
-
-// ─── API Methods ───
 
 export const api = {
   search: (query: string, limit = 20) =>
@@ -176,6 +170,36 @@ export const api = {
       body: JSON.stringify(request),
     }),
 
+  // Drift actions
+  acceptDrift: (alertId: string) =>
+    apiFetch<{ status: string }>(`/api/drift/${alertId}/accept`, { method: "POST" }),
+
+  dismissDrift: (alertId: string) =>
+    apiFetch<{ status: string }>(`/api/drift/${alertId}/dismiss`, { method: "POST" }),
+
+  convertDrift: (alertId: string) =>
+    apiFetch<{ status: string }>(`/api/drift/${alertId}/convert`, { method: "POST" }),
+
+  driftStats: () =>
+    apiFetch<{ total: number; pending: number; dismissed: number; accepted: number; converted: number }>("/api/drift/stats"),
+
+  // Salience
+  salience: () =>
+    apiFetch<{ count: number; nodes: { nodeId: string; title: string; nodeType: string; salience: number; shouldArchive: boolean; lastTouchedAt: string }[] }>("/api/salience"),
+
+  // Archive
+  archiveList: () =>
+    apiFetch<{ count: number; nodes: { nodeId: string; title: string; nodeType: string; salience: number; lastTouchedAt: string }[] }>("/api/archive"),
+
+  archiveStale: () =>
+    apiFetch<{ archived: number; nodeIds: string[] }>("/api/archive/stale", { method: "POST" }),
+
+  restoreArchive: (nodeId: string) =>
+    apiFetch<{ restored: boolean }>(`/api/archive/${nodeId}/restore`, { method: "POST" }),
+
+  archiveCandidates: () =>
+    apiFetch<{ count: number; nodes: { nodeId: string; title: string; nodeType: string; salience: number; lastTouchedAt: string }[] }>("/api/archive/candidates"),
+
   // Model management
   modelStatus: () =>
     apiFetch<{ model: string; description: string; state: string; path: string; sizeBytes: number; progress: number; gpu: { backend: string; device: string; vramMb: number; layers: number }; isReady: boolean; isLoading: boolean }>("/api/model/status"),
@@ -199,8 +223,6 @@ export const api = {
       body: JSON.stringify({ mode }),
     }),
 };
-
-// ─── Health Check ───
 
 export async function checkApiHealth(): Promise<boolean> {
   try {

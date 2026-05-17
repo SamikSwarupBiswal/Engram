@@ -41,6 +41,7 @@ var briefGenerator = new BriefGenerator(nodeStore);
 var identityStore = new IdentityStore(paths);
 var salienceScorer = new SalienceScorer();
 var driftAlertStore = new DriftAlertStore(paths);
+var archiveManager = new ArchiveManager(nodeStore, salienceScorer, paths);
 var discoverySOP = new DiscoverySOP(identityStore);
 var interventionPolicy = new InterventionPolicy(identityStore);
 var gpuDetector = new GpuDetector();
@@ -402,6 +403,95 @@ app.MapPost("/api/power-mode", (PowerModeRequest request) =>
         return Results.Ok(new { mode = inferenceRouter.PowerMode.ToString().ToLower() });
     }
     return Results.BadRequest(new { error = "Invalid mode. Use 'eco' or 'turbo'." });
+});
+
+// --- Drift Alert Actions ---
+app.MapPost("/api/drift/{alertId}/accept", (string alertId) =>
+{
+    var result = driftAlertStore.Accept(alertId);
+    return result ? Results.Ok(new { status = "accepted" }) : Results.NotFound(new { error = "Alert not found" });
+});
+
+app.MapPost("/api/drift/{alertId}/dismiss", (string alertId) =>
+{
+    var result = driftAlertStore.Dismiss(alertId);
+    return result ? Results.Ok(new { status = "dismissed" }) : Results.NotFound(new { error = "Alert not found" });
+});
+
+app.MapPost("/api/drift/{alertId}/convert", (string alertId) =>
+{
+    var result = driftAlertStore.Convert(alertId);
+    return result ? Results.Ok(new { status = "converted" }) : Results.NotFound(new { error = "Alert not found" });
+});
+
+app.MapGet("/api/drift/stats", () =>
+{
+    var stats = driftAlertStore.GetStats();
+    return Results.Ok(stats);
+});
+
+// --- Salience ---
+app.MapGet("/api/salience", () =>
+{
+    var nodes = nodeStore.LoadAll();
+    var scored = nodes.Select(n => new
+    {
+        nodeId = n.NodeId,
+        title = n.Title,
+        nodeType = n.NodeType.ToString(),
+        salience = salienceScorer.Compute(n),
+        shouldArchive = salienceScorer.ShouldArchive(n),
+        lastTouchedAt = n.LastTouchedAt
+    }).OrderByDescending(n => n.salience).ToList();
+
+    return Results.Ok(new { count = scored.Count, nodes = scored });
+});
+
+// --- Archive ---
+app.MapGet("/api/archive", () =>
+{
+    var archived = archiveManager.ListArchived();
+    return Results.Ok(new
+    {
+        count = archived.Count,
+        nodes = archived.Select(n => new
+        {
+            nodeId = n.NodeId,
+            title = n.Title,
+            nodeType = n.NodeType.ToString(),
+            salience = salienceScorer.Compute(n),
+            lastTouchedAt = n.LastTouchedAt
+        })
+    });
+});
+
+app.MapPost("/api/archive/stale", () =>
+{
+    var archived = archiveManager.ArchiveStaleNodes();
+    return Results.Ok(new { archived = archived.Count, nodeIds = archived });
+});
+
+app.MapPost("/api/archive/{nodeId}/restore", (string nodeId) =>
+{
+    var result = archiveManager.RestoreFromArchive(nodeId);
+    return result ? Results.Ok(new { restored = true }) : Results.NotFound(new { error = "Node not found in archive" });
+});
+
+app.MapGet("/api/archive/candidates", () =>
+{
+    var candidates = archiveManager.GetArchiveCandidates();
+    return Results.Ok(new
+    {
+        count = candidates.Count,
+        nodes = candidates.Select(n => new
+        {
+            nodeId = n.NodeId,
+            title = n.Title,
+            nodeType = n.NodeType.ToString(),
+            salience = salienceScorer.Compute(n),
+            lastTouchedAt = n.LastTouchedAt
+        })
+    });
 });
 
 // --- CopilotKit Runtime (mock) ---
