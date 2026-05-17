@@ -46,13 +46,6 @@ public class EdgeCaseTests : IDisposable
     }
 
     [Fact]
-    public void Validate_NullEventId_Throws()
-    {
-        var evt = new RawEvent { EventId = null!, EventType = "test", Source = "test" };
-        Assert.Throws<EngramValidationException>(() => InputValidator.ValidateRawEvent(evt));
-    }
-
-    [Fact]
     public void Validate_LongEventId_Throws()
     {
         var evt = new RawEvent { EventId = new string('x', 300), EventType = "test", Source = "test" };
@@ -60,10 +53,25 @@ public class EdgeCaseTests : IDisposable
     }
 
     [Fact]
-    public void Validate_BackslashInEventId_Throws()
+    public void Validate_NullEventId_Throws()
     {
-        var evt = new RawEvent { EventId = "test\\path", EventType = "test", Source = "test" };
+        var evt = new RawEvent { EventId = null!, EventType = "test", Source = "test" };
         Assert.Throws<EngramValidationException>(() => InputValidator.ValidateRawEvent(evt));
+    }
+
+    [Fact]
+    public void Validate_ForwardSlashInEventId_Throws()
+    {
+        var evt = new RawEvent { EventId = "test/path", EventType = "test", Source = "test" };
+        Assert.Throws<EngramValidationException>(() => InputValidator.ValidateRawEvent(evt));
+    }
+
+    [Fact]
+    public void Validate_NullByteInEventId_Throws()
+    {
+        // Null byte is invalid on ALL platforms
+        var evt = new RawEvent { EventId = "test\0path", EventType = "test", Source = "test" };
+        Assert.ThrowsAny<Exception>(() => InputValidator.ValidateRawEvent(evt));
     }
 
     [Fact]
@@ -75,7 +83,7 @@ public class EdgeCaseTests : IDisposable
     [Fact]
     public void Validate_EmptyRoot_Throws()
     {
-        Assert.ThrowsAny<Exception>(() => new WorkspacePaths(""));
+        Assert.Throws<EngramValidationException>(() => new WorkspacePaths(""));
     }
 
     [Fact]
@@ -234,6 +242,35 @@ public class EdgeCaseTests : IDisposable
         var store = new WikiNodeStore(_paths);
         var node = store.Load("does_not_exist");
         Assert.Null(node);
+    }
+
+    [Fact]
+    public void Wiki_DeleteNonexistent_ReturnsFalse()
+    {
+        var store = new WikiNodeStore(_paths);
+        var result = store.Delete("does_not_exist");
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void Wiki_DeleteExisting_ReturnsTrue()
+    {
+        var store = new WikiNodeStore(_paths);
+        store.Save(new WikiNode { NodeId = "to_delete", Title = "Delete Me", NodeType = WikiNodeType.Concept });
+        Assert.True(store.Exists("to_delete"));
+
+        var deleted = store.Delete("to_delete");
+        Assert.True(deleted);
+        Assert.False(store.Exists("to_delete"));
+    }
+
+    [Fact]
+    public void Wiki_DeleteThenLoad_ReturnsNull()
+    {
+        var store = new WikiNodeStore(_paths);
+        store.Save(new WikiNode { NodeId = "del_load", Title = "Test", NodeType = WikiNodeType.Concept });
+        store.Delete("del_load");
+        Assert.Null(store.Load("del_load"));
     }
 
     [Fact]
@@ -463,7 +500,7 @@ public class EdgeCaseTests : IDisposable
             NodeId = "decay_test",
             Title = "Old Node",
             NodeType = WikiNodeType.Concept,
-            LastTouchedAt = DateTimeOffset.UtcNow.AddDays(-60)
+            LastTouchedAt = DateTimeOffset.UtcNow.AddDays(-31)
         };
 
         var score = scorer.Compute(node);

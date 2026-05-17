@@ -121,6 +121,35 @@ public class WikiNodeStore : IDisposable
     }
 
     /// <summary>
+    /// Delete a wiki node by ID. Returns true if deleted, false if not found.
+    /// Thread-safe.
+    /// </summary>
+    public bool Delete(string nodeId)
+    {
+        var filePath = GetFilePath(nodeId);
+
+        _lock.EnterWriteLock();
+        try
+        {
+            if (!File.Exists(filePath))
+                return false;
+
+            File.Delete(filePath);
+            _logger?.LogInformation("Deleted wiki node: {NodeId}", nodeId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to delete wiki node: {NodeId}", nodeId);
+            return false;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
+    /// <summary>
     /// Get the wiki directory path.
     /// </summary>
     public string GetWikiPath() => _wikiPath;
