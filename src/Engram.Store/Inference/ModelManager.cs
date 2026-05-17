@@ -21,7 +21,7 @@ public class ModelManager : IDisposable
     {
         Name = "Phi-4-mini",
         FileName = "phi-4-mini-q4_k_m.gguf",
-        DownloadUrl = "https://huggingface.co/bartowski/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
+        DownloadUrl = "https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
         SizeBytes = 2_300_000_000L, // ~2.2GB
         ContextSize = 4096,
         Description = "Phi-4-mini 3.8B params, Q4_K_M quantized (~2.2GB)"
