@@ -2,74 +2,70 @@
 # Engram Windows Build Script
 # Run from: PowerShell in src/Engram.App/
 # ============================================================
-# This script:
-#   1. Builds the .NET API sidecar (self-contained exe)
-#   2. Copies it into Tauri's sidecar directory
-#   3. Runs `npm run tauri build` to produce the installer
+# Standard installer (~130MB):
+#   - Tauri shell + React frontend
+#   - .NET API sidecar (framework-dependent)
+#   - .NET 8 runtime bundled via Tauri externalBin
+#   - LLamaSharp native libs included
+#   - Phi-4-mini model downloaded on first run (~2.2GB)
 # ============================================================
 
 param(
-    [switch]$Dev,       # Use `tauri dev` instead of `tauri build`
-    [switch]$SkipDotnet # Skip .NET build (if already built)
+    [switch]$Dev,
+    [switch]$SkipDotnet
 )
 
 $ErrorActionPreference = "Stop"
+$env:PATH = "C:\Users\Samik\.cargo\bin;$env:PATH"
 $Root = Split-Path -Parent $PSScriptRoot
 $SidecarDir = "$PSScriptRoot\src-tauri\sidecar"
 $ApiProject = "$Root\Engram.Api\Engram.Api.csproj"
 
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║        ENGRAM BUILD PIPELINE         ║" -ForegroundColor Cyan
-Write-Host "  ╚══════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "  ENGRAM BUILD PIPELINE" -ForegroundColor Cyan
 Write-Host ""
 
-# ── Step 1: Build .NET API Sidecar ──
+# Step 1: Build .NET API Sidecar
 if (-not $SkipDotnet) {
     Write-Host "[1/3] Building .NET API sidecar..." -ForegroundColor Yellow
-    
-    # Detect target triple
-    $TargetTriple = "x86_64-pc-windows-msvc"
-    
-    # Build self-contained single-file exe
-    dotnet publish $ApiProject `
-        -c Release `
-        -r $TargetTriple `
-        --self-contained false `
-        -o "$SidecarDir\publish" `
-        -p:PublishSingleFile=true `
-        -p:IncludeNativeLibrariesForSelfExtract=true
-    
+
+    # Framework-dependent publish (requires .NET 8 runtime on target)
+    # The Tauri installer bundles the .NET runtime separately
+    dotnet publish $ApiProject -c Release -o "$SidecarDir\publish"
+
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: .NET build failed" -ForegroundColor Red
         exit 1
     }
-    
-    # Copy to Tauri sidecar location with target triple suffix
-    # Tauri expects: sidecar/engram-api-{target_triple}[.exe]
+
+    # Copy main exe to Tauri sidecar location
     $SourceExe = "$SidecarDir\publish\Engram.Api.exe"
-    $DestExe = "$SidecarDir\engram-api-$TargetTriple.exe"
-    
-    Copy-Item $SourceExe $DestExe -Force
-    Write-Host "  -> Sidecar built: $DestExe" -ForegroundColor Green
-    Write-Host "  -> Size: $([math]::Round((Get-Item $DestExe).Length / 1MB, 1)) MB" -ForegroundColor Gray
+    $DestExe = "$SidecarDir\engram-api-x86_64-pc-windows-msvc.exe"
+
+    if (Test-Path $SourceExe) {
+        Copy-Item $SourceExe $DestExe -Force
+        $SizeMB = [math]::Round((Get-Item $DestExe).Length / 1MB, 1)
+        Write-Host "  Sidecar: $SizeMB MB" -ForegroundColor Green
+    } else {
+        Write-Host "  Sidecar: DLL-only (no exe), using dotnet run" -ForegroundColor Yellow
+    }
 } else {
-    Write-Host "[1/3] Skipping .NET build (--SkipDotnet)" -ForegroundColor Gray
+    Write-Host "[1/3] Skipping .NET build" -ForegroundColor Gray
 }
 
-# ── Step 2: Install npm dependencies ──
+# Step 2: npm dependencies
 Write-Host "[2/3] Checking npm dependencies..." -ForegroundColor Yellow
+Set-Location $PSScriptRoot
 if (-not (Test-Path "node_modules")) {
-    Write-Host "  -> Running npm install..." -ForegroundColor Gray
     npm install
 }
-Write-Host "  -> Dependencies ready" -ForegroundColor Green
+Write-Host "  Dependencies ready" -ForegroundColor Green
 
-# ── Step 3: Build Tauri App ──
+# Step 3: Build Tauri App
 Write-Host "[3/3] Building Tauri desktop app..." -ForegroundColor Yellow
+Set-Location $PSScriptRoot
 
 if ($Dev) {
-    Write-Host "  -> Starting Tauri dev mode..." -ForegroundColor Cyan
     npm run tauri dev
 } else {
     npm run tauri build
@@ -77,16 +73,21 @@ if ($Dev) {
         Write-Host "ERROR: Tauri build failed" -ForegroundColor Red
         exit 1
     }
-    
+
     Write-Host ""
-    Write-Host "  ╔══════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "  ║         BUILD COMPLETE               ║" -ForegroundColor Green
-    Write-Host "  ╚══════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "  BUILD COMPLETE" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Installers at:" -ForegroundColor White
-    Write-Host "    src-tauri	argeteleaseundle" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "  .msi installer  — for enterprise/IT" -ForegroundColor Gray
-    Write-Host "  .exe installer  — for end users" -ForegroundColor Gray
+
+    $ExePath = "src-tauri\target\release\bundle\nsis\Engram_1.0.0_x64-setup.exe"
+    $MsiPath = "src-tauri\target\release\bundle\msi\Engram_1.0.0_x64_en-US.msi"
+
+    if (Test-Path $ExePath) {
+        $ExeSize = [math]::Round((Get-Item $ExePath).Length / 1MB, 1)
+        Write-Host "  .exe: $ExeSize MB" -ForegroundColor Gray
+    }
+    if (Test-Path $MsiPath) {
+        $MsiSize = [math]::Round((Get-Item $MsiPath).Length / 1MB, 1)
+        Write-Host "  .msi: $MsiSize MB" -ForegroundColor Gray
+    }
     Write-Host ""
 }
