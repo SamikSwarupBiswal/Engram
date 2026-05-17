@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src-tauri/target/
+*.log
+src-tauri/sidecar/publish/
+src-tauri/gen/
+src-tauri/sidecar/*.exe

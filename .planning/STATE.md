@@ -1,134 +1,133 @@
 # Engram State
 
-**Status:** Phase 8 complete — Cloud Reasoning Pipeline operational
-**Current Phase:** Phase 8 - Cloud Reasoning and Tier Routing (DONE)
+**Status:** Phase 6 complete — Identity Hardening + UI
+**Current Phase:** Phase 6 - Identity Hardening (DONE)
 **Next Phase:** Phase 9 - Google Workspace Metadata Ingestion [PRO TIER]
-**Last Activity:** 2026-05-13
-**Total Tests:** 444/444 passing
-**Latest Commit:** f3b6aa5 (feat: complete cloud reasoning pipeline and integration tests)
-**Git Status:** master, 5 commits ahead of origin/master (not pushed)
+**Last Activity:** 2026-05-17
+**Total Tests:** 516/516 passing
+**Latest Commit:** Phase 6 UI complete
+**Git Status:** master
 
-## Phase 8 Final State
+## Architecture
 
-### Cloud Reasoning Pipeline (Complete)
-- **CloudCallPipeline.cs** — Orchestration: Route → Filter → TierGuard → RateLimit → Budget → Cache → Provider → Audit
-- **CloudRateLimiter.cs** — Per-minute and per-hour rate limiting
-- **MockCloudModelProvider.cs** — Test/dev provider
-- **GeminiFlashProvider.cs** — Stub for Gemini 3 Flash
-- **ClaudeSonnetProvider.cs** — Stub for Claude 4.5 Sonnet
-- **Phase 8 plans 08-01 and 08-02: COMPLETE**
+Engram is a desktop app. Not a web app, not a localhost dev server.
 
-### Test Results
-- 444 total tests, 444 passed, 0 failed
-- 29 new Phase 8 tests (17 integration + 12 unit)
-- All 6 quality gates pass:
-  1. Model routing selects correct tier ✓
-  2. Local filter reduces token ingress ✓
-  3. Cloud call → audit log with reason+cost ✓
-  4. Private data never sent to cloud ✓
-  5. Budget limit enforced (no runaway costs) ✓
-  6. Local filtering < 50ms latency (0.36ms avg) ✓
+```
+User clicks Engram icon
+  → Tauri shell (Rust, ~10MB)
+    → Spawns .NET API sidecar on 127.0.0.1:5000
+    → Loads React frontend
+    → Frontend connects to sidecar automatically
+    → Chat/Search/Wiki/Timeline/Settings all work
+    → User closes app → sidecar killed
+```
 
-### Test Fixes Applied (Phase 8)
-- CloudRateLimiter constructor validation: maxPerMinute cannot exceed maxPerHour
-- Budget test: uses EstimateCost (pre-call ~$0.06) not mock cost; test per-call limit blocking
-- PII filter test: verify PII absent from audit log, not from mock response
-- Latency test: warm-up regex JIT, assert per-call average <50ms (0.36ms avg)
+**Installers:**
+- `Engram_1.0.0_x64-setup.exe` (NSIS, 2.46 MB)
+- `Engram_1.0.0_x64_en-US.msi` (MSI, 3.69 MB)
 
-### CLI Entry Point Created
-- `src/Engram.Cli/Program.cs` — ~180 lines, 8 subcommands
-- Commands: init, status, search, capture, brief, wiki, help, version
-- Wired to Engram.Store services (RawEventWriter, ReplayEnumerator, WikiIndex, SearchIndex, CaptureOrchestrator)
+## Current State
 
-### Phase Numbering Resolved
-- Implementation Plan renumbered to 1-indexed (Phase 0→1, ..., Phase 11→12)
-- All docs, code, tests now use consistent 1-indexed system
+### Desktop App (Phase 5 UI — Complete)
+- **Tauri v2** shell with auto-spawn .NET sidecar
+- **React 19** + TypeScript + Tailwind CSS dark theme
+- **ChatGPT-style sidebar**: New Chat, session history, user profile, More menu
+- **5 views**: Chat, Search, Wiki, Timeline, Settings
+- **All views wired to API** with loading/error states
+- **Chat**: localStorage persistence, real API calls
+- **Discovery Interview**: 7-step in-app flow on first launch
+- **Settings**: Profile, workspace stats, power mode, identity display, drift alerts
+
+### API Sidecar (16 endpoints)
+```
+GET  /                              Health check
+GET  /api/status                    Workspace stats
+GET  /api/search?q=                 Search wiki
+GET  /api/wiki                      List wiki nodes
+GET  /api/wiki/:id                  Get single node
+GET  /api/brief?time=morning|evening  Generate brief
+GET  /api/events                    List raw events
+GET  /api/identity                  User profile
+GET  /api/identity/anti-goals       List anti-goals
+GET  /api/identity/priorities       List priorities
+GET  /api/discovery/status          Check discovery complete
+GET  /api/drift                     Drift alerts
+POST /api/discovery                 Run discovery interview
+POST /api/intervention/check        Evaluate intervention policy
+POST /v1/chat/completions           Chat (mock — needs inference engine)
+PUT  /api/identity                  Update user profile
+```
+
+### Phase 5 Library (Complete 2026-05-13)
+- SearchEngine: TF-IDF keyword search, AND semantics, field weighting
+- BriefGenerator: morning/evening briefs with source citations
+- CaptureStatus: pause/resume, per-source toggles, counters
+- CLI: engram search, brief, status
+
+### Phase 6 Library + UI (Complete 2026-05-17)
+- DiscoverySOP: 7-step interview → UserProfile + Priorities + AntiGoals
+- InterventionPolicy: gates all proactive actions against anti-goals
+- IdentityStore: user_identity.md, priorities.md, anti_goals.md
+- Frontend: DiscoveryInterview component, editable Settings identity section
+- API: 6 new endpoints (discovery, identity CRUD, intervention check)
+
+### Phase 7 (Complete 2026-05-13)
+- SalienceScorer: power-law decay S(t) = S0 * e^(-λt)
+- DriftDetector: keyword matching + contradiction alerts
+- DriftAlertStore: JSON persistence, accept/dismiss/convert
+- ArchiveManager: moves stale nodes to archives/, restore support
+
+### Phase 8 (Complete 2026-05-13)
+- CloudCallPipeline: Route→Filter→TierGuard→RateLimit→Budget→Cache→Provider→Audit
+- ModelRouter: Low→Local, Medium→Gemini Flash, High→Claude Sonnet
+- LocalFilter: strips PII, ~90% token reduction
+- TierGuard: Free tier blocks cloud, Pro tier allows
+- BudgetManager: $1/day, $25/month, $0.50/call limits
+- CloudAuditLog: append-only JSONL audit trail
+- CleanCache: LRU cache, 7-day TTL, persisted to disk
+
+## Tests: 516/516
+
+| Category | Count |
+|----------|-------|
+| Phase 1-2 (Foundation + Hardening) | ~125 |
+| Phase 3 (Ingestion) | ~48 |
+| Phase 4 (Wiki) | ~43 |
+| Phase 5 (Search + Briefs) | ~44 |
+| Phase 6 (Identity) | ~31 |
+| Phase 7 (Salience + Drift) | ~44 |
+| Phase 8 (Cloud) | ~29 |
+| API Integration Tests | 18 |
+| Edge Case Tests | 39 |
+| Phase 6 UI Tests | 15 |
+| **Total** | **516** |
 
 ## Unresolved
 
-- **CS0649 warnings**: Unassigned fields in CaptureOrchestrator
-- **CS0414 warnings**: Unused _disposed fields in WriteAheadLog, ProcessingSidecar, DriftAlertStore, IdentityStore
-- **xUnit1031 warnings**: Blocking task operations in some tests
-- **GeminiFlashProvider/ClaudeSonnetProvider**: Stubs, not wired to real APIs yet
+- GeminiFlashProvider/ClaudeSonnetProvider: stubs, not wired to real APIs
+- CopilotKit removed (SSE protocol mismatch) — re-add when inference engine ready
+- Capture toggle switches in Settings are visual only (not wired to API)
+- Alt+Space global hotkey not implemented
+- No CI/CD pipeline
 
-## Accumulated Context
+## Decisions Log
 
-### Phase 1 Summary (Complete)
-- .NET solution skeleton with Store, CLI, Tests
-- .engram workspace initializer (idempotent)
-- Raw event schema (11 fields, snake_case JSON)
-- Append-only writer with content-addressed deduplication
-- Replay enumerator with deterministic ordering
-- CLI commands: engram init, engram replay
-- 56 tests
-
-### Phase 2 Summary (Complete)
-- Atomic writes via .tmp + rename
-- Per-event processing sidecar (.meta.json)
-- Filtered replay with ReplayQuery (date, source, status)
-- Integrity verification on read (hash recomputation)
-- 24 new tests (80 total)
-
-### Production Hardening (Complete)
-- HashIndex, FileLock, WAL, InputValidator, EngramConfigStore
-- RateLimiter, CircuitBreaker, Debouncer, ExclusionList
-- Streaming enumeration, pagination
-- 45 new tests (125 total)
-
-### Phase 3 Summary (Complete)
-- Provider interfaces: IFileCaptureProvider, IClipboardProvider, IActiveWindowProvider, IOcrProvider
-- FileWatcher, ClipboardWatcher, ActiveWindowTracker, CaptureOrchestrator
-- 48 new tests (173 total)
-
-### Phase 4 Summary (Complete)
-- WikiNode model (7 entity types), WikiNodeSerializer, WikiNodeStore
-- WikiMetabolizer, IndexGenerator, source-linked facts
-- 43 new tests (216 total)
-
-### Phase 5 Summary (Complete)
-- SearchEngine (TF-IDF, AND semantics), BriefGenerator, CaptureStatus
-- CLI: engram search, engram brief, engram status
-- 44 new tests (260 total)
-
-### Phase 6 Summary (Complete)
-- UserProfile, IdentityStore, DiscoverySOP, InterventionPolicy
-- CLI: engram discover, engram identity
-- 31 new tests (291 total)
-
-### Phase 7 Summary (Complete)
-- SalienceScorer, ArchiveManager, DriftDetector, DriftAlertStore
-- CLI: engram salience, engram drift
-- 44 new tests (335 total)
-
-### Phase 8 Summary (Complete) [PRO TIER]
-- Cloud/: CloudCallPipeline, CloudRateLimiter, MockCloudModelProvider
-- Cloud/: GeminiFlashProvider, ClaudeSonnetProvider (stubs)
-- Prior phases: ICloudModelProvider, ModelRouter, LocalFilter, TierGuard
-- Prior phases: CloudAuditLog, BudgetManager, CleanCache
-- EngramConfig: TierLevel, CloudEnabled, budget settings
-- CLI: engram init/status/search/capture/brief/wiki/help/version
-- 29 new tests (444 total)
-
-### Canonical References
-- Artifacts/Product Requirements Document_Engram Full Specification.md
-- Artifacts/Engram Implementation Plan.md
-- docs/QUALITY-GATE-POLICY.md
-- docs/TIER-ARCHITECTURE.md
-
-### Decisions Log
-- D-001..D-010: Phase 1 foundation decisions
-- D-011..D-015: Phase 2 hardening decisions
-- D-016..D-022: Phase 3 capture decisions
-- D-023..D-027: Phase 4 wiki decisions
-- D-028..D-032: Phase 8 cloud reasoning decisions
-- D-033: Frontend stack = Tauri + React + Tailwind + shadcn/ui + CopilotKit
-- D-034: Local inference = LLamaSharp with Vulkan (not Ollama, not LocalAI)
-- D-035: Brain = Phi-4-mini GGUF Q4_K_M (~2.2GB, downloaded on first run)
-- D-036: Power Mode toggle = Eco (local) / Turbo (cloud), default Eco
-- D-037: .NET sidecar as inference router (single endpoint for CopilotKit)
-- D-038: Installer = ~130MB standard, ~2.4GB offline, ~50MB runtime-dependent
-- D-039: Model cached at %LOCALAPPDATA%/Engram/models/, not bundled in installer
-- D-040: Vulkan fallback chain: discrete GPU → iGPU → CPU+SIMD
-- D-041: Hardware minimum: 8GB RAM, modern quad-core, Windows 10 64-bit
-- D-042: CopilotKit runtimeUrl points to .NET sidecar localhost endpoint
+- D-001..D-010: Phase 1 foundation
+- D-011..D-015: Phase 2 hardening
+- D-016..D-022: Phase 3 capture
+- D-023..D-027: Phase 4 wiki
+- D-028..D-031: Phase 5 search
+- D-032..D-035: Phase 6 identity
+- D-033: Frontend = Tauri + React + Tailwind + shadcn/ui + CopilotKit
+- D-034: Local inference = LLamaSharp with Vulkan (not Ollama)
+- D-035: Brain = Phi-4-mini GGUF Q4_K_M
+- D-036: Power Mode = Eco (local) / Turbo (cloud)
+- D-037: .NET sidecar as inference router
+- D-038: Installer ~130MB standard, ~2.4GB offline
+- D-039: Model at %LOCALAPPDATA%/Engram/models/
+- D-040: Vulkan fallback: discrete GPU → iGPU → CPU+SIMD
+- D-041: Min hardware: 8GB RAM, quad-core, Win10 64-bit
+- D-042: CopilotKit runtimeUrl → .NET sidecar
 - D-043: Tauri spawns .NET sidecar as child process (sidecar pattern)
+- D-044: Discovery interview on first launch (chat-based, 7 steps)
+- D-045: Intervention policy gates all proactive chat actions

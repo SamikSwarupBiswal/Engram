@@ -12,3 +12,9 @@ coverage/
 *.user
 *.suo
 *.log
+node_modules/
+src-tauri/target/
+src-tauri/sidecar/publish/
+*.exe
+*.msi
+package-lock.json
