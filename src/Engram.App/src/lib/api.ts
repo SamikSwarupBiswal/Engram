@@ -175,6 +175,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify(request),
     }),
+
+  // Model management
+  modelStatus: () =>
+    apiFetch<{ model: string; description: string; state: string; path: string; sizeBytes: number; progress: number; gpu: { backend: string; device: string; vramMb: number; layers: number }; isReady: boolean; isLoading: boolean }>("/api/model/status"),
+
+  downloadModel: () =>
+    apiFetch<{ status: string }>("/api/model/download", { method: "POST" }),
+
+  loadModel: () =>
+    apiFetch<{ loaded: boolean; isReady: boolean; gpu: string }>("/api/model/load", { method: "POST" }),
+
+  unloadModel: () =>
+    apiFetch<{ unloaded: boolean }>("/api/model/unload", { method: "POST" }),
+
+  // Power mode
+  getPowerMode: () =>
+    apiFetch<{ mode: string; localReady: boolean }>("/api/power-mode"),
+
+  setPowerMode: (mode: "eco" | "turbo") =>
+    apiFetch<{ mode: string }>("/api/power-mode", {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    }),
 };
 
 // ─── Health Check ───

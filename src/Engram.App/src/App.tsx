@@ -440,7 +440,10 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
             ].map((mode) => (
               <button
                 key={mode.id}
-                onClick={() => setPowerMode(mode.id)}
+                onClick={() => {
+                  setPowerMode(mode.id);
+                  api.setPowerMode(mode.id).catch(() => {});
+                }}
                 className={`flex-1 rounded-xl border p-4 text-left transition-colors ${
                   powerMode === mode.id ? "border-emerald-600/50 bg-emerald-900/20" : "border-white/[0.06] bg-[#2f2f2f]/50 hover:border-white/[0.12]"
                 }`}
@@ -450,6 +453,22 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
               </button>
             ))}
           </div>
+          {powerMode === "eco" && (
+            <div className="mt-3 rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[13px] font-medium">Local Model</div>
+                  <div className="text-[11px] text-[#888]">Phi-4-mini GGUF Q4_K_M (~2.2GB)</div>
+                </div>
+                <button
+                  onClick={() => api.loadModel().catch(() => {})}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] text-white hover:bg-emerald-700"
+                >
+                  Load Model
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Drift Alerts */}

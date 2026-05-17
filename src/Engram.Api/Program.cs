@@ -3,6 +3,7 @@ using Engram.Store.Search;
 using Engram.Store.Wiki;
 using Engram.Store.Salience;
 using Engram.Store.Identity;
+using Engram.Store.Inference;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,10 @@ var salienceScorer = new SalienceScorer();
 var driftAlertStore = new DriftAlertStore(paths);
 var discoverySOP = new DiscoverySOP(identityStore);
 var interventionPolicy = new InterventionPolicy(identityStore);
+var gpuDetector = new GpuDetector();
+var modelManager = new ModelManager();
+var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
+var inferenceRouter = new InferenceRouter(localEngine);
 
 // --- Health ---
 app.MapGet("/", () => Results.Ok(new
@@ -259,16 +264,46 @@ app.MapPost("/api/intervention/check", (InterventionRequest request) =>
     });
 });
 
-// --- Chat Completions (mock for now) ---
+// --- Chat Completions (real inference) ---
 app.MapPost("/v1/chat/completions", async (HttpContext context) =>
 {
     var body = await JsonSerializer.DeserializeAsync<ChatRequest>(
         context.Request.Body,
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-    var userMessage = body?.Messages?.LastOrDefault()?.Content ?? "";
 
-    // TODO: Route to LLamaSharp (Eco) or cloud pipeline (Turbo)
-    var response = "[Engram Mock] Received: " + userMessage + ". The inference engine is not yet connected.";
+    var messages = body?.Messages?.Select(m => new Engram.Store.Inference.ChatMessage
+    {
+        Role = m.Role ?? "user",
+        Content = m.Content ?? ""
+    }).ToArray() ?? Array.Empty<Engram.Store.Inference.ChatMessage>();
+
+    var result = await inferenceRouter.ChatCompletionAsync(messages, body?.MaxTokens ?? 1024, context.RequestAborted);
+
+    if (result.Success)
+    {
+        return Results.Ok(new
+        {
+            id = "chatcmpl-" + Guid.NewGuid().ToString("n"),
+            @object = "chat.completion",
+            choices = new[]
+            {
+                new
+                {
+                    index = 0,
+                    message = new { role = "assistant", content = result.Content },
+                    finish_reason = "stop"
+                }
+            },
+            usage = new
+            {
+                prompt_tokens = result.InputTokens,
+                completion_tokens = result.OutputTokens,
+                total_tokens = result.InputTokens + result.OutputTokens
+            },
+            model = result.Model,
+            provider = result.Provider
+        });
+    }
 
     return Results.Ok(new
     {
@@ -279,12 +314,94 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
             new
             {
                 index = 0,
-                message = new { role = "assistant", content = response },
-                finish_reason = "stop"
+                message = new { role = "assistant", content = "I could not generate a response. " + result.ErrorMessage },
+                finish_reason = "error"
             }
         },
         usage = new { prompt_tokens = 0, completion_tokens = 0, total_tokens = 0 }
     });
+});
+
+// --- Model Status ---
+app.MapGet("/api/model/status", () =>
+{
+    var config = ModelManager.Phi4Mini;
+    var status = modelManager.GetStatus(config);
+    var gpu = gpuDetector.Detect();
+    return Results.Ok(new
+    {
+        model = config.Name,
+        description = config.Description,
+        state = status.State.ToString(),
+        path = status.Path,
+        sizeBytes = status.SizeBytes,
+        progress = status.Progress,
+        gpu = new { backend = gpu.Backend.ToString(), device = gpu.DeviceName, vramMb = gpu.VramMb, layers = gpu.LayerCount },
+        isReady = localEngine.IsReady,
+        isLoading = localEngine.IsLoading
+    });
+});
+
+// --- Download Model ---
+app.MapPost("/api/model/download", async (HttpContext context) =>
+{
+    var config = ModelManager.Phi4Mini;
+
+    if (modelManager.IsModelReady(config))
+        return Results.Ok(new { status = "already_downloaded", path = ModelManager.GetModelPath(config) });
+
+    // Start download in background (returns immediately)
+    var progress = new Progress<ModelDownloadProgress>(p =>
+    {
+        // Could emit via SignalR/WebSocket for real-time progress
+    });
+
+    _ = Task.Run(async () =>
+    {
+        try { await modelManager.DownloadModelAsync(config, progress, context.RequestAborted); }
+        catch { }
+    });
+
+    return Results.Accepted("/api/model/status", new { status = "downloading" });
+});
+
+// --- Load Model ---
+app.MapPost("/api/model/load", () =>
+{
+    var loaded = localEngine.LoadModel();
+    return Results.Ok(new
+    {
+        loaded,
+        isReady = localEngine.IsReady,
+        gpu = localEngine.GpuInfo?.Description
+    });
+});
+
+// --- Unload Model ---
+app.MapPost("/api/model/unload", () =>
+{
+    localEngine.UnloadModel();
+    return Results.Ok(new { unloaded = true });
+});
+
+// --- Power Mode ---
+app.MapGet("/api/power-mode", () =>
+{
+    return Results.Ok(new
+    {
+        mode = inferenceRouter.PowerMode.ToString().ToLower(),
+        localReady = inferenceRouter.IsLocalReady
+    });
+});
+
+app.MapPost("/api/power-mode", (PowerModeRequest request) =>
+{
+    if (Enum.TryParse<PowerMode>(request.Mode, true, out var mode))
+    {
+        inferenceRouter.PowerMode = mode;
+        return Results.Ok(new { mode = inferenceRouter.PowerMode.ToString().ToLower() });
+    }
+    return Results.BadRequest(new { error = "Invalid mode. Use 'eco' or 'turbo'." });
 });
 
 // --- CopilotKit Runtime (mock) ---
@@ -310,8 +427,9 @@ Console.WriteLine("Workspace: " + paths.Root);
 app.Run();
 
 // Request models
-record ChatRequest(ChatMessage[]? Messages);
+record ChatRequest(ChatMessage[]? Messages, int MaxTokens = 1024);
 record ChatMessage(string Role, string Content);
+record PowerModeRequest(string Mode);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
