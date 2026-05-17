@@ -4,6 +4,7 @@ using Engram.Store.Wiki;
 using Engram.Store.Salience;
 using Engram.Store.Identity;
 using Engram.Store.Inference;
+using Engram.Store.Billing;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -48,6 +49,7 @@ var gpuDetector = new GpuDetector();
 var modelManager = new ModelManager();
 var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
 var inferenceRouter = new InferenceRouter(localEngine);
+var tokenBudget = new TokenBudget(paths.Config);
 
 // --- Health ---
 app.MapGet("/", () => Results.Ok(new
@@ -494,6 +496,71 @@ app.MapGet("/api/archive/candidates", () =>
     });
 });
 
+// --- Token Budget ---
+app.MapGet("/api/tokens", () =>
+{
+    var status = tokenBudget.GetStatus();
+    return Results.Ok(status);
+});
+
+app.MapPost("/api/tokens/check", (TokenCheckRequest request) =>
+{
+    var cost = TokenPricing.CalculateCost(request.Provider ?? "gemini-flash", request.InputTokens, request.OutputTokens);
+    var result = tokenBudget.CheckBudget(cost);
+    return Results.Ok(new
+    {
+        allowed = result.IsAllowed,
+        cost,
+        reason = result.DenyReason,
+        remainingAfter = result.RemainingAfter
+    });
+});
+
+app.MapPost("/api/tokens/pack", (TokenPackRequest request) =>
+{
+    var amount = request.Size?.ToLowerInvariant() switch
+    {
+        "small" => TokenBudget.TokenPackSmall,
+        "large" => TokenBudget.TokenPackLarge,
+        _ => request.Amount ?? 0
+    };
+
+    if (amount <= 0)
+        return Results.BadRequest(new { error = "Invalid pack size. Use 'small' (100K), 'large' (500K), or provide amount." });
+
+    tokenBudget.AddBonusTokens(amount, $"Token pack: {request.Size ?? "custom"}");
+    return Results.Ok(new { added = amount, remaining = tokenBudget.GetStatus().TokensRemaining });
+});
+
+app.MapPost("/api/tokens/tier", (TierChangeRequest request) =>
+{
+    tokenBudget.SetTier(request.Tier);
+    return Results.Ok(tokenBudget.GetStatus());
+});
+
+app.MapGet("/api/tokens/pricing", () =>
+{
+    return Results.Ok(new
+    {
+        plans = new[]
+        {
+            new { name = "free", price = "$0/mo", tokens = TokenBudget.FreeTierWeeklyTokens * 4, period = "month" },
+            new { name = "pro", price = "$20-30/mo", tokens = TokenBudget.ProTierMonthlyTokens, period = "month" }
+        },
+        packs = new[]
+        {
+            new { name = "small", tokens = TokenBudget.TokenPackSmall, price = "$5" },
+            new { name = "large", tokens = TokenBudget.TokenPackLarge, price = "$20" }
+        },
+        rates = new[]
+        {
+            new { provider = "gemini-flash", inputCost = "1x", outputCost = "3x", description = "Cheap, fast, routine tasks" },
+            new { provider = "claude-sonnet", inputCost = "10x", outputCost = "30x", description = "Expensive, complex reasoning" },
+            new { provider = "local", inputCost = "0x", outputCost = "0x", description = "Free — runs on your machine" }
+        }
+    });
+});
+
 // --- Provider Configuration ---
 app.MapGet("/api/provider", () =>
 {
@@ -547,6 +614,9 @@ record ChatRequest(ChatMessage[]? Messages, int MaxTokens = 1024);
 record ChatMessage(string Role, string Content);
 record PowerModeRequest(string Mode);
 record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, string? ProviderName);
+record TokenCheckRequest(string? Provider, int InputTokens, int OutputTokens);
+record TokenPackRequest(string? Size, long? Amount);
+record TierChangeRequest(string Tier);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
