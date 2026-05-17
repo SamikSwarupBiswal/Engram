@@ -1,0 +1,24 @@
+<Project>
+  <!--
+    NETSDK1152 Fix: LLamaSharp.Backend.CPU bundles 4 CPU variants
+    (avx, avx2, avx512, noavx) with identical DLL names.
+
+    The conflict happens during _ComputeFilesToPublish because all 4 variants
+    map to the same output path. We remove 3 of them before that step.
+  -->
+  <Target Name="RemoveDuplicateLlamaSharpRuntimes"
+          BeforeTargets="_ComputeFilesToPublish"
+          Condition="'$(SelfContained)' == 'true'">
+    <ItemGroup>
+      <!-- Remove avx variant -->
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)"
+        Condition="$([System.String]::Copy('%(RuntimeCopyLocalItems.NuGetPackageId)').Contains('llamasharp.backend.cpu')) AND $([System.String]::Copy('%(RuntimeCopyLocalItems.PathInPackage)').Contains('/native/avx/')) AND !$([System.String]::Copy('%(RuntimeCopyLocalItems.PathInPackage)').Contains('/native/avx2/')) AND !$([System.String]::Copy('%(RuntimeCopyLocalItems.PathInPackage)').Contains('/native/avx512/'))" />
+      <!-- Remove avx2 variant -->
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)"
+        Condition="$([System.String]::Copy('%(RuntimeCopyLocalItems.NuGetPackageId)').Contains('llamasharp.backend.cpu')) AND $([System.String]::Copy('%(RuntimeCopyLocalItems.PathInPackage)').Contains('/native/avx2/'))" />
+      <!-- Remove avx512 variant -->
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)"
+        Condition="$([System.String]::Copy('%(RuntimeCopyLocalItems.NuGetPackageId)').Contains('llamasharp.backend.cpu')) AND $([System.String]::Copy('%(RuntimeCopyLocalItems.PathInPackage)').Contains('/native/avx512/'))" />
+    </ItemGroup>
+  </Target>
+</Project>
