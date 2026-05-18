@@ -5,6 +5,7 @@ import { Titlebar } from "./components/layout/Titlebar";
 import { api, checkApiHealth } from "./lib/api";
 import { DiscoveryInterview } from "./components/discovery/DiscoveryInterview";
 import { ModelDownloadBar } from "./components/chat/ModelDownloadBar";
+import { GoogleWorkspacePanel } from "./components/settings/GoogleWorkspacePanel";
 import type { SearchResult, WikiNodeSummary, RawEvent, StatusResponse, IdentityResponse, DriftAlert } from "./lib/api";
 
 export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive";
@@ -709,6 +710,9 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
             </div>
           </div>
         )}
+
+        {/* Google Workspace */}
+        <GoogleWorkspacePanel />
 
         {/* Custom Provider (Turbo Mode) */}
         {powerMode === "turbo" && (

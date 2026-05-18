@@ -248,6 +248,16 @@ export const api = {
   tokenPricing: () =>
     apiFetch<{ plans: { name: string; price: string; tokens: number; period: string }[]; packs: { name: string; tokens: number; price: string }[]; rates: { provider: string; inputCost: string; outputCost: string; description: string }[] }>("/api/tokens/pricing"),
 
+  // Google Workspace
+  gwsStatus: () =>
+    apiFetch<{ isAuthenticated: boolean; email: string | null; scopes: string[]; expiresAt: string | null }>("/api/gws/status"),
+
+  gwsSync: () =>
+    apiFetch<{ success: boolean; email: string | null; emailCount: number; eventCount: number; fileCount: number; errors: string[] }>("/api/gws/sync", { method: "POST" }),
+
+  gwsDisconnect: () =>
+    apiFetch<{ disconnected: boolean }>("/api/gws/disconnect", { method: "POST" }),
+
   // Provider config
   getProvider: () =>
     apiFetch<{ hasCustomProvider: boolean; providerName: string; baseUrl: string; model: string; hasApiKey: boolean }>("/api/provider"),
