@@ -715,6 +715,22 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
           </div>
         )}
 
+        {/* Security */}
+        <div>
+          <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Security</h3>
+          <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-[13px] text-[#ececec]">AES-256-GCM Encryption</span>
+            </div>
+            <p className="text-[11px] text-[#888] mb-3">All data encrypted at rest. Export your data anytime.</p>
+            <div className="flex gap-2">
+              <button onClick={async () => { const r = await api.securityExport(); alert(`Exported ${r.fileCount} files to ${r.outputPath}`); }} className="flex-1 rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Export All Data</button>
+              <button onClick={async () => { if (confirm("Delete ALL data permanently?")) { await api.securityDelete(); alert("Data deleted."); } }} className="rounded-lg border border-red-500/30 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10">Delete All</button>
+            </div>
+          </div>
+        </div>
+
         {/* Google Workspace */}
         <GoogleWorkspacePanel />
 

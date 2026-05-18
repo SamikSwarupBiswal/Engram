@@ -248,6 +248,28 @@ export const api = {
   tokenPricing: () =>
     apiFetch<{ plans: { name: string; price: string; tokens: number; period: string }[]; packs: { name: string; tokens: number; price: string }[]; rates: { provider: string; inputCost: string; outputCost: string; description: string }[] }>("/api/tokens/pricing"),
 
+  // Security
+  securityStatus: () =>
+    apiFetch<{ encryptionConfigured: boolean }>("/api/security/status"),
+
+  securitySetup: (password: string) =>
+    apiFetch<{ success: boolean; salt: string }>("/api/security/setup", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+
+  securityUnlock: (password: string) =>
+    apiFetch<{ unlocked: boolean }>("/api/security/unlock", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+
+  securityExport: () =>
+    apiFetch<{ success: boolean; outputPath: string; fileCount: number; totalBytes: number }>("/api/security/export", { method: "POST" }),
+
+  securityDelete: () =>
+    apiFetch<{ success: boolean; fileCount: number; directoriesDeleted: string[] }>("/api/security/delete", { method: "POST" }),
+
   // Research Agent
   researchStart: (query: string) =>
     apiFetch<{ runId: string; query: string; status: string; steps: { stepId: string; type: string; description: string; status: string; output: string | null }[]; sources: { sourceId: string; url: string; title: string; domain: string; citationIndex: number }[]; summary: string | null; progress: number }>("/api/research/start", {

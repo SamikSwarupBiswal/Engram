@@ -8,6 +8,7 @@ using Engram.Store.Billing;
 using Engram.Store.Google;
 using Engram.Store.Agent;
 using Engram.Store.Automation;
+using Engram.Store.Security;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -57,6 +58,9 @@ var gwsManager = new GoogleWorkspaceManager(paths.Config);
 var researchAgent = new ResearchAgent(paths.Config);
 var permissionGate = new PermissionGate();
 var actionExecutor = new ActionExecutor();
+var keyManager = new KeyManager(paths.Config);
+var dataExport = new DataExport(paths.Root);
+var dataDelete = new DataDelete(paths.Root);
 var modelDownloadLock = new object();
 Task? modelDownloadTask = null;
 ModelDownloadProgress? modelDownloadProgress = null;
@@ -540,6 +544,64 @@ app.MapGet("/api/archive/candidates", () =>
     });
 });
 
+// --- Security ---
+app.MapGet("/api/security/status", () =>
+{
+    return Results.Ok(new
+    {
+        encryptionConfigured = keyManager.IsConfigured()
+    });
+});
+
+app.MapPost("/api/security/setup", (SecuritySetupRequest request) =>
+{
+    try
+    {
+        var result = keyManager.Setup(request.Password);
+        return Results.Ok(result);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/security/unlock", (SecurityUnlockRequest request) =>
+{
+    var encryption = keyManager.Unlock(request.Password);
+    if (encryption == null)
+        return Results.BadRequest(new { error = "Wrong password" });
+    encryption.Dispose();
+    return Results.Ok(new { unlocked = true });
+});
+
+app.MapPost("/api/security/change-password", (SecurityChangePasswordRequest request) =>
+{
+    var success = keyManager.ChangePassword(request.OldPassword, request.NewPassword);
+    return success
+        ? Results.Ok(new { changed = true })
+        : Results.BadRequest(new { error = "Wrong old password" });
+});
+
+app.MapPost("/api/security/export", async (CancellationToken ct) =>
+{
+    var outputPath = Path.Combine(Path.GetTempPath(), $"engram-export-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.zip");
+    var result = await dataExport.ExportAsync(outputPath, ct);
+    return Results.Ok(result);
+});
+
+app.MapPost("/api/security/import", async (SecurityImportRequest request, CancellationToken ct) =>
+{
+    var result = await dataExport.ImportAsync(request.ZipPath, ct);
+    return Results.Ok(result);
+});
+
+app.MapPost("/api/security/delete", () =>
+{
+    var result = dataDelete.DeleteAll();
+    return Results.Ok(result);
+});
+
 // --- Automation ---
 app.MapPost("/api/automation/plan", (AutomationPlanRequest request) =>
 {
@@ -829,6 +891,10 @@ record ResearchStartRequest(string Query);
 record AutomationPlanRequest(string Goal, List<AutomationActionRequest> Actions);
 record AutomationActionRequest(string Type, string Description, string? Value, string? Selector);
 record AutomationApproveRequest(string? PlanId, string? ActionId);
+record SecuritySetupRequest(string Password);
+record SecurityUnlockRequest(string Password);
+record SecurityChangePasswordRequest(string OldPassword, string NewPassword);
+record SecurityImportRequest(string ZipPath);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
