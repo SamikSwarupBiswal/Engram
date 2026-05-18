@@ -75,7 +75,9 @@ public class InferenceRouter : IDisposable
             }
 
             return InferenceResult.Failed(
-                "The model is being downloaded. Please wait a moment and try again.");
+                _localEngine.IsReady
+                    ? "Model loaded but failed to process. Try again."
+                    : "The model is being set up. Please wait a moment and try again.");
         }
 
         // Turbo mode — use cloud

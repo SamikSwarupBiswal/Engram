@@ -43,9 +43,10 @@ export function ModelDownloadBar({ onComplete, visible = true }: ModelDownloadBa
         }
 
         if (status.state === "Ready") {
+          // Model is downloaded — try to load it
           stopPolling();
           setProgress(100);
-          setStatusText("Download complete. Loading model...");
+          setStatusText("Model found. Loading into memory...");
           setState("loading");
 
           const result = await api.loadModel();
@@ -103,15 +104,17 @@ export function ModelDownloadBar({ onComplete, visible = true }: ModelDownloadBa
       }
 
       if (status.state === "Ready") {
+        // Model is downloaded — try to load
         setState("loading");
-        setStatusText("Loading model into memory...");
+        setStatusText("Model found. Loading into memory...");
         const result = await api.loadModel();
         if (result.loaded) {
           setState("ready");
           onComplete();
         } else {
+          // Model downloaded but can't load (WSL, missing DLLs, etc.)
           setState("error");
-          setError("Failed to load model");
+          setError("Model downloaded but couldn\'t load. Restart the app or check GPU drivers.");
         }
         return;
       }
