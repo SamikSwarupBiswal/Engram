@@ -44,13 +44,21 @@ pub fn run() {
         ])
         .setup(|app| {
             // ── Spawn .NET API sidecar ──
-            // The sidecar binary is bundled at src-tauri/sidecar/engram-api-{target_triple}
-            // Tauri resolves it via externalBin in tauri.conf.json
-            let sidecar = app.shell().sidecar("engram-api").expect("sidecar config missing");
-            let (mut rx, child) = sidecar
+            // The sidecar is a self-contained .NET app bundled as Tauri resources.
+            // We launch it from the resources directory so it can find its DLLs.
+            let resource_dir = app.path().resource_dir().expect("resource dir not found");
+            let sidecar_dir = resource_dir.join("sidecar").join("publish");
+            let sidecar_exe = if cfg!(target_os = "windows") {
+                sidecar_dir.join("Engram.Api.exe")
+            } else {
+                sidecar_dir.join("Engram.Api")
+            };
+
+            let (mut rx, child) = app.shell().command(sidecar_exe)
                 .args(["--urls", "http://127.0.0.1:5000"])
+                .current_dir(&sidecar_dir)
                 .spawn()
-                .expect("failed to spawn .NET sidecar");
+                .expect("failed to spawn sidecar");
             let child_pid = child.pid();
 
             // Store PID for cleanup
