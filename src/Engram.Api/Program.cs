@@ -6,6 +6,7 @@ using Engram.Store.Identity;
 using Engram.Store.Inference;
 using Engram.Store.Billing;
 using Engram.Store.Google;
+using Engram.Store.Agent;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -52,6 +53,7 @@ var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
 var inferenceRouter = new InferenceRouter(localEngine);
 var tokenBudget = new TokenBudget(paths.Config);
 var gwsManager = new GoogleWorkspaceManager(paths.Config);
+var researchAgent = new ResearchAgent(paths.Config);
 var modelDownloadLock = new object();
 Task? modelDownloadTask = null;
 ModelDownloadProgress? modelDownloadProgress = null;
@@ -535,6 +537,44 @@ app.MapGet("/api/archive/candidates", () =>
     });
 });
 
+// --- Research Agent ---
+app.MapPost("/api/research/start", async (ResearchStartRequest request, CancellationToken ct) =>
+{
+    var run = await researchAgent.StartResearchAsync(request.Query, ct);
+    return Results.Ok(run);
+});
+
+app.MapPost("/api/research/{runId}/resume", async (string runId, CancellationToken ct) =>
+{
+    try
+    {
+        var run = await researchAgent.ResumeResearchAsync(runId, ct);
+        return Results.Ok(run);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/research/{runId}/cancel", (string runId) =>
+{
+    researchAgent.CancelResearch(runId);
+    return Results.Ok(new { cancelled = true });
+});
+
+app.MapGet("/api/research/{runId}", (string runId) =>
+{
+    var run = researchAgent.GetRun(runId);
+    return run != null ? Results.Ok(run) : Results.NotFound(new { error = "Run not found" });
+});
+
+app.MapGet("/api/research", () =>
+{
+    var runs = researchAgent.ListRuns();
+    return Results.Ok(new { count = runs.Count, runs });
+});
+
 // --- Google Workspace ---
 app.MapGet("/api/gws/status", () =>
 {
@@ -709,6 +749,7 @@ record TokenCheckRequest(string? Provider, int InputTokens, int OutputTokens);
 record TokenPackRequest(string? Size, long? Amount);
 record TierChangeRequest(string Tier);
 record GwsConnectRequest(string Code, string ClientId, string ClientSecret, string RedirectUri);
+record ResearchStartRequest(string Query);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
