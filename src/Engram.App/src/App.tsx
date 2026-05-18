@@ -7,9 +7,10 @@ import { DiscoveryInterview } from "./components/discovery/DiscoveryInterview";
 import { ModelDownloadBar } from "./components/chat/ModelDownloadBar";
 import { GoogleWorkspacePanel } from "./components/settings/GoogleWorkspacePanel";
 import { ResearchPanel } from "./components/research/ResearchPanel";
+import { AutomationPanel } from "./components/automation/AutomationPanel";
 import type { SearchResult, WikiNodeSummary, RawEvent, StatusResponse, IdentityResponse, DriftAlert } from "./lib/api";
 
-export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive" | "research";
+export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive" | "research" | "automation";
 
 const SESSIONS_KEY = "engram-chat-sessions";
 
@@ -119,6 +120,7 @@ export default function App() {
           {discoveryDone && activeView === "settings" && <SettingsView onRedoDiscovery={() => setDiscoveryDone(false)} />}
           {discoveryDone && activeView === "archive" && <ArchiveView />}
           {discoveryDone && activeView === "research" && <ResearchPanel />}
+          {discoveryDone && activeView === "automation" && <AutomationPanel />}
         </main>
       </div>
     </div>

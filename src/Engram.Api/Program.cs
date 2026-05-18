@@ -7,6 +7,7 @@ using Engram.Store.Inference;
 using Engram.Store.Billing;
 using Engram.Store.Google;
 using Engram.Store.Agent;
+using Engram.Store.Automation;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,6 +55,8 @@ var inferenceRouter = new InferenceRouter(localEngine);
 var tokenBudget = new TokenBudget(paths.Config);
 var gwsManager = new GoogleWorkspaceManager(paths.Config);
 var researchAgent = new ResearchAgent(paths.Config);
+var permissionGate = new PermissionGate();
+var actionExecutor = new ActionExecutor();
 var modelDownloadLock = new object();
 Task? modelDownloadTask = null;
 ModelDownloadProgress? modelDownloadProgress = null;
@@ -537,6 +540,79 @@ app.MapGet("/api/archive/candidates", () =>
     });
 });
 
+// --- Automation ---
+app.MapPost("/api/automation/plan", (AutomationPlanRequest request) =>
+{
+    var plan = new ActionPlan
+    {
+        Goal = request.Goal,
+        Actions = request.Actions.Select(a => new AutomationAction
+        {
+            Type = Enum.Parse<ActionType>(a.Type, true),
+            Description = a.Description,
+            Value = a.Value,
+            Target = a.Selector != null ? new ActionTarget { Selector = a.Selector } : null
+        }).ToList()
+    };
+
+    // Check permissions
+    foreach (var action in plan.Actions)
+    {
+        action.Permission = permissionGate.CheckPermission(action);
+    }
+
+    var pending = plan.Actions.Count(a => a.Permission == ActionPermission.Pending);
+    plan.Status = pending > 0 ? ActionPlanStatus.PendingApproval : ActionPlanStatus.Draft;
+
+    return Results.Ok(plan);
+});
+
+app.MapPost("/api/automation/approve", (AutomationApproveRequest request) =>
+{
+    if (request.PlanId != null && request.ActionId == null)
+    {
+        return Results.Ok(new { message = "Use plan-level approve with plan data" });
+    }
+    return Results.Ok(new { approved = true });
+});
+
+app.MapPost("/api/automation/approve-all", (ActionPlan plan) =>
+{
+    var count = permissionGate.ApproveAll(plan);
+    return Results.Ok(new { approved = count });
+});
+
+app.MapPost("/api/automation/deny-all", (ActionPlan plan) =>
+{
+    var count = permissionGate.DenyAll(plan);
+    return Results.Ok(new { denied = count });
+});
+
+app.MapPost("/api/automation/execute", async (ActionPlan plan, CancellationToken ct) =>
+{
+    // Auto-check permissions
+    foreach (var action in plan.Actions)
+    {
+        if (action.Permission == ActionPermission.Pending)
+            action.Permission = permissionGate.CheckPermission(action);
+    }
+
+    await actionExecutor.ExecutePlanAsync(plan, ct);
+    return Results.Ok(plan);
+});
+
+app.MapGet("/api/automation/log", () =>
+{
+    var log = actionExecutor.GetLog();
+    return Results.Ok(new { count = log.Count, log });
+});
+
+app.MapPost("/api/automation/rollback", (ActionPlan plan) =>
+{
+    var count = actionExecutor.Rollback(plan);
+    return Results.Ok(new { rolledBack = count });
+});
+
 // --- Research Agent ---
 app.MapPost("/api/research/start", async (ResearchStartRequest request, CancellationToken ct) =>
 {
@@ -750,6 +826,9 @@ record TokenPackRequest(string? Size, long? Amount);
 record TierChangeRequest(string Tier);
 record GwsConnectRequest(string Code, string ClientId, string ClientSecret, string RedirectUri);
 record ResearchStartRequest(string Query);
+record AutomationPlanRequest(string Goal, List<AutomationActionRequest> Actions);
+record AutomationActionRequest(string Type, string Description, string? Value, string? Selector);
+record AutomationApproveRequest(string? PlanId, string? ActionId);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
