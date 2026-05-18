@@ -66,7 +66,8 @@ src/
   Engram.App/       Tauri + React frontend (10 views)
   Engram.Cli/       Developer CLI
 tests/
-  Engram.Store.Tests/  801 tests
+  Engram.Store.Tests/  849 tests
+  Engram.Api.Tests/     84 tests
 ```
 
 ## Build
@@ -81,8 +82,8 @@ cd src\Engram.App
 ## Tests
 
 ```
-dotnet test tests/Engram.Store.Tests/
-# 801/801 passing
+dotnet test
+# 933/933 passing (849 Store + 84 API)
 ```
 
 ## License
