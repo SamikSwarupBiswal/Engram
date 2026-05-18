@@ -133,6 +133,8 @@ export function Sidebar({
               { id: "wiki" as View, label: "Wiki", icon: "📚" },
               { id: "timeline" as View, label: "Timeline", icon: "📅" },
               { id: "archive" as View, label: "Archive", icon: "🗄️" },
+              { id: "research" as View, label: "Research", icon: "🔬" },
+              { id: "automation" as View, label: "Automation", icon: "🤖" },
             ].map((item) => (
               <button
                 key={item.id}
