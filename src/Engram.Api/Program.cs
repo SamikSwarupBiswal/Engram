@@ -5,6 +5,7 @@ using Engram.Store.Salience;
 using Engram.Store.Identity;
 using Engram.Store.Inference;
 using Engram.Store.Billing;
+using Engram.Store.Google;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -50,6 +51,7 @@ var modelManager = new ModelManager();
 var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
 var inferenceRouter = new InferenceRouter(localEngine);
 var tokenBudget = new TokenBudget(paths.Config);
+var gwsManager = new GoogleWorkspaceManager(paths.Config);
 var modelDownloadLock = new object();
 Task? modelDownloadTask = null;
 ModelDownloadProgress? modelDownloadProgress = null;
@@ -533,6 +535,58 @@ app.MapGet("/api/archive/candidates", () =>
     });
 });
 
+// --- Google Workspace ---
+app.MapGet("/api/gws/status", () =>
+{
+    var status = gwsManager.OAuth.GetStatus();
+    return Results.Ok(status);
+});
+
+app.MapPost("/api/gws/connect", async (GwsConnectRequest request, CancellationToken ct) =>
+{
+    var success = await gwsManager.OAuth.ExchangeCodeAsync(
+        request.Code, request.ClientId, request.ClientSecret, request.RedirectUri, ct);
+    return success
+        ? Results.Ok(new { connected = true, email = gwsManager.OAuth.UserEmail })
+        : Results.BadRequest(new { error = "Token exchange failed" });
+});
+
+app.MapPost("/api/gws/disconnect", async (CancellationToken ct) =>
+{
+    var success = await gwsManager.OAuth.RevokeAsync(ct);
+    return Results.Ok(new { disconnected = success });
+});
+
+app.MapGet("/api/gws/url", (string clientId, string redirectUri) =>
+{
+    var url = GoogleWorkspaceManager.GetAuthorizationUrl(clientId, redirectUri);
+    return Results.Ok(new { url });
+});
+
+app.MapPost("/api/gws/sync", async (CancellationToken ct) =>
+{
+    var result = await gwsManager.SyncAllAsync(ct);
+    return Results.Ok(result);
+});
+
+app.MapGet("/api/gws/emails", async (CancellationToken ct) =>
+{
+    var emails = await gwsManager.Gmail.GetRecentEmailsAsync(50, ct);
+    return Results.Ok(new { count = emails.Count, emails });
+});
+
+app.MapGet("/api/gws/events", async (CancellationToken ct) =>
+{
+    var events = await gwsManager.Calendar.GetUpcomingEventsAsync(7, 50, ct);
+    return Results.Ok(new { count = events.Count, events });
+});
+
+app.MapGet("/api/gws/files", async (CancellationToken ct) =>
+{
+    var files = await gwsManager.Drive.GetRecentFilesAsync(50, ct);
+    return Results.Ok(new { count = files.Count, files });
+});
+
 // --- Token Budget ---
 app.MapGet("/api/tokens", () =>
 {
@@ -654,6 +708,7 @@ record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, str
 record TokenCheckRequest(string? Provider, int InputTokens, int OutputTokens);
 record TokenPackRequest(string? Size, long? Amount);
 record TierChangeRequest(string Tier);
+record GwsConnectRequest(string Code, string ClientId, string ClientSecret, string RedirectUri);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
