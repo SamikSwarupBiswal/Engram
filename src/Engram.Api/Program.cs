@@ -12,7 +12,18 @@ using Engram.Store.Security;
 using Engram.Store.Perception;
 using System.Text.Json;
 
+
 var builder = WebApplication.CreateBuilder(args);
+
+// OpenAPI/Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new() { Title = "Engram API", Version = "1.0.0", Description = "Personal Semantic Operating Layer API" });
+});
+
+// Rate limiting (simple in-memory)
+builder.Services.AddSingleton<Engram.Store.ApiRateLimiter>();
 
 // CORS for Tauri frontend
 builder.Services.AddCors(options =>
@@ -28,6 +39,26 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors();
+
+// Swagger UI (development only)
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// Rate limiting middleware
+app.Use(async (context, next) =>
+{
+    var limiter = context.RequestServices.GetRequiredService<Engram.Store.ApiRateLimiter>();
+    if (!limiter.TryAcquire())
+    {
+        context.Response.StatusCode = 429;
+        await context.Response.WriteAsJsonAsync(new { error = "Rate limit exceeded. Try again later." });
+        return;
+    }
+    await next();
+});
 
 // Initialize workspace
 var workspacePath = Path.Combine(
@@ -73,6 +104,13 @@ ModelDownloadProgress? modelDownloadProgress = null;
 string? modelDownloadError = null;
 
 // --- Health ---
+app.MapGet("/api/health", () => Results.Ok(new
+{
+    status = "healthy",
+    timestamp = DateTimeOffset.UtcNow,
+    version = "1.0.0"
+}));
+
 app.MapGet("/", () => Results.Ok(new
 {
     service = "Engram API",
