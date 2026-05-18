@@ -45,18 +45,18 @@ public class GoogleWorkspaceTests : IDisposable
     }
 
     [Fact]
-    public void OAuth_GetAccessToken_ReturnsNullWhenNotAuthenticated()
+    public async Task OAuth_GetAccessToken_ReturnsNullWhenNotAuthenticated()
     {
         var oauth = new GoogleOAuthManager(_tempDir);
-        var token = oauth.GetAccessTokenAsync().GetAwaiter().GetResult();
+        var token = await oauth.GetAccessTokenAsync();
         Assert.Null(token);
     }
 
     [Fact]
-    public void OAuth_RevokeAsync_ReturnsTrueWhenNotAuthenticated()
+    public async Task OAuth_RevokeAsync_ReturnsTrueWhenNotAuthenticated()
     {
         var oauth = new GoogleOAuthManager(_tempDir);
-        var result = oauth.RevokeAsync().GetAwaiter().GetResult();
+        var result = await oauth.RevokeAsync();
         Assert.True(result);
     }
 
@@ -80,39 +80,39 @@ public class GoogleWorkspaceTests : IDisposable
     // ─── Gmail Provider ───
 
     [Fact]
-    public void Gmail_NoAuth_ReturnsEmpty()
+    public async Task Gmail_NoAuth_ReturnsEmpty()
     {
         var oauth = new GoogleOAuthManager(_tempDir);
         var http = new HttpClient();
         var gmail = new GmailMetadataProvider(oauth, http);
 
-        var result = gmail.GetRecentEmailsAsync().GetAwaiter().GetResult();
+        var result = await gmail.GetRecentEmailsAsync();
         Assert.Empty(result);
     }
 
     // ─── Calendar Provider ───
 
     [Fact]
-    public void Calendar_NoAuth_ReturnsEmpty()
+    public async Task Calendar_NoAuth_ReturnsEmpty()
     {
         var oauth = new GoogleOAuthManager(_tempDir);
         var http = new HttpClient();
         var cal = new CalendarMetadataProvider(oauth, http);
 
-        var result = cal.GetUpcomingEventsAsync().GetAwaiter().GetResult();
+        var result = await cal.GetUpcomingEventsAsync();
         Assert.Empty(result);
     }
 
     // ─── Drive Provider ───
 
     [Fact]
-    public void Drive_NoAuth_ReturnsEmpty()
+    public async Task Drive_NoAuth_ReturnsEmpty()
     {
         var oauth = new GoogleOAuthManager(_tempDir);
         var http = new HttpClient();
         var drive = new DriveMetadataProvider(oauth, http);
 
-        var result = drive.GetRecentFilesAsync().GetAwaiter().GetResult();
+        var result = await drive.GetRecentFilesAsync();
         Assert.Empty(result);
     }
 
@@ -129,10 +129,10 @@ public class GoogleWorkspaceTests : IDisposable
     }
 
     [Fact]
-    public void Manager_SyncAll_NotAuthenticated_ReturnsError()
+    public async Task Manager_SyncAll_NotAuthenticated_ReturnsError()
     {
         var manager = new GoogleWorkspaceManager(_tempDir);
-        var result = manager.SyncAllAsync().GetAwaiter().GetResult();
+        var result = await manager.SyncAllAsync();
 
         Assert.False(result.Success);
         Assert.Equal("Not authenticated with Google", result.Error);
@@ -297,7 +297,7 @@ public class GoogleWorkspaceTests : IDisposable
     }
 
     [Fact]
-    public void OAuth_MissingRefreshToken_CannotRefresh()
+    public async Task OAuth_MissingRefreshToken_CannotRefresh()
     {
         var tokenState = new GoogleTokenState
         {
@@ -312,14 +312,14 @@ public class GoogleWorkspaceTests : IDisposable
         File.WriteAllText(Path.Combine(_tempDir, "google-tokens.json"), json);
 
         var oauth = new GoogleOAuthManager(_tempDir);
-        var token = oauth.GetAccessTokenAsync().GetAwaiter().GetResult();
+        var token = await oauth.GetAccessTokenAsync();
         Assert.NotNull(token); // Returns expired token (caller decides what to do)
     }
 
     // ─── Concurrent Access ───
 
     [Fact]
-    public void OAuth_ConcurrentStatusReads_ThreadSafe()
+    public async Task OAuth_ConcurrentStatusReads_ThreadSafe()
     {
         var oauth = new GoogleOAuthManager(_tempDir);
         var tasks = new List<Task>();
@@ -337,19 +337,19 @@ public class GoogleWorkspaceTests : IDisposable
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
         // No exception = thread safe
     }
 
     // ─── Manager Edge Cases ───
 
     [Fact]
-    public void Manager_MultipleSyncs_NoSideEffects()
+    public async Task Manager_MultipleSyncs_NoSideEffects()
     {
         var manager = new GoogleWorkspaceManager(_tempDir);
 
-        var r1 = manager.SyncAllAsync().GetAwaiter().GetResult();
-        var r2 = manager.SyncAllAsync().GetAwaiter().GetResult();
+        var r1 = await manager.SyncAllAsync();
+        var r2 = await manager.SyncAllAsync();
 
         Assert.False(r1.Success);
         Assert.False(r2.Success);
@@ -366,14 +366,14 @@ public class GoogleWorkspaceTests : IDisposable
     }
 
     [Fact]
-    public void Manager_AfterDispose_SyncFails()
+    public async Task Manager_AfterDispose_SyncFails()
     {
         var manager = new GoogleWorkspaceManager(_tempDir);
         manager.Dispose();
         // Should not throw, just fail gracefully
-        var ex = Record.Exception(() =>
+        var ex = await Record.ExceptionAsync(async () =>
         {
-            var result = manager.SyncAllAsync().GetAwaiter().GetResult();
+            var result = await manager.SyncAllAsync();
         });
         // May throw ObjectDisposedException — that's acceptable
     }

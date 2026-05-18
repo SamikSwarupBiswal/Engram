@@ -62,11 +62,11 @@ User opens Engram
 ```
 src/
   Engram.Store/     Core library (12 layers)
-  Engram.Api/       ASP.NET API sidecar (64 endpoints)
+  Engram.Api/       ASP.NET API sidecar (75 endpoints)
   Engram.App/       Tauri + React frontend (10 views)
   Engram.Cli/       Developer CLI
 tests/
-  Engram.Store.Tests/  747 tests
+  Engram.Store.Tests/  801 tests
 ```
 
 ## Build
@@ -82,7 +82,7 @@ cd src\Engram.App
 
 ```
 dotnet test tests/Engram.Store.Tests/
-# 747/747 passing
+# 801/801 passing
 ```
 
 ## License

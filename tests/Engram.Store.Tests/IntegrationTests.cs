@@ -131,8 +131,8 @@ public class IntegrationTests : IDisposable
         Assert.Single(result);
         Assert.NotNull(result[0].Metadata);
         Assert.Equal(2, result[0].Metadata!.Count);
-        Assert.Equal("report.pdf", result[0].Metadata["file_name"]);
-        Assert.Equal("1024", result[0].Metadata["file_size"]);
+        Assert.Equal("report.pdf", result[0].Metadata!["file_name"]);
+        Assert.Equal("1024", result[0].Metadata!["file_size"]);
         Assert.Equal("file_watcher", result[0].Source);
         Assert.Equal("file:///C:/Users/Samik/Documents/report.pdf", result[0].SourceUri);
     }

@@ -31,6 +31,7 @@ public class DriftAlertStore : IDisposable
     /// </summary>
     public void Save(DriftAlert alert)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_lock)
         {
             var alerts = LoadAllInternal();
@@ -45,6 +46,7 @@ public class DriftAlertStore : IDisposable
     /// </summary>
     public void SaveBatch(IEnumerable<DriftAlert> alerts)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_lock)
         {
             var existing = LoadAllInternal();
@@ -59,6 +61,7 @@ public class DriftAlertStore : IDisposable
     /// </summary>
     public IReadOnlyList<DriftAlert> LoadAll()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_lock) { return LoadAllInternal(); }
     }
 
@@ -67,6 +70,7 @@ public class DriftAlertStore : IDisposable
     /// </summary>
     public IReadOnlyList<DriftAlert> LoadPending()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_lock) { return LoadAllInternal().Where(a => a.Status == DriftAlertStatus.Pending).ToList(); }
     }
 
@@ -99,6 +103,7 @@ public class DriftAlertStore : IDisposable
     /// </summary>
     public DriftAlertStats GetStats()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var alerts = LoadAllInternal();
         return new DriftAlertStats
         {

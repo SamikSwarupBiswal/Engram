@@ -84,7 +84,7 @@ public class AtomicityTests : IDisposable
     }
 
     [Fact]
-    public void Write_ConcurrentDifferentEvents_BothPersist()
+    public async Task Write_ConcurrentDifferentEvents_BothPersist()
     {
         var writer = CreateWriter();
 
@@ -96,9 +96,7 @@ public class AtomicityTests : IDisposable
             }))
             .ToArray();
 
-        Task.WaitAll(tasks);
-
-        var results = tasks.Select(t => t.Result).ToList();
+        var results = await Task.WhenAll(tasks);
         Assert.All(results, r => Assert.Equal(WriteOutcome.Created, r.Outcome));
         Assert.Equal(5, results.Select(r => r.FilePath).Distinct().Count());
     }
