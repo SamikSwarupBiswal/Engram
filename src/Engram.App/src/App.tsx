@@ -424,17 +424,26 @@ function ArchiveView() {
 
 // ─── Settings View ───
 function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
+  const [tokenPricing, setTokenPricing] = useState<{ rates: { provider: string; inputCost: string; outputCost: string; description: string }[] } | null>(null);
   const [tokenStatus, setTokenStatus] = useState<{ tier: string; monthlyAllowance: number; tokensRemaining: number; tokensUsedThisMonth: number; bonusTokens: number; usagePercent: number; daysRemaining: number; usageByProvider: Record<string, number>; history: { timestamp: string; provider: string; proTokensCost: number; balanceAfter: number }[] } | null>(null);
   const [powerMode, setPowerMode] = useState<"eco" | "turbo">("eco");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [identity, setIdentity] = useState<IdentityResponse | null>(null);
+  const [antiGoals, setAntiGoals] = useState<{ description: string; severity: string }[]>([]);
+  const [priorities, setPriorities] = useState<{ description: string; category: string }[]>([]);
   const [alerts, setAlerts] = useState<DriftAlert[]>([]);
+  const [driftStats, setDriftStats] = useState<{ total: number; pending: number; dismissed: number; accepted: number; converted: number } | null>(null);
 
   useEffect(() => {
     api.status().then(setStatus).catch(() => {});
     api.tokenStatus().then(setTokenStatus).catch(() => {});
+    api.tokenPricing().then(setTokenPricing).catch(() => {});
+    api.getPowerMode().then(r => setPowerMode(r.mode as "eco" | "turbo")).catch(() => {});
     api.identity().then(setIdentity).catch(() => {});
+    api.antiGoals().then(d => setAntiGoals((d.antiGoals || []) as { description: string; severity: string }[])).catch(() => {});
+    api.priorities().then(d => setPriorities((d.priorities || []) as { description: string; category: string }[])).catch(() => {});
     api.drift().then(d => setAlerts(d.alerts)).catch(() => {});
+    api.driftStats().then(setDriftStats).catch(() => {});
   }, []);
 
   return (
@@ -481,7 +490,31 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
                   </div>
                 </div>
               )}
-              {identity.comfortTriggers && identity.comfortTriggers.length > 0 && (
+              {/* Anti-Goals */}
+              {antiGoals.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-[10px] text-[#888] mb-1">Anti-Goals</div>
+                  <div className="flex flex-wrap gap-1">
+                    {antiGoals.map((ag, i) => (
+                      <span key={i} className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">{ag.description} ({ag.severity})</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Priorities */}
+              {priorities.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-[10px] text-[#888] mb-1">Priorities</div>
+                  <div className="flex flex-wrap gap-1">
+                    {priorities.map((p, i) => (
+                      <span key={i} className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">{p.description} ({p.category})</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {identity?.comfortTriggers && identity.comfortTriggers.length > 0 && (
                 <div>
                   <div className="text-[11px] text-[#888] mb-1">Comfort Triggers</div>
                   <div className="flex flex-wrap gap-1.5">
@@ -574,6 +607,16 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
             </div>
           )}
         </div>
+
+        {/* Drift Stats */}
+        {driftStats && (
+          <div className="mb-3 grid grid-cols-4 gap-2">
+            <div className="rounded-lg bg-white/[0.04] p-2 text-center"><div className="text-sm font-medium">{driftStats.total}</div><div className="text-[10px] text-[#888]">Total</div></div>
+            <div className="rounded-lg bg-white/[0.04] p-2 text-center"><div className="text-sm font-medium text-yellow-400">{driftStats.pending}</div><div className="text-[10px] text-[#888]">Pending</div></div>
+            <div className="rounded-lg bg-white/[0.04] p-2 text-center"><div className="text-sm font-medium text-emerald-400">{driftStats.accepted}</div><div className="text-[10px] text-[#888]">Accepted</div></div>
+            <div className="rounded-lg bg-white/[0.04] p-2 text-center"><div className="text-sm font-medium text-[#888]">{driftStats.dismissed}</div><div className="text-[10px] text-[#888]">Dismissed</div></div>
+          </div>
+        )}
 
         {/* Drift Alerts */}
         {alerts.length > 0 && (
@@ -698,8 +741,20 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
                     Upgrade to Pro
                   </button>
                 )}
-                <button
-                  onClick={async () => { await api.buyTokenPack("small"); const s = await api.tokenStatus(); setTokenStatus(s); }}
+              {tokenPricing?.rates && (
+                <div className="mb-2">
+                  <div className="text-[10px] text-[#888] mb-1">Token Rates</div>
+                  {tokenPricing.rates.map((r) => (
+                    <div key={r.provider} className="flex justify-between text-[10px] py-0.5">
+                      <span className="text-[#b4b4b4]">{r.provider}</span>
+                      <span className="text-[#888]">{r.inputCost} in / {r.outputCost} out</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={async () => { await api.buyTokenPack("small");const s = await api.tokenStatus(); setTokenStatus(s); }}
                   className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.08]"
                 >
                   +100K tokens ($5)
@@ -715,6 +770,18 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
           </div>
         )}
 
+        {/* Daily Brief */}
+        <div>
+          <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Daily Brief</h3>
+          <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+            <p className="text-[11px] text-[#888] mb-2">Generate a morning or evening brief from your wiki.</p>
+            <div className="flex gap-2">
+              <button onClick={async () => { const b = await api.brief("morning"); alert(b.content); }} className="flex-1 rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Morning Brief</button>
+              <button onClick={async () => { const b = await api.brief("evening"); alert(b.content); }} className="flex-1 rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Evening Brief</button>
+            </div>
+          </div>
+        </div>
+
         {/* Security */}
         <div>
           <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Security</h3>
@@ -722,6 +789,7 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
             <div className="flex items-center gap-2 mb-2">
               <div className="h-2 w-2 rounded-full bg-emerald-500" />
               <span className="text-[13px] text-[#ececec]">AES-256-GCM Encryption</span>
+              <button onClick={async () => { const s = await api.securityStatus(); alert(s.encryptionConfigured ? "Encryption configured" : "Not configured"); }} className="ml-auto text-[10px] text-[#888] hover:text-[#b4b4b4]">Check Status</button>
             </div>
             <p className="text-[11px] text-[#888] mb-3">All data encrypted at rest. Export your data anytime.</p>
             <div className="flex gap-2">
@@ -733,6 +801,28 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
 
         {/* Google Workspace */}
         <GoogleWorkspacePanel />
+
+        {/* Provider Config */}
+        <div>
+          <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Cloud Provider</h3>
+          <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+            <p className="text-[11px] text-[#888] mb-3">Connect any OpenAI-compatible API.</p>
+            <div className="space-y-2">
+              <input type="text" placeholder="Provider name (openai/groq/ollama)" className="w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-1.5 text-[12px] text-[#ececec] placeholder:text-[#666]" id="provider-name" />
+              <input type="text" placeholder="Base URL (https://api.openai.com/v1)" className="w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-1.5 text-[12px] text-[#ececec] placeholder:text-[#666]" id="provider-url" />
+              <input type="text" placeholder="Model (gpt-4o / llama-3.3-70b)" className="w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-1.5 text-[12px] text-[#ececec] placeholder:text-[#666]" id="provider-model" />
+              <input type="password" placeholder="API Key (empty for local)" className="w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-1.5 text-[12px] text-[#ececec] placeholder:text-[#666]" id="provider-key" />
+              <button onClick={async () => {
+                const n = (document.getElementById('provider-name') as HTMLInputElement)?.value;
+                const u = (document.getElementById('provider-url') as HTMLInputElement)?.value;
+                const m = (document.getElementById('provider-model') as HTMLInputElement)?.value;
+                const k = (document.getElementById('provider-key') as HTMLInputElement)?.value;
+                await api.setProvider({ providerName: n, baseUrl: u, model: m, apiKey: k });
+                alert("Provider saved!");
+              }} className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-[12px] text-white hover:bg-emerald-700">Save Provider</button>
+            </div>
+          </div>
+        </div>
 
         {/* Custom Provider (Turbo Mode) */}
         {powerMode === "turbo" && (
