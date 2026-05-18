@@ -18,3 +18,4 @@ src-tauri/sidecar/publish/
 *.exe
 *.msi
 package-lock.json
+installer-staging/
