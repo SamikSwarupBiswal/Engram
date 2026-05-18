@@ -43,6 +43,6 @@
       "icons/icon.ico"
     ],
     "externalBin": ["sidecar/engram-api"],
-    "resources": ["sidecar/publish/*"]
+    "resources": []
   }
 }

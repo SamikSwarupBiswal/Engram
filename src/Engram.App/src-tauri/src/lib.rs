@@ -44,10 +44,12 @@ pub fn run() {
         ])
         .setup(|app| {
             // ── Spawn .NET API sidecar ──
-            // The sidecar is a self-contained .NET app bundled as Tauri resources.
-            // We launch it from the resources directory so it can find its DLLs.
-            let resource_dir = app.path().resource_dir().expect("resource dir not found");
-            let sidecar_dir = resource_dir.join("sidecar").join("publish");
+            // The sidecar is a self-contained .NET app.
+            // It lives at {install_dir}/sidecar/publish/Engram.Api.exe
+            // We resolve the install directory from the app exe location.
+            let app_exe = std::env::current_exe().expect("cannot find app exe");
+            let install_dir = app_exe.parent().expect("cannot find install dir");
+            let sidecar_dir = install_dir.join("sidecar").join("publish");
             let sidecar_exe = if cfg!(target_os = "windows") {
                 sidecar_dir.join("Engram.Api.exe")
             } else {
