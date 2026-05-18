@@ -1,108 +1,90 @@
 # Engram
 
-A Windows-first personal semantic operating layer that turns your digital activity into durable, source-linked memory.
-
-## What Is Engram?
-
-Engram captures your local digital life — files, clipboard, active windows, and eventually email/calendar — and metabolizes it into a local Markdown wiki. It remembers decisions, extracts commitments, detects contradictions, and can operate your OS to perform research or tasks on your behalf.
-
-**Engram is a desktop app.** Install via .exe/.msi, open from Start Menu, and it just works.
+A Windows-first personal semantic operating layer. Captures your digital life, builds a structured wiki, and lets you search, recall, and reason over everything.
 
 ## Quick Start
 
-### For Users (Install)
-1. Download `Engram_1.0.0_x64-setup.exe` from releases
-2. Run the installer
-3. Open Engram from Start Menu
-4. Complete the Discovery Interview (2 minutes)
-5. Start chatting
-
-### For Developers (Build)
-```bash
-# Clone
-git clone https://github.com/SamikSwarupBiswal/Engram.git
-cd Engram
-
-# Build backend
-dotnet build Engram.sln
-dotnet test Engram.sln
-
-# Build desktop app (Windows PowerShell)
-cd src\Engram.App
-npm install
-.uild-windows.ps1        # Full build + installer
-.uild-windows.ps1 -Dev   # Dev mode with hot reload
 ```
+1. Download Engram_1.0.0_x64-setup.exe (72 MB)
+2. Run installer
+3. Open Engram from Start Menu
+4. Chat, search, research — it just works
+```
+
+## What It Does
+
+- **Capture**: Clipboard, files, active windows (opt-in)
+- **Metabolize**: Events → structured wiki with facts, sources, links
+- **Search**: TF-IDF keyword search over wiki memory
+- **Briefs**: Morning/evening summaries with citations
+- **Chat**: Local Phi-4-mini inference (Eco mode) or cloud (Turbo mode)
+- **Research**: Multi-step web research with citations
+- **Automation**: Desktop actions with permission gating
+- **Google Workspace**: Email, calendar, drive metadata ingestion
+- **Security**: AES-256 encryption, export, delete, encrypted sync
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Shell | Tauri v2 (Rust) |
+| Frontend | React 19 + TypeScript + Tailwind |
+| Backend | .NET 8 Minimal API |
+| Inference | LLamaSharp + Vulkan |
+| Model | Phi-4-mini GGUF (2.3GB) |
+| Storage | Markdown (.engram/) |
+| Encryption | AES-256-GCM |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Engram Desktop App (Tauri v2)                      │
-│                                                     │
-│  React + Tailwind  ←→  .NET 8 API Sidecar          │
-│  Chat, Search, Wiki     16 endpoints               │
-│  Timeline, Settings     Engram.Store services       │
-│                                                     │
-│  Tauri auto-spawns sidecar on launch                │
-│  Sidecar killed on app close                        │
-└─────────────────────────────────────────────────────┘
+User opens Engram
+  → Tauri shell spawns .NET API sidecar
+  → React frontend connects to sidecar
+  → Chat/Search/Wiki/Timeline/Settings/Archive/Research/Automation
+  → Model auto-downloads on first launch
 ```
 
-## Tech Stack
+## Free vs Pro
 
-| Layer | Technology |
-|-------|-----------|
-| Shell | Tauri v2 (Rust) |
-| UI | React 19 + TypeScript + Tailwind CSS |
-| Backend | .NET 8 ASP.NET Minimal API |
-| Tests | xUnit (516 tests) |
-| Local Store | .engram/ (JSON + Markdown) |
+| Feature | Free | Pro ($20-30/mo) |
+|---------|------|----------------|
+| Local inference (Phi-4-mini) | ✓ | ✓ |
+| User's own API keys | ✓ | ✓ |
+| Managed cloud credits | ✗ | ✓ |
+| Google Workspace | ✗ | ✓ |
+| Research agent | ✗ | ✓ |
+| Automation | ✗ | ✓ |
+| Monthly tokens | ~60K | 500K |
 
 ## Project Structure
 
 ```
-Engram/
-├── Artifacts/              # PRD and implementation plan
-├── .planning/              # GSD planning artifacts
-├── docs/                   # Architecture, ADRs, quality gate
-├── src/
-│   ├── Engram.Store/       # Core library (68 source files)
-│   ├── Engram.Cli/         # Developer CLI
-│   ├── Engram.Api/         # API sidecar (16 endpoints)
-│   └── Engram.App/         # Tauri desktop app
-│       ├── src/            # React frontend
-│       ├── src-tauri/      # Rust Tauri shell
-│       ├── build-windows.ps1
-│       └── dev-windows.ps1
-├── tests/
-│   └── Engram.Store.Tests/ # 516 xUnit tests
-└── Engram.sln
+src/
+  Engram.Store/     Core library (12 layers)
+  Engram.Api/       ASP.NET API sidecar (64 endpoints)
+  Engram.App/       Tauri + React frontend (10 views)
+  Engram.Cli/       Developer CLI
+tests/
+  Engram.Store.Tests/  747 tests
 ```
 
-## Roadmap
+## Build
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Repository and Runtime Foundation | ✅ Complete |
-| 2 | Immutable Raw Event Store | ✅ Complete |
-| 3 | Local Ingestion MVP | ✅ Complete |
-| 4 | Markdown Wiki Memory | ✅ Complete |
-| 5 | Local Search + Desktop Shell | ✅ Complete |
-| 6 | Identity Hardening + Discovery UI | ✅ Complete |
-| 7 | Salience and Drift Engine | ✅ Complete |
-| 8 | Cloud Reasoning and Tier Routing | ✅ Complete |
-| 9 | Google Workspace Ingestion | Next |
-| 10 | Agentic Research Workflow | Planned |
-| 11 | Computer-Use Automation | Planned |
-| 12 | Encryption, Sync, Hardening | Planned |
+```powershell
+# From Windows PowerShell
+cd src\Engram.App
+.\build-nsis-installer.ps1
+# Output: Engram_1.0.0_x64-setup.exe (72 MB)
+```
 
 ## Tests
 
-```bash
-dotnet test Engram.sln    # 516/516 passing
+```
+dotnet test tests/Engram.Store.Tests/
+# 747/747 passing
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Proprietary
