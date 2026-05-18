@@ -4,10 +4,14 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::{
+    process::{CommandChild, CommandEvent},
+    ShellExt,
+};
 
 struct SidecarState {
     pid: Mutex<Option<u32>>,
+    child: Mutex<Option<CommandChild>>,
 }
 
 #[tauri::command]
@@ -32,6 +36,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(SidecarState {
             pid: Mutex::new(None),
+            child: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             get_app_version,
@@ -42,21 +47,44 @@ pub fn run() {
             // The sidecar binary is bundled at src-tauri/sidecar/engram-api-{target_triple}
             // Tauri resolves it via externalBin in tauri.conf.json
             let sidecar = app.shell().sidecar("engram-api").expect("sidecar config missing");
-            let (rx, child) = sidecar
+            let (mut rx, child) = sidecar
                 .args(["--urls", "http://127.0.0.1:5000"])
                 .spawn()
                 .expect("failed to spawn .NET sidecar");
+            let child_pid = child.pid();
 
             // Store PID for cleanup
             {
                 let state = app.state::<SidecarState>();
                 let mut pid = state.pid.lock().unwrap();
-                *pid = Some(child.pid());
+                *pid = Some(child_pid);
+
+                let mut child_handle = state.child.lock().unwrap();
+                *child_handle = Some(child);
             }
 
             // Keep child handle alive — Tauri manages lifecycle
             // The sidecar is killed when the app exits
-            let _ = (rx, child);
+            tauri::async_runtime::spawn(async move {
+                while let Some(event) = rx.recv().await {
+                    match event {
+                        CommandEvent::Stdout(line) => {
+                            println!("engram-api: {}", String::from_utf8_lossy(&line));
+                        }
+                        CommandEvent::Stderr(line) => {
+                            eprintln!("engram-api: {}", String::from_utf8_lossy(&line));
+                        }
+                        CommandEvent::Terminated(payload) => {
+                            eprintln!("engram-api exited: {:?}", payload.code);
+                            break;
+                        }
+                        CommandEvent::Error(error) => {
+                            eprintln!("engram-api error: {error}");
+                        }
+                        _ => {}
+                    }
+                }
+            });
 
             // ── Build system tray menu ──
             let pause_item = MenuItem::with_id(app, "pause", "Pause Capture", true, None::<&str>)?;

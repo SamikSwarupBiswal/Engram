@@ -164,7 +164,7 @@ public class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
     // ─── Chat Completions ───
 
     [Fact]
-    public async Task ChatCompletions_ReturnsOkWithMockResponse()
+    public async Task ChatCompletions_ReturnsSetupMessageWhenModelNotLoaded()
     {
         var request = new
         {
@@ -182,7 +182,7 @@ public class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True(json.GetProperty("choices").GetArrayLength() > 0);
 
         var content = json.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
-        Assert.Contains("Hello Engram", content!);
+        Assert.Contains("model", content!, StringComparison.OrdinalIgnoreCase);
     }
 
     // ─── CopilotKit ───

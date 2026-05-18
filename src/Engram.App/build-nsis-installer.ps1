@@ -14,6 +14,11 @@ Write-Host "[1/4] Building self-contained .NET sidecar..." -ForegroundColor Yell
 dotnet publish $ApiProject -c Release -r win-x64 --self-contained true -o $PublishDir
 if ($LASTEXITCODE -ne 0) { Write-Host "FAIL" -ForegroundColor Red; exit 1 }
 if (Test-Path $LlamaNativeDir) { Copy-Item "$LlamaNativeDir\*.dll" $PublishDir -Force }
+$SourceExe = "$PublishDir\Engram.Api.exe"
+if (Test-Path $SourceExe) {
+    Copy-Item $SourceExe "$SidecarDir\engram-api-x86_64-pc-windows-msvc.exe" -Force
+    Copy-Item $SourceExe "$PublishDir\engram-api.exe" -Force
+}
 $Size = [math]::Round((Get-ChildItem $PublishDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 0)
 Write-Host "  Sidecar: $Size MB" -ForegroundColor Green
 

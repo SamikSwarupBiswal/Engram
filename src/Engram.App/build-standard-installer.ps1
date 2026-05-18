@@ -33,6 +33,12 @@ if (-not $SkipDotnet) {
         Write-Host "  + LLamaSharp native DLLs (noavx)" -ForegroundColor Gray
     }
 
+    $SourceExe = "$PublishDir\Engram.Api.exe"
+    if (Test-Path $SourceExe) {
+        Copy-Item $SourceExe "$SidecarDir\engram-api-x86_64-pc-windows-msvc.exe" -Force
+        Copy-Item $SourceExe "$PublishDir\engram-api.exe" -Force
+    }
+
     $Size = [math]::Round((Get-ChildItem $PublishDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 0)
     Write-Host "  Sidecar: $Size MB" -ForegroundColor Green
 }
@@ -56,6 +62,8 @@ Copy-Item "src-tauri\target\release\engram-app.exe" "$InstallerDir\engram-app.ex
 
 # Copy .NET publish directory
 Copy-Item $PublishDir "$InstallerDir\publish" -Recurse -Force
+Copy-Item "download-model.ps1" "$InstallerDir\download-model.ps1" -Force
+Copy-Item "installer.nsi" "$InstallerDir\installer.nsi" -Force
 
 $TotalSize = [math]::Round((Get-ChildItem $InstallerDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 0)
 Write-Host "  Staged: $TotalSize MB" -ForegroundColor Green
@@ -71,7 +79,7 @@ if (-not (Test-Path $NsisExe)) {
 }
 
 if ($NsisExe) {
-    & $NsisExe "$PSScriptRoot\installer.nsi"
+    & $NsisExe "$InstallerDir\installer.nsi"
     if ($LASTEXITCODE -eq 0) {
         $InstallerPath = "$InstallerDir\Engram_1.0.0_x64-setup.exe"
         if (Test-Path $InstallerPath) {
@@ -82,6 +90,9 @@ if ($NsisExe) {
             Write-Host "  Engram_1.0.0_x64-setup.exe = $InstallerSize MB" -ForegroundColor White
             Write-Host ""
         }
+    } else {
+        Write-Host "  NSIS build failed" -ForegroundColor Red
+        exit 1
     }
 } else {
     Write-Host "  NSIS not found. Install NSIS or use Tauri bundler." -ForegroundColor Yellow

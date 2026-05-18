@@ -30,6 +30,7 @@ export default function App() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [discoveryDone, setDiscoveryDone] = useState<boolean | null>(null);
   const [modelReady, setModelReady] = useState(false);
+  const handleModelReady = useCallback(() => setModelReady(true), []);
 
   useEffect(() => {
     checkApiHealth().then((online) => {
@@ -90,14 +91,17 @@ export default function App() {
           onDeleteSession={handleDeleteSession}
         />
         <main className="flex-1 overflow-hidden">
+          {apiOnline && !modelReady && (
+            <ModelDownloadBar
+              visible={discoveryDone === true && activeView === "chat"}
+              onComplete={handleModelReady}
+            />
+          )}
           {discoveryDone === false && (
             <DiscoveryInterview
               onComplete={() => setDiscoveryDone(true)}
               onSkip={() => setDiscoveryDone(true)}
             />
-          )}
-          {discoveryDone && activeView === "chat" && !modelReady && (
-            <ModelDownloadBar onComplete={() => setModelReady(true)} />
           )}
           {discoveryDone && activeView === "chat" && (
             <ChatPanel

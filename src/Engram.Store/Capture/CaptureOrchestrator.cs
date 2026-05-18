@@ -49,7 +49,7 @@ public class CaptureOrchestrator : IDisposable
         _exclusionList = new ExclusionList();
         _exclusionList.LoadFromConfig(config.ExcludedApps);
 
-        _rateLimiter = new RateLimiter(maxTokens: 200, refillRatePerSecond: 100);
+        _rateLimiter = new RateLimiter(maxTokens: 200, refillRatePerSecond: 10);
         _circuitBreaker = new CircuitBreaker(failureThreshold: 10, openDuration: TimeSpan.FromSeconds(30));
     }
 

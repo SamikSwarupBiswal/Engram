@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
@@ -39,6 +40,10 @@ public class ModelManager : IDisposable
     /// </summary>
     public static string GetModelsDirectory()
     {
+        var overridePath = Environment.GetEnvironmentVariable("ENGRAM_MODELS_DIR");
+        if (!string.IsNullOrWhiteSpace(overridePath))
+            return overridePath;
+
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         return Path.Combine(localAppData, "Engram", "models");
     }
@@ -71,8 +76,22 @@ public class ModelManager : IDisposable
     public ModelStatus GetStatus(ModelConfig config)
     {
         var path = GetModelPath(config);
+        var tempPath = path + ".downloading";
+
         if (!File.Exists(path))
-            return new ModelStatus { State = ModelState.NotDownloaded, Path = path };
+        {
+            if (!File.Exists(tempPath))
+                return new ModelStatus { State = ModelState.NotDownloaded, Path = path };
+
+            var tempInfo = new FileInfo(tempPath);
+            return new ModelStatus
+            {
+                State = ModelState.PartialDownload,
+                Path = path,
+                SizeBytes = tempInfo.Length,
+                Progress = Math.Min(0.99, (double)tempInfo.Length / config.SizeBytes)
+            };
+        }
 
         var fileInfo = new FileInfo(path);
         var progress = (double)fileInfo.Length / config.SizeBytes;
@@ -120,6 +139,14 @@ public class ModelManager : IDisposable
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
+        // Some servers ignore Range and return 200 OK. In that case restart
+        // instead of appending a full response to an existing partial file.
+        if (existingBytes > 0 && response.StatusCode == HttpStatusCode.OK)
+        {
+            _logger?.LogInformation("Server did not resume download; restarting from byte 0");
+            existingBytes = 0;
+        }
+
         var totalBytes = (response.Content.Headers.ContentLength ?? 0) + existingBytes;
         var downloadedBytes = existingBytes;
 
@@ -153,6 +180,13 @@ public class ModelManager : IDisposable
         if (File.Exists(modelPath))
             File.Delete(modelPath);
         File.Move(tempPath, modelPath);
+
+        var finalSize = new FileInfo(modelPath).Length;
+        if (finalSize < config.SizeBytes * 0.9)
+        {
+            File.Delete(modelPath);
+            throw new InvalidDataException($"Downloaded model is incomplete: {finalSize} bytes.");
+        }
 
         _logger?.LogInformation("Model download complete: {Path}", modelPath);
         progress?.Report(new ModelDownloadProgress

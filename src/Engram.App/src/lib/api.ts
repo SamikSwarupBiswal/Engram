@@ -202,7 +202,7 @@ export const api = {
 
   // Model management
   modelStatus: () =>
-    apiFetch<{ model: string; description: string; state: string; path: string; sizeBytes: number; progress: number; gpu: { backend: string; device: string; vramMb: number; layers: number }; isReady: boolean; isLoading: boolean }>("/api/model/status"),
+    apiFetch<{ model: string; description: string; state: string; path: string; sizeBytes: number; progress: number; gpu: { backend: string; device: string; vramMb: number; layers: number }; isReady: boolean; isLoading: boolean; downloadInProgress: boolean; downloadError: string | null }>("/api/model/status"),
 
   downloadModel: () =>
     apiFetch<{ status: string }>("/api/model/download", { method: "POST" }),

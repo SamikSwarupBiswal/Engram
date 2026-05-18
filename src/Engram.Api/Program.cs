@@ -50,6 +50,10 @@ var modelManager = new ModelManager();
 var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
 var inferenceRouter = new InferenceRouter(localEngine);
 var tokenBudget = new TokenBudget(paths.Config);
+var modelDownloadLock = new object();
+Task? modelDownloadTask = null;
+ModelDownloadProgress? modelDownloadProgress = null;
+string? modelDownloadError = null;
 
 // --- Health ---
 app.MapGet("/", () => Results.Ok(new
@@ -331,39 +335,72 @@ app.MapGet("/api/model/status", () =>
     var config = ModelManager.Phi4Mini;
     var status = modelManager.GetStatus(config);
     var gpu = gpuDetector.Detect();
+    bool downloadInProgress;
+    ModelDownloadProgress? latestProgress;
+    string? latestError;
+
+    lock (modelDownloadLock)
+    {
+        downloadInProgress = modelDownloadTask is { IsCompleted: false };
+        latestProgress = modelDownloadProgress;
+        latestError = modelDownloadError;
+    }
+
     return Results.Ok(new
     {
         model = config.Name,
         description = config.Description,
         state = status.State.ToString(),
         path = status.Path,
-        sizeBytes = status.SizeBytes,
-        progress = status.Progress,
+        sizeBytes = latestProgress?.BytesDownloaded ?? status.SizeBytes,
+        progress = latestProgress?.Progress ?? status.Progress,
         gpu = new { backend = gpu.Backend.ToString(), device = gpu.DeviceName, vramMb = gpu.VramMb, layers = gpu.LayerCount },
         isReady = localEngine.IsReady,
-        isLoading = localEngine.IsLoading
+        isLoading = localEngine.IsLoading,
+        downloadInProgress,
+        downloadError = latestError
     });
 });
 
 // --- Download Model ---
-app.MapPost("/api/model/download", async (HttpContext context) =>
+app.MapPost("/api/model/download", () =>
 {
     var config = ModelManager.Phi4Mini;
 
     if (modelManager.IsModelReady(config))
         return Results.Ok(new { status = "already_downloaded", path = ModelManager.GetModelPath(config) });
 
-    // Start download in background (returns immediately)
-    var progress = new Progress<ModelDownloadProgress>(p =>
+    lock (modelDownloadLock)
     {
-        // Could emit via SignalR/WebSocket for real-time progress
-    });
+        if (modelDownloadTask is { IsCompleted: false })
+            return Results.Accepted("/api/model/status", new { status = "downloading" });
 
-    _ = Task.Run(async () =>
-    {
-        try { await modelManager.DownloadModelAsync(config, progress, context.RequestAborted); }
-        catch { }
-    });
+        modelDownloadError = null;
+        modelDownloadProgress = null;
+
+        var progress = new Progress<ModelDownloadProgress>(p =>
+        {
+            lock (modelDownloadLock)
+            {
+                modelDownloadProgress = p;
+            }
+        });
+
+        modelDownloadTask = Task.Run(async () =>
+        {
+            try
+            {
+                await modelManager.DownloadModelAsync(config, progress, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                lock (modelDownloadLock)
+                {
+                    modelDownloadError = ex.Message;
+                }
+            }
+        });
+    }
 
     return Results.Accepted("/api/model/status", new { status = "downloading" });
 });
