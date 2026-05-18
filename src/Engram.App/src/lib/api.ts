@@ -248,6 +248,25 @@ export const api = {
   tokenPricing: () =>
     apiFetch<{ plans: { name: string; price: string; tokens: number; period: string }[]; packs: { name: string; tokens: number; price: string }[]; rates: { provider: string; inputCost: string; outputCost: string; description: string }[] }>("/api/tokens/pricing"),
 
+  // Research Agent
+  researchStart: (query: string) =>
+    apiFetch<{ runId: string; query: string; status: string; steps: { stepId: string; type: string; description: string; status: string; output: string | null }[]; sources: { sourceId: string; url: string; title: string; domain: string; citationIndex: number }[]; summary: string | null; progress: number }>("/api/research/start", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
+
+  researchList: () =>
+    apiFetch<{ count: number; runs: { runId: string; query: string; status: string; progress: number; createdAt: string }[] }>("/api/research"),
+
+  researchGet: (runId: string) =>
+    apiFetch<{ runId: string; query: string; status: string; steps: { stepId: string; type: string; description: string; status: string; output: string | null }[]; sources: { sourceId: string; url: string; title: string; domain: string; citationIndex: number }[]; summary: string | null; progress: number; error: string | null }>(`/api/research/${runId}`),
+
+  researchResume: (runId: string) =>
+    apiFetch<{ runId: string; status: string }>(`/api/research/${runId}/resume`, { method: "POST" }),
+
+  researchCancel: (runId: string) =>
+    apiFetch<{ cancelled: boolean }>(`/api/research/${runId}/cancel`, { method: "POST" }),
+
   // Google Workspace
   gwsStatus: () =>
     apiFetch<{ isAuthenticated: boolean; email: string | null; scopes: string[]; expiresAt: string | null }>("/api/gws/status"),

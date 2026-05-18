@@ -6,9 +6,10 @@ import { api, checkApiHealth } from "./lib/api";
 import { DiscoveryInterview } from "./components/discovery/DiscoveryInterview";
 import { ModelDownloadBar } from "./components/chat/ModelDownloadBar";
 import { GoogleWorkspacePanel } from "./components/settings/GoogleWorkspacePanel";
+import { ResearchPanel } from "./components/research/ResearchPanel";
 import type { SearchResult, WikiNodeSummary, RawEvent, StatusResponse, IdentityResponse, DriftAlert } from "./lib/api";
 
-export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive";
+export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive" | "research";
 
 const SESSIONS_KEY = "engram-chat-sessions";
 
@@ -117,6 +118,7 @@ export default function App() {
           {activeView === "timeline" && <TimelineView />}
           {discoveryDone && activeView === "settings" && <SettingsView onRedoDiscovery={() => setDiscoveryDone(false)} />}
           {discoveryDone && activeView === "archive" && <ArchiveView />}
+          {discoveryDone && activeView === "research" && <ResearchPanel />}
         </main>
       </div>
     </div>
