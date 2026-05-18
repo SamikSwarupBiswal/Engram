@@ -1,8 +1,3 @@
-; Engram NSIS Installer Script
-; Produces a ~100MB self-contained installer
-; Bundles: Tauri app + .NET runtime + LLamaSharp + sidecar
-; Model (Phi-4-mini, ~2.2GB) downloaded on first launch
-
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 
@@ -12,7 +7,6 @@ InstallDir "$LOCALAPPDATA\Engram"
 InstallDirRegKey HKCU "Software\Engram" ""
 RequestExecutionLevel user
 
-; Pages
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -22,48 +16,47 @@ RequestExecutionLevel user
 
 !insertmacro MUI_LANGUAGE "English"
 
-Section "Engram" SecEngram
+Section "Engram Application" SecEngram
   SetOutPath "$INSTDIR"
-
-  ; Tauri app (main executable)
   File "engram-app.exe"
+  File "download-model.ps1"
 
-  ; .NET API sidecar (self-contained with all DLLs)
   SetOutPath "$INSTDIR\sidecar"
   File /r "publish\*.*"
 
-  ; Create Start Menu shortcut
   CreateDirectory "$SMPROGRAMS\Engram"
   CreateShortCut "$SMPROGRAMS\Engram\Engram.lnk" "$INSTDIR\engram-app.exe"
   CreateShortCut "$DESKTOP\Engram.lnk" "$INSTDIR\engram-app.exe"
 
-  ; Write uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
-  ; Registry for Add/Remove Programs
   WriteRegStr HKCU "Software\Engram" "" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" \
-    "DisplayName" "Engram"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" \
-    "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" \
-    "DisplayVersion" "1.0.0"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" \
-    "Publisher" "Engram"
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" \
-    "NoModify" 1
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" \
-    "NoRepair" 1
-
-  ; Get installed size
-  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
-  IntFmt $0 "0x%08X" $0
-  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" \
-    "EstimatedSize" "$0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" "DisplayName" "Engram"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" "DisplayVersion" "1.0.0"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram" "Publisher" "Engram"
 SectionEnd
+
+Section "Download AI Model (2.3 GB)" SecModel
+  DetailPrint "Downloading Phi-4-mini AI model (2.3 GB)..."
+  DetailPrint "This may take a few minutes depending on your internet speed."
+  nsExec::ExecToLog 'powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\download-model.ps1"'
+  Pop $0
+  ${If} $0 == "0"
+    DetailPrint "Model downloaded successfully."
+  ${Else}
+    DetailPrint "Model download will complete when you first open Engram."
+  ${EndIf}
+SectionEnd
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecEngram} "Install Engram application and API sidecar."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecModel} "Download the Phi-4-mini AI model (2.3 GB). Required for local chat. Can be skipped and downloaded later."
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Section "Uninstall"
   Delete "$INSTDIR\engram-app.exe"
+  Delete "$INSTDIR\download-model.ps1"
   RMDir /r "$INSTDIR\sidecar"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
@@ -75,3 +68,9 @@ Section "Uninstall"
   DeleteRegKey HKCU "Software\Engram"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Engram"
 SectionEnd
+
+Function .onInstSuccess
+  MessageBox MB_YESNO "Installation complete! Open Engram now?" IDNO NoLaunch
+    Exec "$INSTDIR\engram-app.exe"
+  NoLaunch:
+FunctionEnd
