@@ -9,6 +9,7 @@ using Engram.Store.Google;
 using Engram.Store.Agent;
 using Engram.Store.Automation;
 using Engram.Store.Security;
+using Engram.Store.Perception;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -61,6 +62,11 @@ var actionExecutor = new ActionExecutor();
 var keyManager = new KeyManager(paths.Config);
 var dataExport = new DataExport(paths.Root);
 var dataDelete = new DataDelete(paths.Root);
+var screenCapture = new ScreenCaptureService();
+var ocrService = new OcrService();
+var stateDetector = new UiStateDetector();
+var perceptionPipeline = new VisualPerceptionPipeline(paths.Raw, screenCapture, ocrService, stateDetector);
+var layoutSnap = new LayoutSnapService();
 var modelDownloadLock = new object();
 Task? modelDownloadTask = null;
 ModelDownloadProgress? modelDownloadProgress = null;
@@ -544,6 +550,88 @@ app.MapGet("/api/archive/candidates", () =>
     });
 });
 
+// --- Visual Perception ---
+app.MapGet("/api/perception/status", () =>
+{
+    return Results.Ok(new
+    {
+        isRunning = perceptionPipeline.IsRunning,
+        framesProcessed = perceptionPipeline.FramesProcessed,
+        eventsGenerated = perceptionPipeline.EventsGenerated,
+        ocrAvailable = ocrService.IsAvailable
+    });
+});
+
+app.MapPost("/api/perception/start", async (CancellationToken ct) =>
+{
+    await perceptionPipeline.StartAsync();
+    return Results.Ok(new { started = true });
+});
+
+app.MapPost("/api/perception/stop", async (CancellationToken ct) =>
+{
+    await perceptionPipeline.StopAsync();
+    return Results.Ok(new { stopped = true });
+});
+
+app.MapPost("/api/perception/capture", async () =>
+{
+    var result = await perceptionPipeline.ProcessSingleFrameAsync();
+    return Results.Ok(new
+    {
+        frame = new
+        {
+            result.Frame.ActiveWindowTitle,
+            result.Frame.ActiveWindowProcess,
+            result.Frame.Width,
+            result.Frame.Height,
+            result.Frame.Success,
+            result.Frame.ExtractedText,
+            stateChanges = result.Frame.StateChanges
+        },
+        events = result.Events
+    });
+});
+
+// --- Layout Snap ---
+app.MapPost("/api/layout/snap-research", (LayoutSnapRequest request) =>
+{
+    var result = layoutSnap.SnapResearchLayout(request.BrowserProcess ?? "msedge", request.EditorProcess ?? "code");
+    return Results.Ok(new { snapped = result });
+});
+
+app.MapPost("/api/layout/snap-left", () =>
+{
+    var handle = layoutSnap.GetForegroundWindow();
+    if (handle == IntPtr.Zero) return Results.BadRequest(new { error = "No foreground window" });
+    var result = layoutSnap.SnapLeft(handle);
+    return Results.Ok(new { snapped = result });
+});
+
+app.MapPost("/api/layout/snap-right", () =>
+{
+    var handle = layoutSnap.GetForegroundWindow();
+    if (handle == IntPtr.Zero) return Results.BadRequest(new { error = "No foreground window" });
+    var result = layoutSnap.SnapRight(handle);
+    return Results.Ok(new { snapped = result });
+});
+
+app.MapPost("/api/layout/maximize", () =>
+{
+    var handle = layoutSnap.GetForegroundWindow();
+    if (handle == IntPtr.Zero) return Results.BadRequest(new { error = "No foreground window" });
+    layoutSnap.Maximize(handle);
+    return Results.Ok(new { maximized = true });
+});
+
+app.MapPost("/api/layout/restore", () =>
+{
+    var handle = layoutSnap.GetForegroundWindow();
+    if (handle == IntPtr.Zero) return Results.BadRequest(new { error = "No foreground window" });
+    layoutSnap.Restore(handle);
+    return Results.Ok(new { restored = true });
+});
+
 // --- Security ---
 app.MapGet("/api/security/status", () =>
 {
@@ -895,6 +983,7 @@ record SecuritySetupRequest(string Password);
 record SecurityUnlockRequest(string Password);
 record SecurityChangePasswordRequest(string OldPassword, string NewPassword);
 record SecurityImportRequest(string ZipPath);
+record LayoutSnapRequest(string? BrowserProcess, string? EditorProcess);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
