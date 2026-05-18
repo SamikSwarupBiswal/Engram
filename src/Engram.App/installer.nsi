@@ -21,7 +21,7 @@ Section "Engram Application" SecEngram
   File "engram-app.exe"
   File "download-model.ps1"
 
-  SetOutPath "$INSTDIR\sidecar"
+  SetOutPath "$INSTDIR\sidecar\publish"
   File /r "publish\*.*"
 
   CreateDirectory "$SMPROGRAMS\Engram"

@@ -46,9 +46,20 @@ pub fn run() {
             // ── Spawn .NET API sidecar ──
             // The sidecar is a self-contained .NET app.
             // It lives at {install_dir}/sidecar/publish/Engram.Api.exe
-            // We resolve the install directory from the app exe location.
-            let app_exe = std::env::current_exe().expect("cannot find app exe");
-            let install_dir = app_exe.parent().expect("cannot find install dir");
+            let app_exe = match std::env::current_exe() {
+                Ok(exe) => exe,
+                Err(e) => {
+                    eprintln!("[Engram] Cannot find app exe: {}", e);
+                    return Ok(());
+                }
+            };
+            let install_dir = match app_exe.parent() {
+                Some(dir) => dir,
+                None => {
+                    eprintln!("[Engram] Cannot find install dir");
+                    return Ok(());
+                }
+            };
             let sidecar_dir = install_dir.join("sidecar").join("publish");
             let sidecar_exe = if cfg!(target_os = "windows") {
                 sidecar_dir.join("Engram.Api.exe")
@@ -56,45 +67,54 @@ pub fn run() {
                 sidecar_dir.join("Engram.Api")
             };
 
-            let (mut rx, child) = app.shell().command(sidecar_exe)
+            eprintln!("[Engram] Sidecar path: {:?}", sidecar_exe);
+            eprintln!("[Engram] Sidecar dir: {:?}", sidecar_dir);
+            eprintln!("[Engram] Sidecar exists: {}", sidecar_exe.exists());
+
+            match app.shell().command(&sidecar_exe)
                 .args(["--urls", "http://127.0.0.1:5000"])
                 .current_dir(&sidecar_dir)
                 .spawn()
-                .expect("failed to spawn sidecar");
-            let child_pid = child.pid();
-
-            // Store PID for cleanup
             {
-                let state = app.state::<SidecarState>();
-                let mut pid = state.pid.lock().unwrap();
-                *pid = Some(child_pid);
+                Ok((rx, child)) => {
+                    let child_pid = child.pid();
+                    eprintln!("[Engram] Sidecar started, PID: {}", child_pid);
 
-                let mut child_handle = state.child.lock().unwrap();
-                *child_handle = Some(child);
-            }
+                    let state = app.state::<SidecarState>();
+                    let mut pid = state.pid.lock().unwrap();
+                    *pid = Some(child_pid);
+                    let mut child_handle = state.child.lock().unwrap();
+                    *child_handle = Some(child);
 
-            // Keep child handle alive — Tauri manages lifecycle
-            // The sidecar is killed when the app exits
-            tauri::async_runtime::spawn(async move {
-                while let Some(event) = rx.recv().await {
-                    match event {
-                        CommandEvent::Stdout(line) => {
-                            println!("engram-api: {}", String::from_utf8_lossy(&line));
+                    // Spawn event listener for sidecar output
+                    let mut rx = rx;
+                    tauri::async_runtime::spawn(async move {
+                        while let Some(event) = rx.recv().await {
+                            match event {
+                                CommandEvent::Stdout(line) => {
+                                    println!("engram-api: {}", String::from_utf8_lossy(&line));
+                                }
+                                CommandEvent::Stderr(line) => {
+                                    eprintln!("engram-api: {}", String::from_utf8_lossy(&line));
+                                }
+                                CommandEvent::Terminated(payload) => {
+                                    eprintln!("engram-api exited: {:?}", payload.code);
+                                    break;
+                                }
+                                CommandEvent::Error(error) => {
+                                    eprintln!("engram-api error: {error}");
+                                }
+                                _ => {}
+                            }
                         }
-                        CommandEvent::Stderr(line) => {
-                            eprintln!("engram-api: {}", String::from_utf8_lossy(&line));
-                        }
-                        CommandEvent::Terminated(payload) => {
-                            eprintln!("engram-api exited: {:?}", payload.code);
-                            break;
-                        }
-                        CommandEvent::Error(error) => {
-                            eprintln!("engram-api error: {error}");
-                        }
-                        _ => {}
-                    }
+                    });
                 }
-            });
+                Err(e) => {
+                    eprintln!("[Engram] Failed to spawn sidecar: {}", e);
+                    eprintln!("[Engram] Sidecar path was: {:?}", sidecar_exe);
+                    eprintln!("[Engram] App will continue without backend.");
+                }
+            }
 
             // ── Build system tray menu ──
             let pause_item = MenuItem::with_id(app, "pause", "Pause Capture", true, None::<&str>)?;
