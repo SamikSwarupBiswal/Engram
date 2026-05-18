@@ -177,7 +177,18 @@ export function ResearchPanel() {
               {(activeRun.status === "running" || activeRun.status === "paused") && (
                 <button onClick={() => handleCancel(activeRun.runId)} className="rounded-lg border border-red-500/30 px-3 py-1 text-[11px] text-red-400 hover:bg-red-500/10">Cancel</button>
               )}
-              <button onClick={() => setActiveRun(null)} className="rounded-lg border border-white/[0.08] px-3 py-1 text-[11px] text-[#888] hover:bg-white/[0.06]">Close</button>
+              {activeRun.status === "completed" && (
+                <button onClick={async () => {
+                  try {
+                    await fetch("http://127.0.0.1:5000/api/layout/snap-research", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({}),
+                    });
+                  } catch {}
+                }} className="rounded-lg bg-blue-600 px-3 py-1 text-[11px] text-white hover:bg-blue-700">Snap Layout</button>
+              )}
+              <button onClick={() => setActiveRun(null)} className="rounded-lg border border-white/[0.08] px-3 py-1 text-[11px] text-[#888]">Close</button>
             </div>
           </div>
         )}

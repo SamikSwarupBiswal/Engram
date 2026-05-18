@@ -424,6 +424,7 @@ function ArchiveView() {
 
 // ─── Settings View ───
 function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
+  const [perceptionStatus, setPerceptionStatus] = useState<{ isRunning: boolean; framesProcessed: number; eventsGenerated: number; ocrAvailable: boolean } | null>(null);
   const [tokenPricing, setTokenPricing] = useState<{ rates: { provider: string; inputCost: string; outputCost: string; description: string }[] } | null>(null);
   const [tokenStatus, setTokenStatus] = useState<{ tier: string; monthlyAllowance: number; tokensRemaining: number; tokensUsedThisMonth: number; bonusTokens: number; usagePercent: number; daysRemaining: number; usageByProvider: Record<string, number>; history: { timestamp: string; provider: string; proTokensCost: number; balanceAfter: number }[] } | null>(null);
   const [powerMode, setPowerMode] = useState<"eco" | "turbo">("eco");
@@ -439,6 +440,7 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
     api.tokenStatus().then(setTokenStatus).catch(() => {});
     api.tokenPricing().then(setTokenPricing).catch(() => {});
     api.getPowerMode().then(r => setPowerMode(r.mode as "eco" | "turbo")).catch(() => {});
+    api.perceptionStatus().then(setPerceptionStatus).catch(() => {});
     api.identity().then(setIdentity).catch(() => {});
     api.antiGoals().then(d => setAntiGoals((d.antiGoals || []) as { description: string; severity: string }[])).catch(() => {});
     api.priorities().then(d => setPriorities((d.priorities || []) as { description: string; category: string }[])).catch(() => {});
@@ -778,6 +780,59 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
             <div className="flex gap-2">
               <button onClick={async () => { const b = await api.brief("morning"); alert(b.content); }} className="flex-1 rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Morning Brief</button>
               <button onClick={async () => { const b = await api.brief("evening"); alert(b.content); }} className="flex-1 rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Evening Brief</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Visual Perception */}
+        <div>
+          <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Visual Perception</h3>
+          <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`h-2 w-2 rounded-full ${perceptionStatus?.isRunning ? "bg-emerald-500" : "bg-[#888]"}`} />
+              <span className="text-[13px] text-[#ececec]">{perceptionStatus?.isRunning ? "Capturing" : "Idle"}</span>
+              {perceptionStatus?.ocrAvailable && <span className="text-[10px] text-emerald-400 ml-auto">OCR Available</span>}
+            </div>
+
+            {perceptionStatus && (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="rounded-lg bg-white/[0.04] p-2 text-center">
+                  <div className="text-sm font-medium">{perceptionStatus.framesProcessed}</div>
+                  <div className="text-[10px] text-[#888]">Frames</div>
+                </div>
+                <div className="rounded-lg bg-white/[0.04] p-2 text-center">
+                  <div className="text-sm font-medium">{perceptionStatus.eventsGenerated}</div>
+                  <div className="text-[10px] text-[#888]">Events</div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 mb-2">
+              {perceptionStatus?.isRunning ? (
+                <button onClick={async () => { await api.perceptionStop(); setPerceptionStatus(await api.perceptionStatus()); }} className="flex-1 rounded-lg border border-red-500/30 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10">Stop Capture</button>
+              ) : (
+                <button onClick={async () => { await api.perceptionStart(); setPerceptionStatus(await api.perceptionStatus()); }} className="flex-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] text-white hover:bg-emerald-700">Start Capture</button>
+              )}
+              <button onClick={async () => {
+                const r = await api.perceptionCapture();
+                alert(`Window: ${r.frame.activeWindowTitle}\nProcess: ${r.frame.activeWindowProcess}\nChanges: ${r.frame.stateChanges.length}\nEvents: ${r.events.length}`);
+              }} className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Capture Now</button>
+            </div>
+
+            <p className="text-[10px] text-[#666]">Captures screen frames at 2s intervals. Detects window switches, app changes, and notifications.</p>
+          </div>
+        </div>
+
+        {/* Layout Snap */}
+        <div>
+          <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Layout Snap</h3>
+          <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+            <p className="text-[11px] text-[#888] mb-3">Snap windows for side-by-side viewing.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => api.layoutSnapLeft()} className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">← Snap Left</button>
+              <button onClick={() => api.layoutSnapRight()} className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Snap Right →</button>
+              <button onClick={() => api.layoutSnapResearch()} className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Research Layout</button>
+              <button onClick={() => api.layoutMaximize()} className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#b4b4b4] hover:bg-white/[0.04]">Maximize</button>
             </div>
           </div>
         </div>

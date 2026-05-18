@@ -248,6 +248,38 @@ export const api = {
   tokenPricing: () =>
     apiFetch<{ plans: { name: string; price: string; tokens: number; period: string }[]; packs: { name: string; tokens: number; price: string }[]; rates: { provider: string; inputCost: string; outputCost: string; description: string }[] }>("/api/tokens/pricing"),
 
+  // Visual Perception
+  perceptionStatus: () =>
+    apiFetch<{ isRunning: boolean; framesProcessed: number; eventsGenerated: number; ocrAvailable: boolean }>("/api/perception/status"),
+
+  perceptionStart: () =>
+    apiFetch<{ started: boolean }>("/api/perception/start", { method: "POST" }),
+
+  perceptionStop: () =>
+    apiFetch<{ stopped: boolean }>("/api/perception/stop", { method: "POST" }),
+
+  perceptionCapture: () =>
+    apiFetch<{ frame: { activeWindowTitle: string; activeWindowProcess: string; width: number; height: number; success: boolean; extractedText: string | null; stateChanges: { type: string; description: string; oldValue: string | null; newValue: string | null }[] }; events: { timestamp: string; type: string; description: string; activeWindow: string }[] }>("/api/perception/capture", { method: "POST" }),
+
+  // Layout Snap
+  layoutSnapResearch: (browserProcess?: string, editorProcess?: string) =>
+    apiFetch<{ snapped: boolean }>("/api/layout/snap-research", {
+      method: "POST",
+      body: JSON.stringify({ browserProcess, editorProcess }),
+    }),
+
+  layoutSnapLeft: () =>
+    apiFetch<{ snapped: boolean }>("/api/layout/snap-left", { method: "POST" }),
+
+  layoutSnapRight: () =>
+    apiFetch<{ snapped: boolean }>("/api/layout/snap-right", { method: "POST" }),
+
+  layoutMaximize: () =>
+    apiFetch<{ maximized: boolean }>("/api/layout/maximize", { method: "POST" }),
+
+  layoutRestore: () =>
+    apiFetch<{ restored: boolean }>("/api/layout/restore", { method: "POST" }),
+
   // Security
   securityStatus: () =>
     apiFetch<{ encryptionConfigured: boolean }>("/api/security/status"),
