@@ -407,7 +407,16 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
                 total_tokens = result.InputTokens + result.OutputTokens
             },
             model = result.Model,
-            provider = result.Provider
+            provider = result.Provider,
+            _kv = new
+            {
+                tokensBefore = result.KvTokensBefore,
+                tokensAfter = result.KvTokensAfter,
+                cellsBefore = result.KvCellsBefore,
+                cellsAfter = result.KvCellsAfter,
+                usedFreshContext = result.UsedFreshContext,
+                clearedKvCache = result.ClearedKvCache
+            }
         });
     }
 
@@ -508,6 +517,76 @@ app.MapPost("/api/model/unload", () =>
 {
     lifecycle.UnloadModel();
     return Results.Ok(new { unloaded = true });
+});
+
+// ══════════════════════════════════════
+//  EXPERIMENT CONTROL ENDPOINTS
+//  For soak validation — controlled KV cache experiments
+// ══════════════════════════════════════
+
+// --- Get inference experiment mode ---
+app.MapGet("/api/experiment/mode", () =>
+{
+    return Results.Ok(new
+    {
+        clearKvCacheAfterInference = localEngine.ClearKvCacheAfterInference,
+        freshContextPerRequest = localEngine.FreshContextPerRequest,
+        kvTokensInCache = localEngine.GetKvTokenCount(),
+        kvUsedCells = localEngine.GetKvUsedCells(),
+        totalInferences = localEngine.GetTelemetry().TotalInferences,
+        totalTokensGenerated = localEngine.GetTelemetry().TotalTokensGenerated
+    });
+});
+
+// --- Set inference experiment mode ---
+app.MapPost("/api/experiment/mode", (ExperimentModeRequest request) =>
+{
+    if (request.ClearKvCache.HasValue)
+        localEngine.ClearKvCacheAfterInference = request.ClearKvCache.Value;
+    if (request.FreshContext.HasValue)
+        localEngine.FreshContextPerRequest = request.FreshContext.Value;
+
+    log.Inference($"Experiment mode set: ClearKv={localEngine.ClearKvCacheAfterInference}, FreshCtx={localEngine.FreshContextPerRequest}");
+
+    return Results.Ok(new
+    {
+        clearKvCacheAfterInference = localEngine.ClearKvCacheAfterInference,
+        freshContextPerRequest = localEngine.FreshContextPerRequest
+    });
+});
+
+// --- Manually clear KV cache ---
+app.MapPost("/api/experiment/clear-kv", () =>
+{
+    var tokensBefore = localEngine.GetKvTokenCount();
+    var cellsBefore = localEngine.GetKvUsedCells();
+    localEngine.ClearKvCache();
+    var tokensAfter = localEngine.GetKvTokenCount();
+    var cellsAfter = localEngine.GetKvUsedCells();
+
+    return Results.Ok(new
+    {
+        cleared = true,
+        kvTokensBefore = tokensBefore,
+        kvTokensAfter = tokensAfter,
+        kvCellsBefore = cellsBefore,
+        kvCellsAfter = cellsAfter
+    });
+});
+
+// --- Get KV cache telemetry ---
+app.MapGet("/api/experiment/kv-status", () =>
+{
+    var telemetry = localEngine.GetTelemetry();
+    return Results.Ok(new
+    {
+        kvTokensInCache = telemetry.KvTokensInCache,
+        kvUsedCells = telemetry.KvUsedCells,
+        totalInferences = telemetry.TotalInferences,
+        totalTokensGenerated = telemetry.TotalTokensGenerated,
+        clearKvAfterInference = telemetry.ClearKvAfterInference,
+        freshContextPerRequest = telemetry.FreshContextPerRequest
+    });
 });
 
 // --- Power Mode ---
@@ -1058,6 +1137,7 @@ app.Run();
 // Request models
 record ChatRequest(ChatMessage[]? Messages, int MaxTokens = 1024);
 record ChatMessage(string Role, string Content);
+record ExperimentModeRequest(bool? ClearKvCache, bool? FreshContext);
 record PowerModeRequest(string Mode);
 record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, string? ProviderName);
 record TokenCheckRequest(string? Provider, int InputTokens, int OutputTokens);

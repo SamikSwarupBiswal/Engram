@@ -1,5 +1,6 @@
 using LLama;
 using LLama.Common;
+using LLama.Native;
 using Microsoft.Extensions.Logging;
 
 namespace Engram.Store.Inference;
@@ -37,6 +38,20 @@ public class LocalInferenceEngine : IDisposable
     private long _totalTokensGenerated;
     private long _totalViolations;
     private DateTime? _lastInferenceAt;
+
+    // ── KV cache management (Experiment modes) ──
+    /// <summary>
+    /// When true, clears KV cache after each inference request.
+    /// Test: does clearing prevent the ~2000-token collapse?
+    /// </summary>
+    public bool ClearKvCacheAfterInference { get; set; }
+
+    /// <summary>
+    /// When true, creates a fresh LLamaContext for each request
+    /// and disposes it after. Model weights stay loaded.
+    /// Test: is context reuse fundamentally unsafe?
+    /// </summary>
+    public bool FreshContextPerRequest { get; set; }
 
     public bool IsReady => _model != null && _context != null;
     public bool IsLoading => _isLoading;
@@ -120,9 +135,67 @@ public class LocalInferenceEngine : IDisposable
         }
     }
 
+    // ══════════════════════════════════════
+    //  KV CACHE MANAGEMENT
+    // ══════════════════════════════════════
+
+    /// <summary>
+    /// Clear the KV cache. Erases all cell info and zeroes KV data.
+    /// Call between requests to prevent token accumulation.
+    /// </summary>
+    public void ClearKvCache()
+    {
+        if (_context == null) return;
+        try
+        {
+            _context.NativeHandle.KvCacheClear();
+            _log.Inference("KV cache cleared");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to clear KV cache");
+            _log.InferenceError("KV cache clear failed", ex);
+        }
+    }
+
+    /// <summary>
+    /// Get the number of tokens currently in the KV cache.
+    /// Returns -1 if unavailable.
+    /// </summary>
+    public int GetKvTokenCount()
+    {
+        if (_context == null) return -1;
+        try
+        {
+            return _context.NativeHandle.KvCacheCountTokens();
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    /// <summary>
+    /// Get the number of used KV cells.
+    /// Returns -1 if unavailable.
+    /// </summary>
+    public int GetKvUsedCells()
+    {
+        if (_context == null) return -1;
+        try
+        {
+            return _context.NativeHandle.KvCacheCountCells();
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
     /// <summary>
     /// Generate a chat completion from messages.
     /// Creates an InferenceSession with heartbeat tracking and watchdog.
+    /// Respects ClearKvCacheAfterInference and FreshContextPerRequest modes.
     /// </summary>
     public async Task<InferenceResult> ChatCompletionAsync(
         ChatMessage[] messages,
@@ -157,12 +230,50 @@ public class LocalInferenceEngine : IDisposable
         // Memory telemetry: snapshot before
         var memBefore = GetMemorySnapshot();
 
+        // KV telemetry: snapshot before
+        var kvTokensBefore = GetKvTokenCount();
+        var kvCellsBefore = GetKvUsedCells();
+
+        // Determine context source for this request
+        // Experiment 2: Fresh context per request (model weights stay loaded)
+        LLamaContext? requestContext = null;
+        LLamaContext? contextToDispose = null;
+        bool usingFreshContext = FreshContextPerRequest && _model != null;
+
+        if (usingFreshContext)
+        {
+            try
+            {
+                var modelPath = ModelManager.GetModelPath(_loadedConfig!);
+                var parameters = new ModelParams(modelPath)
+                {
+                    ContextSize = (uint)_loadedConfig.ContextSize,
+                    GpuLayerCount = _gpuInfo?.LayerCount ?? 0,
+                    Threads = Environment.ProcessorCount,
+                    BatchSize = 512
+                };
+                requestContext = _model.CreateContext(parameters);
+                contextToDispose = requestContext;
+                _log.Inference($"Session {session.SessionId}: using FRESH context (experiment mode)");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to create fresh context, falling back to shared");
+                _log.InferenceError("Fresh context creation failed, using shared context", ex);
+                requestContext = _context;
+            }
+        }
+        else
+        {
+            requestContext = _context;
+        }
+
         session.Start();
 
         try
         {
             var prompt = FormatChatPrompt(messages);
-            var executor = new InteractiveExecutor(_context!);
+            var executor = new InteractiveExecutor(requestContext!);
 
             var inferenceParams = new InferenceParams
             {
@@ -197,6 +308,16 @@ public class LocalInferenceEngine : IDisposable
             var memAfter = GetMemorySnapshot();
             var memDelta = memAfter.WorkingSetMb - memBefore.WorkingSetMb;
 
+            // KV telemetry: snapshot after
+            var kvTokensAfter = usingFreshContext ? -1 : GetKvTokenCount();
+            var kvCellsAfter = usingFreshContext ? -1 : GetKvUsedCells();
+
+            // Experiment 1: Clear KV cache after inference if configured
+            if (ClearKvCacheAfterInference && !usingFreshContext)
+            {
+                ClearKvCache();
+            }
+
             // Update global stats
             Interlocked.Increment(ref _totalInferences);
             Interlocked.Add(ref _totalTokensGenerated, tokenCount);
@@ -205,7 +326,7 @@ public class LocalInferenceEngine : IDisposable
             _log.Inference($"Session {session.SessionId}: complete — {tokenCount} tokens " +
                 $"in {session.Elapsed.TotalSeconds:F1}s " +
                 $"({tokenCount / Math.Max(0.1, session.Elapsed.TotalSeconds):F1} tok/s) " +
-                $"[memΔ: {memDelta:+0;-0}MB]");
+                $"[memΔ: {memDelta:+0;-0}MB] [kv: {kvTokensBefore}→{kvTokensAfter}]");
 
             return new InferenceResult
             {
@@ -216,7 +337,13 @@ public class LocalInferenceEngine : IDisposable
                 Model = _loadedConfig?.Name ?? "unknown",
                 Provider = "local",
                 SessionTelemetry = session.GetTelemetry(),
-                MemoryDeltaMb = memDelta
+                MemoryDeltaMb = memDelta,
+                KvTokensBefore = kvTokensBefore,
+                KvTokensAfter = kvTokensAfter,
+                KvCellsBefore = kvCellsBefore,
+                KvCellsAfter = kvCellsAfter,
+                UsedFreshContext = usingFreshContext,
+                ClearedKvCache = ClearKvCacheAfterInference && !usingFreshContext
             };
         }
         catch (OperationCanceledException) when (session.IsCancelled && session.Violation != null)
@@ -239,6 +366,9 @@ public class LocalInferenceEngine : IDisposable
         }
         finally
         {
+            // Dispose fresh context if we created one
+            contextToDispose?.Dispose();
+
             lock (_sessionLock)
             {
                 _activeSession = null;
@@ -356,7 +486,11 @@ public class LocalInferenceEngine : IDisposable
                 TotalTokensGenerated = Interlocked.Read(ref _totalTokensGenerated),
                 TotalViolations = Interlocked.Read(ref _totalViolations),
                 LastInferenceAt = _lastInferenceAt,
-                ActiveSession = _activeSession?.GetTelemetry()
+                ActiveSession = _activeSession?.GetTelemetry(),
+                KvTokensInCache = GetKvTokenCount(),
+                KvUsedCells = GetKvUsedCells(),
+                ClearKvAfterInference = ClearKvCacheAfterInference,
+                FreshContextPerRequest = FreshContextPerRequest
             };
         }
     }
@@ -413,6 +547,14 @@ public class InferenceResult
     public InferenceSessionTelemetry? SessionTelemetry { get; init; }
     public double MemoryDeltaMb { get; init; }
 
+    // ── KV cache telemetry ──
+    public int KvTokensBefore { get; init; } = -1;
+    public int KvTokensAfter { get; init; } = -1;
+    public int KvCellsBefore { get; init; } = -1;
+    public int KvCellsAfter { get; init; } = -1;
+    public bool UsedFreshContext { get; init; }
+    public bool ClearedKvCache { get; init; }
+
     public static InferenceResult Failed(string error) => new()
     {
         Success = false,
@@ -440,4 +582,10 @@ public class InferenceEngineTelemetry
     public long TotalViolations { get; init; }
     public DateTime? LastInferenceAt { get; init; }
     public InferenceSessionTelemetry? ActiveSession { get; init; }
+
+    // ── KV cache state ──
+    public int KvTokensInCache { get; init; } = -1;
+    public int KvUsedCells { get; init; } = -1;
+    public bool ClearKvAfterInference { get; init; }
+    public bool FreshContextPerRequest { get; init; }
 }
