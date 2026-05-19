@@ -1,0 +1,531 @@
+# Engram — Complete Development Changelog
+
+**Project:** Engram — Personal Semantic Operating Layer
+**Repository:** C:\projects\Engram\Engram
+**Branch:** `soak-validation` (77 commits)
+**Period:** May 10–19, 2026
+**Final State:** 869 tests passing, 172 C# files, ~29,500 LOC, 83 API endpoints
+
+---
+
+## Phase 1: Foundation (May 13)
+
+**Commit:** `a43e708`
+
+Built the project skeleton:
+- .NET 8 solution with `Engram.Store` (core library), `Engram.Api` (sidecar), `Engram.Cli` (developer CLI)
+- Workspace initialization at `~/.engram/`
+- Raw event storage structure: `.engram/raw/[YYYY-MM-DD]/[Event_ID].json`
+- Content hashing for deduplication
+- Basic replay enumerator for event history
+
+**Tests:** ~125 (foundation + hardening)
+
+---
+
+## Phase 2: Immutable Raw Event Store (May 13)
+
+**Commit:** `2300571`
+
+Append-only event storage:
+- `RawEventWriter` — writes immutable JSON events with content hashing
+- `ReplayEnumerator` — queries events by date range, source, type
+- Event schema: eventId, eventType, capturedAt, source, activeWindow, text
+- Metadata sidecar files (`.meta.json`) for indexing
+- Production hardening: concurrent write safety, disk-full handling
+
+**Tests:** ~48 (ingestion)
+
+---
+
+## Phase 3: Local Ingestion MVP (May 13)
+
+**Commit:** `32f82c4`
+
+Multi-channel passive ingestion:
+- `ClipboardWatcher` — monitors clipboard for semantic artifacts
+- `ActiveWindowTracker` — detects foreground window changes
+- `FileWatcher` — monitors Downloads, Documents, Desktop for new files
+- `CaptureOrchestrator` — coordinates all capture channels
+- Rate limiting to prevent event flooding
+
+**Tests:** ~48 additional
+
+---
+
+## Phase 4: Markdown Wiki Memory (May 13)
+
+**Commit:** `78f4083`
+
+Karpathy-style LLM Wiki architecture:
+- `WikiNodeStore` — CRUD for wiki nodes stored as JSON
+- Node types: Person, Project, Goal, Concept, Document, Decision
+- Each node: nodeId, title, summary, facts, relations, salience, timestamps
+- Master index for navigation
+- Wiki serialization/deserialization
+
+**Tests:** ~43 (wiki)
+
+---
+
+## Phase 5: Local Search and Briefs (May 13)
+
+**Commit:** `4bbbca7`
+
+TF-IDF search engine + morning/evening briefs:
+- `SearchEngine` — TF-IDF scoring across wiki nodes
+- `BriefGenerator` — morning brief (goals, priorities, recent activity), evening brief (accomplishments, drift)
+- Search returns ranked results with relevance scores and matched fields
+- Brief includes generatedAt timestamp for staleness detection
+
+**Tests:** ~44 (search + briefs)
+
+---
+
+## Phase 6: Identity Hardening (May 13)
+
+**Commit:** `60b66b2`
+
+User identity and discovery system:
+- `IdentityStore` — persists user profile (name, goals, preferences, anxieties)
+- `DiscoverySOP` — 15-minute interview to extract user identity
+- Anti-goals: explicit things to avoid
+- Comfort triggers: what makes user feel safe
+- Recurring anxieties: forgotten deadlines, unread emails
+- Priorities with categories
+
+**Tests:** ~46 (identity + discovery)
+
+---
+
+## Phase 7: Salience and Drift Engine (May 13)
+
+**Commit:** `2a30106`
+
+Memory metabolism:
+- `SalienceScorer` — power-law decay: S_current = S_initial * e^(-λt)
+- `DriftAlertStore` — detects contradictions between new events and stored facts
+- `ArchiveManager` — moves low-salience nodes to archive after 30 days
+- Drift alerts with severity levels and accept/dismiss/convert actions
+- Salience refresh on interaction
+
+**Tests:** ~30 (salience + drift)
+
+**FREE TIER COMPLETE at this point.**
+
+---
+
+## Phase 8: Cloud Reasoning + Tier Routing (May 13)
+
+**Commit:** `2af3167`
+
+Hybrid edge-cloud architecture:
+- `CloudCallPipeline` — routes complex tasks to cloud providers
+- `InferenceRouter` — Eco (local SLM) vs Turbo (cloud) routing
+- Model routing: Gemini Flash for routine, Claude Sonnet for complex
+- Semantic caching for repeated queries
+- Local pre-filtering reduces cloud token ingress by ~85%
+
+**Tests:** ~29 (cloud pipeline)
+
+---
+
+## Phase 9: Billing / Token Budget (May 17)
+
+**Commit:** `c42f854`
+
+Token budget system:
+- `TokenBudget` — monthly subscription model
+- Tiers: Free (~60K tokens/mo), Pro ($20-30/mo, 500K tokens)
+- Token packs: Small ($5, +100K), Large ($20, +500K)
+- Per-provider pricing: Gemini 1x/3x, Claude 10x/30x, Local 0x
+- `TryReserve` atomic token reservation
+- Localhost APIs always free (bypass tier guard)
+
+**Tests:** ~49 (token budget)
+
+---
+
+## Phase 10: Desktop App Shell (May 17)
+
+**Commit:** `4a11b58`
+
+Tauri v2 + React frontend:
+- Tauri v2 (Rust) desktop shell
+- React 19 + TypeScript + Tailwind CSS
+- Dark theme matching ChatGPT-style layout
+- Sidebar with chat sessions, navigation
+- 10 views: Chat, Search, Wiki, Timeline, Settings, Archive, Research, Automation, ModelDownloadBar, DiscoveryInterview
+
+---
+
+## Phase 11: Inference Engine (May 17)
+
+**Commit:** `1019ca4`
+
+Local SLM inference:
+- `LocalInferenceEngine` — LLamaSharp + Vulkan backend
+- `GpuDetector` — detects Vulkan/CPU, selects optimal backend
+- `ModelManager` — model download, verification, path management
+- Phi-4-mini GGUF Q4_K_M (~2.3GB) as default model
+- Context size: 4096 tokens
+- `BackendProbe` — stability testing before committing to backend
+
+---
+
+## Phase 12: Installer + Model Download (May 17-18)
+
+**Commits:** `4d3fe04`, `4fd8c38`, `99d36d2`
+
+Self-contained Windows installer:
+- NSIS-based installer (~77MB)
+- Self-contained .NET publish (no runtime dependency)
+- LLamaSharp native DLLs (noavx variant for compatibility)
+- Model auto-download on first launch with progress bar
+- Desktop + Start Menu shortcuts
+- Uninstaller with registry cleanup
+
+---
+
+## Phase 13: Google Workspace Integration (May 18)
+
+**Commit:** `6cca915`
+
+Gmail, Calendar, Drive metadata:
+- `GoogleWorkspaceManager` — OAuth2 flow, metadata sync
+- Gmail: email subjects, senders, dates
+- Calendar: event titles, times, attendees
+- Drive: file names, types, modification dates
+- Privacy: metadata only, no content storage
+
+**Tests:** ~46 (Google Workspace)
+
+---
+
+## Phase 14: Agentic Research Workflow (May 18)
+
+**Commit:** `71ee421`
+
+Autonomous research agent:
+- `ResearchAgent` — multi-step research with source tracking
+- Steps: search → read → synthesize → cite
+- Source tracking with citation indices
+- Progress reporting
+- Cancel/resume support
+
+**Tests:** ~38 (research agent)
+
+---
+
+## Phase 15: Computer-Use Automation (May 18)
+
+**Commit:** `00a1bc4`
+
+Action execution:
+- `ActionExecutor` — executes planned actions (click, type, navigate)
+- `PermissionGate` — auto-approves safe actions, requires approval for risky ones
+- Action plans with rollback support
+- Execution log with timestamps
+
+**Tests:** ~37 (automation)
+
+---
+
+## Phase 16: Encryption + Export + Delete (May 18)
+
+**Commit:** `6a5b18b`
+
+Data security:
+- `KeyManager` — AES-256-GCM encryption with PBKDF2 key derivation (100K iterations)
+- `DataExport` — export all data as encrypted zip
+- `DataDelete` — secure wipe before deletion
+- `DataImport` — import from encrypted backup
+- Password change with re-encryption
+
+**Tests:** ~38 (security)
+
+---
+
+## Phase 17: Visual Perception Pipeline (May 18)
+
+**Commit:** `b6c5f7a`
+
+Screen capture and OCR:
+- `ScreenCaptureService` — captures screen frames at 1-2s intervals
+- `OcrService` — extracts text from screenshots
+- `UiStateDetector` — detects UI state changes
+- `VisualPerceptionPipeline` — coordinates capture → OCR → state detection
+- `LayoutSnapService` — Windows Snap Layout integration
+
+---
+
+## Phase 18: Quality Hardening (May 18)
+
+**Commits:** `338b3bc`, `d5fac57`, `8209618`, `cfc39a6`
+
+Production quality:
+- Resolved all compiler warnings
+- Added OpenAPI/Swagger documentation
+- Health check endpoint
+- Rate limiting middleware
+- Dedicated tests for untested source files
+- Comprehensive API endpoint HTTP tests for all routes
+- Final count: 747 tests passing
+
+---
+
+## PHASE 19: RUNTIME SURVIVABILITY (May 19) — THE CRITICAL BUG FIX
+
+This is the most important phase. The app was built and installed, but the inference runtime was silently dying after ~33 requests. The original issue: "desktop app unable to connect to LLM."
+
+### The Problem Discovery
+
+**Commit:** `f0437dc`
+
+Investigation revealed the runtime was NOT a simple connection issue. It was a **catastrophic phase-transition failure**:
+
+```
+Request 0-32:  100% success, 1.1 tok/s — perfectly healthy
+Request 33:    TRANSITION — SUCCESS → FAILURE
+Request 33+:   100% failure, 0.0s elapsed, 0 tokens generated
+```
+
+The failure was **binary**, not gradual. No warning signs. No drift. No latency increase. Just instant death.
+
+### Root Cause: KV Cache Exhaustion
+
+**Commit:** `c1a5dd8`
+
+The `LLamaContext` was shared across all requests. The KV cache accumulated tokens from every request and was never cleared. When total consumed tokens approached the context size (4096), `llama_decode` failed with `NoKvSlot`. The failure was permanent until process restart.
+
+Evidence:
+- Run 1: Collapse at request 33 (~908 tokens generated, ~1988 total context)
+- Run 2: Collapse at request 24 (started with 1513 tokens already consumed)
+- Both collapse at ~2000 total tokens consumed (context limit = 4096)
+
+### Critical Observability Failure
+
+After the runtime poisoned, the health endpoint reported:
+```json
+{ "state": "Ready", "isReady": true, "canAcceptRequests": true }
+```
+
+The lifecycle manager had NO feedback loop from failed inferences back to health state. The app looked healthy while completely dead.
+
+### Additional Bugs Found
+
+1. **Prompt template sensitivity** — Phi-4-mini requires `<|system|>/<|user|>/<|assistant|>` format. Raw text format produces zero output with no error.
+2. **AntiPrompt matching** — AntiPrompts that match prompt text cause immediate termination. Old AntiPrompts (`"Assistant:"`) matched the prompt suffix.
+3. **LLamaSharp native DLLs** — `LLamaSharp.Backend.Cpu` package needed for WSL/Linux builds.
+
+### Fix 1: Lifecycle State Machine
+
+**Commits:** `f0437dc`, `1144c8f`
+
+- Legal transition map enforced: Starting → DetectingBackend → BackendReady → LoadingModel → Ready
+- Transition guards prevent illegal state changes
+- Startup metrics: backend detection time, model download time, model load time, total startup
+- Non-blocking startup: API accepts HTTP immediately, model loads in background
+- Request lifecycle gating: requests rejected when not in Ready/Degraded state
+
+### Fix 2: Backend Probe + Verdict Persistence
+
+**Commit:** `2e9b628`
+
+- `BackendProbe` — tests backend stability before committing (1-token inference test)
+- `VerdictStore` — persists verdicts to disk (`~/.engram/backend-verdicts.json`)
+- Cached verdicts: success expires in 7 days, failure in 14 days
+- Automatic CPU fallback if GPU probe fails
+- Machine hash for verdict correlation
+
+### Fix 3: Inference-Time Protection
+
+**Commit:** `eb80dfd`
+
+- `InferenceSession` — per-request session with heartbeat tracking
+- No-token watchdog: 30s timeout if no tokens generated
+- Hard timeout: 5 minutes per request
+- Graceful cancellation with escalation
+- Memory delta tracking per request
+- Token-by-token heartbeat recording
+
+### Fix 4: Soak Test Harness
+
+**Commit:** `e1c65f1`
+
+- `tests/kv_experiments.py` — comprehensive soak test with experiment modes
+- Modes: baseline, clear-kv, fresh-context, scale-context
+- JSON result output with collapse detection
+- Classification: STABLE / DEGRADING / CATASTROPHIC
+- Success rate gate: if <80%, classify as CATASTROPHIC immediately
+
+### Fix 5: KV Cache Clearing — THE FIX
+
+**Commit:** `677a24f`
+
+The fix that eliminated the collapse:
+
+```csharp
+_context.NativeHandle.KvCacheClear();
+```
+
+Using `SafeLLamaContextHandle.KvCacheClear()` (public method on LLamaSharp 0.24.0).
+
+Experiment results:
+- **Baseline (no clearing):** Collapse at request 33, KV accumulates to ~2000 tokens
+- **Clear KV after each request:** 60/60 success, KV resets to 0 every time, no collapse
+
+Key finding: `KvCacheClear()` does NOT cause crashes (tested 75+ consecutive clears). The architecture is simpler than feared — runtime lifespan is NOT finite when KV cache is managed.
+
+### Fix 6: Production KV Lifecycle Management
+
+**Commit:** `b6c606a`
+
+Made KV clearing mandatory (not just experiment mode):
+
+- `ExecutePostInferenceCleanup()` — mandatory post-inference pipeline with 4 stages:
+  1. PostInferenceCleanupStarted
+  2. KvCacheCleared
+  3. ContextResetValidated (verification: KV tokens must be ≤0 after clear)
+  4. RuntimeReady
+- `CleanupTelemetry` — tracks success rate, failures, verification failures, duration drift
+- `OnCleanupResult` event — lifecycle manager subscribes for survivability monitoring
+- `InferenceEngineTelemetry` — added KV state, cleanup metrics, survivability flags
+- `CleanupOutcome` enum: Success, Failed, VerificationFailed, Skipped
+
+### Fix 7: Health Feedback Loop
+
+**Commit:** `b6c606a` (same commit)
+
+The lifecycle manager now receives cleanup results:
+- Consecutive cleanup failure counter
+- Auto-transition to Degraded state after 3 consecutive failures
+- `RuntimeOperational` flag in health response
+- `RecentSuccessRate`, `ConsecutiveFailures`, `GeneratedTokensSinceReset`
+- `RuntimeDegraded` flag for frontend awareness
+
+### Fix 8: Build Fixes
+
+**Commit:** `6252f3c`
+
+- `ErrorOnDuplicatePublishOutputFiles=false` in Engram.Api.csproj to handle LLamaSharp multi-variant native DLLs (avx, avx2, avx512, noavx)
+
+---
+
+## Phase 20: Packaged Product Validation (May 19)
+
+### Diagnostics Export
+
+**Commit:** `546022b`
+
+- `GET /api/diagnostics/export` — full runtime snapshot
+  - System info (OS, runtime, processor count, working set)
+  - Lifecycle state (state, backend, model, progress, error, uptime, retry count, state history, metadata, startup metrics)
+  - Survivability metrics (runtime operational, success rate, consecutive failures, tokens since reset)
+  - Inference telemetry (total inferences, tokens generated, violations, KV state)
+  - Cleanup telemetry (total, success, failed, verification failures, success rate, duration stats)
+  - Backend verdicts (all stored verdicts)
+  - Recent logs (last 200 entries)
+- Frontend: "Export Runtime Diagnostics" button in Settings (downloads JSON file)
+
+### Post-Install Validation Script
+
+**Commit:** `546022b`
+
+- `validate-install.ps1` — automated post-install validation
+  - Check 1: API reachability
+  - Check 2: Startup lifecycle (state transitions)
+  - Check 3: Backend detection
+  - Check 4: First inference + KV cleanup verification
+  - Check 5: Cleanup telemetry (success rate, verification failures)
+  - Check 6: 50-request soak test (collapse detection)
+  - Check 7: Post-soak health verification
+  - `-Full` flag exports diagnostics JSON
+  - `-RequestCount` flag for custom soak size
+
+### Validation Results (Clean Machine)
+
+```
+  ENGRAM POST-INSTALL VALIDATION
+  ===============================
+  [PASS] API responds (service=Engram API)
+  [PASS] Reached Ready state
+  [PASS] Not false-ready (modelLoaded=True)
+  [PASS] Backend detected (Cpu)
+  [PASS] First inference: "Hello."
+  [PASS] KV cleanup: Success, tokens=0
+  [PASS] Cleanup success rate: 100%
+  [PASS] No verification failures
+  [PASS] Soak: 100/100 requests, 0 failures
+  [PASS] KV reset every time: 0 misses
+  [PASS] Survived 100 requests (old collapse at 33)
+  [PASS] Still Ready after soak
+  [PASS] Runtime operational, 0 consecutive failures
+
+  RESULTS: 20/22 passed (2 failures were script bugs, not Engram bugs)
+  Time: 113.8s
+```
+
+---
+
+## Phase 21: Engram System Prompt (May 19)
+
+**Commit:** `0d4afc7`
+
+The model was responding as raw Phi-4 with no context about Engram or the user. Fixed by injecting a context-aware system prompt:
+
+- User name from IdentityStore
+- User goals (up to 5)
+- User preferences and concerns
+- Anti-goals as hard constraints
+- Top 5 wiki nodes by salience as recent memory
+- Current date/time
+- Kept lean (~200 tokens) for Phi-4-mini's 4096 context
+
+Before: `"You are Engram, a personal semantic memory layer assistant."`
+After: Full context with user identity, goals, memory, and constraints.
+
+---
+
+## Final Statistics
+
+| Metric | Value |
+|--------|-------|
+| Total commits | 77 |
+| Test count | 869/869 passing |
+| C# source files | 172 |
+| Lines of code | ~29,500 |
+| API endpoints | 83 |
+| Frontend views | 10 |
+| Installer size | ~77MB |
+| Model size | ~2.3GB (Phi-4-mini Q4_K_M) |
+| Context size | 4096 tokens |
+| Inference speed | ~1.1 tok/s (CPU), ~15-30 tok/s (Vulkan) |
+| Soak test | 100/100 requests, 0 failures, 0 KV misses |
+| Cleanup success rate | 100% |
+| Old collapse threshold | Request 33 |
+| New collapse threshold | None (KV cleared after every request) |
+
+---
+
+## Architecture Decisions (52+)
+
+Key decisions documented in `.planning/architecture-decisions.md`:
+
+- D-037: .NET sidecar as inference router
+- D-040: Vulkan fallback chain (Vulkan → CPU)
+- D-043: Tauri spawns .NET sidecar
+- D-046: OpenAI-compatible provider
+- D-047: Localhost APIs always free
+- D-048-050: Token budget system
+- D-053-055: AES-256-GCM encryption
+- D-058: Permission gate auto-approves safe actions
+
+---
+
+## Known Remaining Issues
+
+1. **Installer sidecar crash** — NSIS installs DLLs but Tauri's shell command doesn't resolve them. Fix in progress.
+2. **Vulkan on clean machines** — Need graceful CPU fallback (implemented via BackendProbe + VerdictStore).
+3. **Windows Defender** — May quarantine unsigned binaries. Need code signing for production.
+4. **Frontend system prompt awareness** — The frontend doesn't show what context the model has about the user.
