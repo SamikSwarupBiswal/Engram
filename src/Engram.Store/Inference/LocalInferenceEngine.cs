@@ -167,7 +167,7 @@ public class LocalInferenceEngine : IDisposable
             var inferenceParams = new InferenceParams
             {
                 MaxTokens = maxTokens,
-                AntiPrompts = new[] { "User:", "Assistant:", "\nUser:" }
+                AntiPrompts = new[] { "<|end|>", "<|user|>", "<|system|>" }
             };
 
             _log.Inference($"Session {session.SessionId}: generating (maxTokens={maxTokens})");
@@ -188,11 +188,10 @@ public class LocalInferenceEngine : IDisposable
 
             var response = responseBuilder.ToString().Trim();
 
-            // Clean up common artifacts
-            if (response.StartsWith("Assistant:"))
-                response = response["Assistant:".Length..].Trim();
-            if (response.EndsWith("User:"))
-                response = response[..^"User:".Length].Trim();
+            // Clean up template artifacts
+            response = response.Replace("<|end|>", "").Trim();
+            response = response.Replace("<|user|>", "").Trim();
+            response = response.Replace("<|system|>", "").Trim();
 
             // Memory telemetry: snapshot after
             var memAfter = GetMemorySnapshot();
@@ -271,7 +270,7 @@ public class LocalInferenceEngine : IDisposable
             var inferenceParams = new InferenceParams
             {
                 MaxTokens = maxTokens,
-                AntiPrompts = new[] { "User:", "Assistant:", "\nUser:" }
+                AntiPrompts = new[] { "<|end|>", "<|user|>", "<|system|>" }
             };
 
             await foreach (var token in executor.InferAsync(prompt, inferenceParams, cancellationToken))
@@ -289,26 +288,33 @@ public class LocalInferenceEngine : IDisposable
     }
 
     /// <summary>
-    /// Format messages into a chat prompt template.
+    /// Format messages into Phi-4-mini-instruct chat template.
+    /// Template: <|system|>system msg<|end|><|user|>user msg<|end|><|assistant|>
     /// </summary>
     private static string FormatChatPrompt(ChatMessage[] messages)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("You are Engram, a personal semantic memory layer assistant. You help the user search their memory, generate briefs, and answer questions about their digital life.");
+
+        // Add system message if none provided
+        var hasSystem = messages.Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
+        if (!hasSystem)
+        {
+            sb.Append("<|system|>You are Engram, a personal semantic memory layer assistant.<|end|>");
+        }
 
         foreach (var msg in messages)
         {
             var role = msg.Role.ToLowerInvariant() switch
             {
-                "user" => "User",
-                "assistant" => "Assistant",
-                "system" => "System",
-                _ => "User"
+                "user" => "user",
+                "assistant" => "assistant",
+                "system" => "system",
+                _ => "user"
             };
-            sb.AppendLine($"{role}: {msg.Content}");
+            sb.Append($"<|{role}|>{msg.Content}<|end|>");
         }
 
-        sb.Append("Assistant:");
+        sb.Append("<|assistant|>");
         return sb.ToString();
     }
 
