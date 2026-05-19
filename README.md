@@ -86,6 +86,27 @@ dotnet test
 # 933/933 passing (849 Store + 84 API)
 ```
 
+### Soak Tests (runtime stability)
+
+```
+dotnet test --filter "Category=Soak"
+# Requires running API sidecar with model loaded
+```
+
+See [.planning/soak-validation.md](.planning/soak-validation.md) for results.
+
+## Runtime Status (Soak Validation)
+
+**Branch:** `soak-validation`
+
+Key findings from soak testing:
+- KV cache accumulates across requests (never clears) — deterministic collapse at ~2000 tokens
+- Health endpoint false positive after runtime death
+- Prompt template is model-specific (Phi-4-mini requires `<|system|>/<|user|>/<|assistant|>`)
+- Phase-transition failure pattern (healthy → dead, no gradual degradation)
+
+See [.planning/](.planning/) for detailed findings and next steps.
+
 ## License
 
 Proprietary
