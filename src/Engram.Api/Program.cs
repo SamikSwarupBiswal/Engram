@@ -94,9 +94,14 @@ var modelManager = new ModelManager();
 var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
 var inferenceRouter = new InferenceRouter(localEngine);
 
+// ── Backend probe + verdict persistence ──
+var probe = new BackendProbe();
+var verdictStore = new VerdictStore(paths.Root);
+
 // ── Lifecycle Manager (single source of truth) ──
 var lifecycle = new InferenceLifecycleManager();
-lifecycle.Configure(gpuDetector, modelManager, localEngine, inferenceRouter);
+lifecycle.Configure(gpuDetector, modelManager, localEngine, inferenceRouter,
+    downloadFunc: null, probe: probe, verdictStore: verdictStore);
 
 var tokenBudget = new TokenBudget(paths.Config);
 var gwsManager = new GoogleWorkspaceManager(paths.Config);

@@ -247,4 +247,118 @@ public class InferenceEngineTests : IDisposable
         Assert.Equal(0, (int)PowerMode.Eco);
         Assert.Equal(1, (int)PowerMode.Turbo);
     }
+
+    // ─── VerdictStore ───
+
+    [Fact]
+    public void VerdictStore_RecordsAndRetrieves()
+    {
+        var store = new VerdictStore(_tempDir);
+        var verdict = new BackendVerdict
+        {
+            Backend = "Vulkan",
+            Status = VerdictStatus.Success,
+            GpuDevice = "RTX 4060",
+            VramMb = 8000,
+            ProbeDurationMs = 1500
+        };
+
+        store.Record(verdict);
+        var retrieved = store.GetVerdict("Vulkan");
+
+        Assert.NotNull(retrieved);
+        Assert.Equal("Vulkan", retrieved.Backend);
+        Assert.Equal(VerdictStatus.Success, retrieved.Status);
+        Assert.Equal("RTX 4060", retrieved.GpuDevice);
+    }
+
+    [Fact]
+    public void VerdictStore_ShouldSkipBackend_OnFailure()
+    {
+        var store = new VerdictStore(_tempDir);
+        store.Record(new BackendVerdict
+        {
+            Backend = "Vulkan",
+            Status = VerdictStatus.Failed,
+            FailureStage = "init",
+            Reason = "vkCreateDevice failed"
+        });
+
+        Assert.True(store.ShouldSkipBackend("Vulkan"));
+        Assert.False(store.ShouldSkipBackend("Cpu"));
+    }
+
+    [Fact]
+    public void VerdictStore_Invalidate_ClearsBackend()
+    {
+        var store = new VerdictStore(_tempDir);
+        store.Record(new BackendVerdict
+        {
+            Backend = "Vulkan",
+            Status = VerdictStatus.Failed,
+            FailureStage = "init"
+        });
+
+        Assert.True(store.ShouldSkipBackend("Vulkan"));
+
+        store.Invalidate("Vulkan");
+        Assert.False(store.ShouldSkipBackend("Vulkan"));
+    }
+
+    [Fact]
+    public void VerdictStore_UnknownBackend_ReturnsNull()
+    {
+        var store = new VerdictStore(_tempDir);
+        Assert.Null(store.GetVerdict("NonExistent"));
+    }
+
+    [Fact]
+    public void VerdictStore_PersistsToDisk()
+    {
+        var store1 = new VerdictStore(_tempDir);
+        store1.Record(new BackendVerdict
+        {
+            Backend = "Vulkan",
+            Status = VerdictStatus.Success,
+            ProbeDurationMs = 500
+        });
+
+        // New instance should read from disk
+        var store2 = new VerdictStore(_tempDir);
+        var verdict = store2.GetVerdict("Vulkan");
+
+        Assert.NotNull(verdict);
+        Assert.Equal(VerdictStatus.Success, verdict.Status);
+    }
+
+    [Fact]
+    public void VerdictStore_TimeoutStatus_IsTreatedAsFailure()
+    {
+        var store = new VerdictStore(_tempDir);
+        store.Record(new BackendVerdict
+        {
+            Backend = "Vulkan",
+            Status = VerdictStatus.Timeout,
+            FailureStage = "timeout",
+            Reason = "Probe timed out after 30s"
+        });
+
+        Assert.True(store.ShouldSkipBackend("Vulkan"));
+    }
+
+    // ─── InferenceState ───
+
+    [Fact]
+    public void InferenceState_HasAllExpectedValues()
+    {
+        Assert.Equal(0, (int)InferenceState.Starting);
+        Assert.Equal(1, (int)InferenceState.DetectingBackend);
+        Assert.Equal(2, (int)InferenceState.BackendReady);
+        Assert.Equal(3, (int)InferenceState.DownloadingModel);
+        Assert.Equal(4, (int)InferenceState.LoadingModel);
+        Assert.Equal(5, (int)InferenceState.Ready);
+        Assert.Equal(6, (int)InferenceState.Error);
+        Assert.Equal(7, (int)InferenceState.Degraded);
+        Assert.Equal(8, (int)InferenceState.Offline);
+    }
 }

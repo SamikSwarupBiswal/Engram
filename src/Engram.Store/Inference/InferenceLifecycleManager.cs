@@ -79,6 +79,8 @@ public sealed class InferenceLifecycleManager : IDisposable
     private LocalInferenceEngine? _localEngine;
     private InferenceRouter? _inferenceRouter;
     private Func<Task>? _downloadFunc;
+    private BackendProbe? _probe;
+    private VerdictStore? _verdictStore;
 
     // ── Background task tracking ──
     private Task? _initTask;
@@ -150,13 +152,17 @@ public sealed class InferenceLifecycleManager : IDisposable
         ModelManager modelManager,
         LocalInferenceEngine localEngine,
         InferenceRouter inferenceRouter,
-        Func<Task>? downloadFunc = null)
+        Func<Task>? downloadFunc = null,
+        BackendProbe? probe = null,
+        VerdictStore? verdictStore = null)
     {
         _gpuDetector = gpuDetector;
         _modelManager = modelManager;
         _localEngine = localEngine;
         _inferenceRouter = inferenceRouter;
         _downloadFunc = downloadFunc;
+        _probe = probe;
+        _verdictStore = verdictStore;
     }
 
     /// <summary>
@@ -173,7 +179,7 @@ public sealed class InferenceLifecycleManager : IDisposable
     {
         try
         {
-            // ── Phase 1: Detect backend ──
+            // ── Phase 1: Detect backend + probe stability ──
             _detectBackendStart = DateTime.UtcNow;
             TransitionTo(InferenceState.DetectingBackend, "startup sequence");
             _log.Gpu("Starting GPU detection...");
@@ -190,9 +196,103 @@ public sealed class InferenceLifecycleManager : IDisposable
             _metadata["gpuVramMb"] = gpuInfo.VramMb.ToString();
             _metadata["gpuLayers"] = gpuInfo.LayerCount.ToString();
             _detectBackendEnd = DateTime.UtcNow;
-            _log.Gpu($"Backend selected: {gpuInfo.Description} (layers={gpuInfo.LayerCount}) [{_detectBackendEnd.Value - _detectBackendStart.Value}ms]");
+            _log.Gpu($"Backend detected: {gpuInfo.Description} [{_detectBackendEnd.Value - _detectBackendStart.Value}ms]");
 
-            TransitionTo(InferenceState.BackendReady, "backend detected");
+            // ── Phase 1b: Probe backend stability ──
+            if (_probe != null && _verdictStore != null)
+            {
+                // Check cached verdict first
+                var cachedVerdict = _verdictStore.GetVerdict(_backend);
+                if (cachedVerdict != null)
+                {
+                    if (cachedVerdict.Status == VerdictStatus.Success)
+                    {
+                        _log.Gpu($"Using cached verdict: {_backend} = SUCCESS (from {cachedVerdict.Timestamp:u})");
+                        _metadata["probeSource"] = "cache";
+                        _metadata["probeCachedAt"] = cachedVerdict.Timestamp.ToString("u");
+                    }
+                    else
+                    {
+                        // Cached failure — skip this backend, try CPU
+                        _log.GpuWarn($"Cached verdict: {_backend} = {cachedVerdict.Status} at '{cachedVerdict.FailureStage}' — {cachedVerdict.Reason}");
+                        _log.GpuWarn("Skipping to CPU fallback (cached failure verdict)");
+
+                        if (gpuInfo.Backend != GpuBackend.Cpu)
+                        {
+                            _backend = "Cpu";
+                            gpuInfo = new GpuInfo
+                            {
+                                Backend = GpuBackend.Cpu,
+                                DeviceName = "CPU",
+                                VramMb = 0,
+                                LayerCount = 0,
+                                Description = "CPU+SIMD (cached GPU failure)"
+                            };
+                            _metadata["gpuDevice"] = "CPU (fallback)";
+                            _metadata["gpuLayers"] = "0";
+                            _metadata["probeSource"] = "cache_skip";
+                            _metadata["probeFailureReason"] = cachedVerdict.Reason ?? "unknown";
+                        }
+                    }
+                }
+                else
+                {
+                    // No cached verdict — run live probe
+                    _log.Gpu($"No cached verdict for {_backend}, running stability probe...");
+                    var modelPath = _modelManager != null ? ModelManager.GetModelPath(ModelManager.Phi4Mini) : null;
+                    var probeTimeout = TimeSpan.FromSeconds(30);
+                    var verdict = await _probe.ProbeAsync(_backend, gpuInfo, modelPath, probeTimeout);
+
+                    _verdictStore.Record(verdict);
+                    _metadata["probeSource"] = "live";
+                    _metadata["probeDurationMs"] = verdict.ProbeDurationMs.ToString();
+
+                    if (verdict.Status != VerdictStatus.Success)
+                    {
+                        _log.GpuWarn($"Probe failed: {verdict.FailureStage} — {verdict.Reason}");
+
+                        // Fallback to CPU
+                        if (gpuInfo.Backend != GpuBackend.Cpu)
+                        {
+                            _log.Gpu("Falling back to CPU...");
+                            _backend = "Cpu";
+                            gpuInfo = new GpuInfo
+                            {
+                                Backend = GpuBackend.Cpu,
+                                DeviceName = "CPU",
+                                VramMb = 0,
+                                LayerCount = 0,
+                                Description = $"CPU+SIMD (probe failed: {verdict.FailureStage})"
+                            };
+                            _metadata["gpuDevice"] = "CPU (fallback)";
+                            _metadata["gpuLayers"] = "0";
+                            _metadata["probeFailureReason"] = verdict.Reason ?? "unknown";
+
+                            // Record CPU verdict as success (it's our fallback)
+                            _verdictStore.Record(new BackendVerdict
+                            {
+                                Backend = "Cpu",
+                                Status = VerdictStatus.Success,
+                                GpuDevice = "CPU",
+                                ProbeDurationMs = 0,
+                                MachineHash = verdict.MachineHash,
+                                AppVersion = verdict.AppVersion
+                            });
+                        }
+                    }
+                    else
+                    {
+                        _log.Gpu($"Probe PASSED: {_backend} is stable [{verdict.ProbeDurationMs}ms]");
+                    }
+                }
+            }
+            else
+            {
+                _log.Gpu("No probe/verdict store — proceeding without stability check");
+                _metadata["probeSource"] = "none";
+            }
+
+            TransitionTo(InferenceState.BackendReady, $"backend verified: {_backend}");
 
             // ── Phase 2: Check/download model ──
             if (_modelManager == null || _localEngine == null)
