@@ -8,12 +8,16 @@ namespace Engram.Store.Inference;
 /// All state transitions go through this manager.
 /// No other component should independently track inference readiness.
 /// 
-/// State machine:
-///   Starting → DetectingBackend → BackendReady → DownloadingModel → LoadingModel → Ready
-///                   ↓                  ↓               ↓               ↓
-///                 Error              Error           Error           Error
-///                   ↓
-///                Degraded (CPU fallback attempted)
+/// LEGAL TRANSITIONS (enforced):
+///   Starting → DetectingBackend, Error, Offline
+///   DetectingBackend → BackendReady, Error, Offline
+///   BackendReady → DownloadingModel, LoadingModel, Error, Offline
+///   DownloadingModel → LoadingModel, Error, Offline
+///   LoadingModel → Ready, Error, Offline
+///   Ready → LoadingModel (reload), BackendReady (unload), Error, Offline
+///   Error → Starting (retry), Offline
+///   Degraded → Starting (retry), Offline
+///   Offline → (terminal)
 /// </summary>
 public sealed class InferenceLifecycleManager : IDisposable
 {
@@ -21,7 +25,29 @@ public sealed class InferenceLifecycleManager : IDisposable
     private readonly object _lock = new();
     private readonly DateTime _startTime = DateTime.UtcNow;
 
-    // State
+    // ── Legal transition map ──
+    private static readonly Dictionary<InferenceState, HashSet<InferenceState>> LegalTransitions = new()
+    {
+        [InferenceState.Starting] = new()
+            { InferenceState.DetectingBackend, InferenceState.Error, InferenceState.Offline },
+        [InferenceState.DetectingBackend] = new()
+            { InferenceState.BackendReady, InferenceState.Error, InferenceState.Offline },
+        [InferenceState.BackendReady] = new()
+            { InferenceState.DownloadingModel, InferenceState.LoadingModel, InferenceState.Error, InferenceState.Offline },
+        [InferenceState.DownloadingModel] = new()
+            { InferenceState.LoadingModel, InferenceState.Error, InferenceState.Offline },
+        [InferenceState.LoadingModel] = new()
+            { InferenceState.Ready, InferenceState.Error, InferenceState.Offline },
+        [InferenceState.Ready] = new()
+            { InferenceState.LoadingModel, InferenceState.BackendReady, InferenceState.Error, InferenceState.Offline },
+        [InferenceState.Error] = new()
+            { InferenceState.Starting, InferenceState.Offline },
+        [InferenceState.Degraded] = new()
+            { InferenceState.Starting, InferenceState.Offline },
+        [InferenceState.Offline] = new() { } // terminal
+    };
+
+    // ── State ──
     private InferenceState _state = InferenceState.Starting;
     private string? _error;
     private string? _backend;
@@ -32,20 +58,37 @@ public sealed class InferenceLifecycleManager : IDisposable
     private readonly List<string> _stateHistory = new();
     private readonly ConcurrentDictionary<string, string> _metadata = new();
 
-    // Components (injected after construction)
+    // ── Startup metrics ──
+    private DateTime? _detectBackendStart;
+    private DateTime? _detectBackendEnd;
+    private DateTime? _downloadStart;
+    private DateTime? _downloadEnd;
+    private DateTime? _loadStart;
+    private DateTime? _loadEnd;
+    private DateTime? _readyTime;
+    private DateTime? _errorTime;
+
+    // ── Degraded mode tracking ──
+    private string? _degradationReason;
+    private InferenceState _degradationFrom;
+    private bool _degradationRetryAllowed = true;
+
+    // ── Components (injected after construction) ──
     private GpuDetector? _gpuDetector;
     private ModelManager? _modelManager;
     private LocalInferenceEngine? _localEngine;
     private InferenceRouter? _inferenceRouter;
     private Func<Task>? _downloadFunc;
 
-    // Background task tracking
+    // ── Background task tracking ──
     private Task? _initTask;
     private CancellationTokenSource _cts = new();
 
     public event Action<InferenceState>? StateChanged;
 
-    // ── Public state accessors ──
+    // ══════════════════════════════════════════
+    //  PUBLIC STATE ACCESSORS
+    // ══════════════════════════════════════════
 
     public InferenceState State
     {
@@ -69,16 +112,39 @@ public sealed class InferenceLifecycleManager : IDisposable
                 IsReady = _state == InferenceState.Ready,
                 CanAcceptRequests = _state == InferenceState.Ready || _state == InferenceState.Degraded,
                 StateHistory = _stateHistory.TakeLast(20).ToList(),
-                Metadata = new Dictionary<string, string>(_metadata)
+                Metadata = new Dictionary<string, string>(_metadata),
+                Metrics = GetMetrics()
             };
         }
     }
 
-    // ── Initialization ──
+    private StartupMetrics GetMetrics()
+    {
+        return new StartupMetrics
+        {
+            BackendDetectionMs = MsBetween(_detectBackendStart, _detectBackendEnd),
+            ModelDownloadMs = MsBetween(_downloadStart, _downloadEnd),
+            ModelLoadMs = MsBetween(_loadStart, _loadEnd),
+            TotalStartupMs = _readyTime.HasValue
+                ? (int)(_readyTime.Value - _startTime).TotalMilliseconds
+                : (int)(DateTime.UtcNow - _startTime).TotalMilliseconds,
+            ReadyAt = _readyTime,
+            ErrorAt = _errorTime,
+            DegradationReason = _degradationReason,
+            DegradationFrom = _degradationFrom.ToString()
+        };
+    }
 
-    /// <summary>
-    /// Inject dependencies. Must be called before StartInitialization().
-    /// </summary>
+    private static int? MsBetween(DateTime? start, DateTime? end)
+    {
+        if (start == null || end == null) return null;
+        return (int)(end.Value - start.Value).TotalMilliseconds;
+    }
+
+    // ══════════════════════════════════════════
+    //  INITIALIZATION
+    // ══════════════════════════════════════════
+
     public void Configure(
         GpuDetector gpuDetector,
         ModelManager modelManager,
@@ -103,15 +169,13 @@ public sealed class InferenceLifecycleManager : IDisposable
         _initTask = Task.Run(() => RunInitializationSequence(_cts.Token));
     }
 
-    /// <summary>
-    /// The full initialization sequence, runs on background thread.
-    /// </summary>
     private async Task RunInitializationSequence(CancellationToken ct)
     {
         try
         {
             // ── Phase 1: Detect backend ──
-            TransitionTo(InferenceState.DetectingBackend);
+            _detectBackendStart = DateTime.UtcNow;
+            TransitionTo(InferenceState.DetectingBackend, "startup sequence");
             _log.Gpu("Starting GPU detection...");
 
             if (_gpuDetector == null)
@@ -125,9 +189,10 @@ public sealed class InferenceLifecycleManager : IDisposable
             _metadata["gpuDevice"] = gpuInfo.DeviceName;
             _metadata["gpuVramMb"] = gpuInfo.VramMb.ToString();
             _metadata["gpuLayers"] = gpuInfo.LayerCount.ToString();
-            _log.Gpu($"Backend selected: {gpuInfo.Description} (layers={gpuInfo.LayerCount})");
+            _detectBackendEnd = DateTime.UtcNow;
+            _log.Gpu($"Backend selected: {gpuInfo.Description} (layers={gpuInfo.LayerCount}) [{_detectBackendEnd.Value - _detectBackendStart.Value}ms]");
 
-            TransitionTo(InferenceState.BackendReady);
+            TransitionTo(InferenceState.BackendReady, "backend detected");
 
             // ── Phase 2: Check/download model ──
             if (_modelManager == null || _localEngine == null)
@@ -142,24 +207,24 @@ public sealed class InferenceLifecycleManager : IDisposable
             if (!_modelManager.IsModelReady(config))
             {
                 _log.Model($"Model not found at {ModelManager.GetModelPath(config)}");
-                TransitionTo(InferenceState.DownloadingModel);
+                _downloadStart = DateTime.UtcNow;
+                TransitionTo(InferenceState.DownloadingModel, "model not found on disk");
                 _log.Model("Starting model download...");
 
-                // Wait for download to complete if a download function is provided
                 if (_downloadFunc != null)
                 {
                     await _downloadFunc();
                 }
                 else
                 {
-                    // Direct download with progress reporting
                     var progress = new Progress<ModelDownloadProgress>(p =>
                     {
                         lock (_lock) _progress = p.Progress * 100;
                     });
-
                     await _modelManager.DownloadModelAsync(config, progress, ct);
                 }
+
+                _downloadEnd = DateTime.UtcNow;
 
                 if (!_modelManager.IsModelReady(config))
                 {
@@ -167,7 +232,7 @@ public sealed class InferenceLifecycleManager : IDisposable
                     return;
                 }
 
-                _log.Model("Model download complete");
+                _log.Model($"Model download complete [{(_downloadEnd.Value - _downloadStart.Value).TotalSeconds:F1}s]");
             }
             else
             {
@@ -175,12 +240,14 @@ public sealed class InferenceLifecycleManager : IDisposable
             }
 
             // ── Phase 3: Load model ──
-            TransitionTo(InferenceState.LoadingModel);
+            _loadStart = DateTime.UtcNow;
+            TransitionTo(InferenceState.LoadingModel, "model file ready");
             _log.Model("Loading model into memory...");
             lock (_lock) _progress = 0;
 
-            // Run LoadModel on a background thread (it's CPU/GPU intensive)
             var loadSuccess = await Task.Run(() => _localEngine.LoadModel(config), ct);
+
+            _loadEnd = DateTime.UtcNow;
 
             if (!loadSuccess)
             {
@@ -190,12 +257,13 @@ public sealed class InferenceLifecycleManager : IDisposable
 
             _modelLoaded = true;
             lock (_lock) _progress = 100;
-            _log.Model($"Model loaded: {config.Name} ({config.Description})");
+            _log.Model($"Model loaded: {config.Name} [{(_loadEnd.Value - _loadStart.Value).TotalSeconds:F1}s]");
             _log.Model($"Backend: {_backend}, Device: {_metadata.GetValueOrDefault("gpuDevice", "unknown")}");
 
             // ── Phase 4: Ready ──
-            TransitionTo(InferenceState.Ready);
-            _log.Lifecycle("=== ENGRAM INFERENCE READY ===");
+            _readyTime = DateTime.UtcNow;
+            TransitionTo(InferenceState.Ready, "initialization complete");
+            _log.Lifecycle($"=== ENGRAM INFERENCE READY === [total: {(_readyTime.Value - _startTime).TotalSeconds:F1}s]");
         }
         catch (OperationCanceledException)
         {
@@ -209,7 +277,9 @@ public sealed class InferenceLifecycleManager : IDisposable
         }
     }
 
-    // ── Manual model load (for user-triggered load after error/download) ──
+    // ══════════════════════════════════════════
+    //  MANUAL OPERATIONS
+    // ══════════════════════════════════════════
 
     /// <summary>
     /// Manually trigger model load. Used when user retries after error
@@ -231,17 +301,21 @@ public sealed class InferenceLifecycleManager : IDisposable
             return false;
         }
 
-        TransitionTo(InferenceState.LoadingModel);
+        _loadStart = DateTime.UtcNow;
+        TransitionTo(InferenceState.LoadingModel, "manual load triggered");
         _log.Model("Manual model load triggered...");
 
         var loadSuccess = await Task.Run(() => _localEngine.LoadModel(config));
+
+        _loadEnd = DateTime.UtcNow;
 
         if (loadSuccess)
         {
             _modelLoaded = true;
             lock (_lock) _progress = 100;
-            TransitionTo(InferenceState.Ready);
-            _log.Model("Model loaded successfully (manual)");
+            _readyTime = DateTime.UtcNow;
+            TransitionTo(InferenceState.Ready, "manual load complete");
+            _log.Model($"Model loaded successfully (manual) [{(_loadEnd.Value - _loadStart.Value).TotalSeconds:F1}s]");
             return true;
         }
         else
@@ -251,8 +325,9 @@ public sealed class InferenceLifecycleManager : IDisposable
         }
     }
 
-    // ── Unload model ──
-
+    /// <summary>
+    /// Unload model from memory. Returns to BackendReady.
+    /// </summary>
     public void UnloadModel()
     {
         _localEngine?.UnloadModel();
@@ -262,11 +337,12 @@ public sealed class InferenceLifecycleManager : IDisposable
             _progress = 0;
         }
         _log.Model("Model unloaded");
-        TransitionTo(InferenceState.BackendReady);
+        TransitionTo(InferenceState.BackendReady, "user requested unload");
     }
 
-    // ── Retry after error ──
-
+    /// <summary>
+    /// Retry after error. Resets state and re-runs initialization.
+    /// </summary>
     public void Retry()
     {
         lock (_lock)
@@ -276,8 +352,21 @@ public sealed class InferenceLifecycleManager : IDisposable
                 _log.LifecycleWarn($"Retry requested but state is {_state}, ignoring");
                 return;
             }
+
+            if (_state == InferenceState.Degraded && !_degradationRetryAllowed)
+            {
+                _log.LifecycleWarn("Retry not allowed for this degradation");
+                return;
+            }
+
             _retryCount++;
             _error = null;
+            _degradationReason = null;
+            // Reset metrics for fresh attempt
+            _detectBackendStart = _detectBackendEnd = null;
+            _downloadStart = _downloadEnd = null;
+            _loadStart = _loadEnd = null;
+            _readyTime = _errorTime = null;
         }
 
         _log.Lifecycle($"Retry #{_retryCount} starting...");
@@ -286,24 +375,41 @@ public sealed class InferenceLifecycleManager : IDisposable
         StartInitialization();
     }
 
-    // ── State transition ──
+    // ══════════════════════════════════════════
+    //  STATE TRANSITIONS (with guards)
+    // ══════════════════════════════════════════
 
-    private void TransitionTo(InferenceState newState)
+    private bool TransitionTo(InferenceState newState, string reason)
     {
         lock (_lock)
         {
             var old = _state;
+
+            // Guard: validate legal transition
+            if (!LegalTransitions.TryGetValue(old, out var allowed) || !allowed.Contains(newState))
+            {
+                _log.LifecycleError($"ILLEGAL TRANSITION: {old} → {newState} (reason: {reason}). Blocked.");
+                _stateHistory.Add($"{DateTime.UtcNow:HH:mm:ss} ILLEGAL: {old} → {newState} BLOCKED ({reason})");
+                return false;
+            }
+
             _state = newState;
-            _stateHistory.Add($"{DateTime.UtcNow:HH:mm:ss} {old} → {newState}");
-            _log.Lifecycle($"State: {old} → {newState}");
+            var entry = $"{DateTime.UtcNow:HH:mm:ss} {old} → {newState}";
+            if (!string.IsNullOrEmpty(reason))
+                entry += $" ({reason})";
+            _stateHistory.Add(entry);
+            _log.Lifecycle($"State: {old} → {newState} ({reason})");
         }
+
         StateChanged?.Invoke(newState);
+        return true;
     }
 
     private void SetError(string error)
     {
         lock (_lock)
         {
+            _errorTime = DateTime.UtcNow;
             _error = error;
             _state = InferenceState.Error;
             _stateHistory.Add($"{DateTime.UtcNow:HH:mm:ss} → Error: {error}");
@@ -312,7 +418,9 @@ public sealed class InferenceLifecycleManager : IDisposable
         StateChanged?.Invoke(InferenceState.Error);
     }
 
-    // ── Download progress update (called from Program.cs download handler) ──
+    // ══════════════════════════════════════════
+    //  DOWNLOAD PROGRESS (external handler)
+    // ══════════════════════════════════════════
 
     public void ReportDownloadProgress(double progress)
     {
@@ -321,6 +429,7 @@ public sealed class InferenceLifecycleManager : IDisposable
 
     public void ReportDownloadComplete()
     {
+        _downloadEnd = DateTime.UtcNow;
         _log.Model("Download reported complete by external handler");
     }
 
@@ -331,6 +440,7 @@ public sealed class InferenceLifecycleManager : IDisposable
 
     public void Dispose()
     {
+        TransitionTo(InferenceState.Offline, "disposing");
         _cts.Cancel();
         _cts.Dispose();
     }
@@ -386,4 +496,35 @@ public class HealthResponse
     public bool CanAcceptRequests { get; init; }
     public List<string> StateHistory { get; init; } = new();
     public Dictionary<string, string> Metadata { get; init; } = new();
+    public StartupMetrics Metrics { get; init; } = new();
+}
+
+/// <summary>
+/// Timing metrics for startup phases. Enables quantitative visibility.
+/// </summary>
+public class StartupMetrics
+{
+    /// <summary>Time to detect GPU backend (ms). Null if not yet completed.</summary>
+    public int? BackendDetectionMs { get; init; }
+
+    /// <summary>Time to download model (ms). Null if model was already cached.</summary>
+    public int? ModelDownloadMs { get; init; }
+
+    /// <summary>Time to load model into memory (ms). Null if not yet attempted.</summary>
+    public int? ModelLoadMs { get; init; }
+
+    /// <summary>Total time from process start to Ready state (ms).</summary>
+    public int TotalStartupMs { get; init; }
+
+    /// <summary>UTC timestamp when Ready state was reached. Null if not ready.</summary>
+    public DateTime? ReadyAt { get; init; }
+
+    /// <summary>UTC timestamp when Error state was reached. Null if no error.</summary>
+    public DateTime? ErrorAt { get; init; }
+
+    /// <summary>Reason for entering Degraded state. Null if not degraded.</summary>
+    public string? DegradationReason { get; init; }
+
+    /// <summary>Which state degradation came from. Empty if not degraded.</summary>
+    public string DegradationFrom { get; init; } = "";
 }

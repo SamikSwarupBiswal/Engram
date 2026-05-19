@@ -333,6 +333,41 @@ app.MapPost("/api/intervention/check", (InterventionRequest request) =>
 // --- Chat Completions (real inference) ---
 app.MapPost("/v1/chat/completions", async (HttpContext context) =>
 {
+    // ── Lifecycle guard: reject requests when not ready ──
+    var health = lifecycle.GetHealth();
+    if (!health.CanAcceptRequests)
+    {
+        var statusMessage = health.State switch
+        {
+            "Starting" => "Engram is starting up. Please wait a moment.",
+            "DetectingBackend" => "Detecting GPU backend...",
+            "BackendReady" => "Backend ready, preparing model...",
+            "DownloadingModel" => $"Model is downloading ({health.Progress:F0}%). Please wait.",
+            "LoadingModel" => "Model is loading into memory. This may take a moment.",
+            "Error" => $"Inference unavailable: {health.Error}",
+            "Offline" => "Engram is offline.",
+            _ => $"Engram is not ready (state: {health.State})"
+        };
+
+        log.Router($"Request rejected: state={health.State}");
+        return Results.Ok(new
+        {
+            id = "chatcmpl-" + Guid.NewGuid().ToString("n"),
+            @object = "chat.completion",
+            choices = new[]
+            {
+                new
+                {
+                    index = 0,
+                    message = new { role = "assistant", content = statusMessage },
+                    finish_reason = "not_ready"
+                }
+            },
+            usage = new { prompt_tokens = 0, completion_tokens = 0, total_tokens = 0 },
+            _lifecycle = new { state = health.State, progress = health.Progress }
+        });
+    }
+
     var body = await JsonSerializer.DeserializeAsync<ChatRequest>(
         context.Request.Body,
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });

@@ -342,6 +342,17 @@ export const api = {
     }),
 };
 
+export interface StartupMetrics {
+  backendDetectionMs: number | null;
+  modelDownloadMs: number | null;
+  modelLoadMs: number | null;
+  totalStartupMs: number;
+  readyAt: string | null;
+  errorAt: string | null;
+  degradationReason: string | null;
+  degradationFrom: string;
+}
+
 export interface HealthResponse {
   state: string;           // Starting | DetectingBackend | BackendReady | DownloadingModel | LoadingModel | Ready | Error | Degraded | Offline
   backend: string | null;
@@ -355,6 +366,7 @@ export interface HealthResponse {
   canAcceptRequests: boolean;
   stateHistory: string[];
   metadata: Record<string, string>;
+  metrics: StartupMetrics;
 }
 
 export async function checkApiHealth(): Promise<HealthResponse | null> {
