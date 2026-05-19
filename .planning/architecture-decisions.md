@@ -1,26 +1,35 @@
 # Architecture Decisions
 
-Decisions informed by soak validation data. **Status: PENDING** — waiting for more data before committing to architecture changes.
+Decisions informed by soak validation data.
 
 ## Decision 1: KV Cache Management
 
-**Status: PENDING**
+**Status: RESOLVED — Clear KV cache after each request**
 
-### Options
+### Outcome
 
-| Option | Pros | Cons |
-|--------|------|------|
-| Clear KV cache between requests | Simple, low overhead | May lose context for multi-turn |
-| Fresh context per request | Clean isolation | Expensive (model reload?) |
-| Increase context size (e.g., 8192) | Delays problem | Doesn't fix, doubles memory |
-| Context pool with rotation | Balanced | Complex |
+Experiment 1 confirmed Outcome A: KV cache clearing after each request eliminates the collapse entirely.
 
-### Data Needed
+| Metric | Without Clearing | With Clearing |
+|--------|-----------------|---------------|
+| 60 requests | Collapse at ~req 60 | 100% success |
+| KV at end | ~2000 tokens | 0 (cleared) |
+| Tok/s drift | N/A (dead) | +4.1% (normal) |
 
-- [ ] Cost of KV cache clearing (latency impact)
-- [ ] Can LLamaSharp clear KV cache without reloading model?
-- [ ] Does fresh context per request require model reload?
-- [ ] Memory impact of larger context size
+### Decision
+
+**Clear KV cache after each request by default.**
+
+This is a lifecycle hygiene fix, not an architecture change. The `SafeLLamaContextHandle.KvCacheClear()` API is stable and has zero measurable overhead.
+
+### Why NOT the other options
+
+| Option | Status | Reason |
+|--------|--------|--------|
+| Fresh context per request | Implemented, not yet tested | Unnecessary overhead if clearing works |
+| Increase context size (8192) | Deferred | Delays problem, doesn't fix; clearing fixes it |
+| Context pool with rotation | Not needed | Over-engineering for this failure mode |
+| Worker recycling | Not needed for KV exhaustion | May still be useful for other failure modes |
 
 ## Decision 2: Worker Recycling
 
