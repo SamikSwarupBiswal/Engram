@@ -361,4 +361,151 @@ public class InferenceEngineTests : IDisposable
         Assert.Equal(7, (int)InferenceState.Degraded);
         Assert.Equal(8, (int)InferenceState.Offline);
     }
+
+    // ─── InferenceSession ───
+
+    [Fact]
+    public void InferenceSession_StartsIdle()
+    {
+        using var session = new InferenceSession();
+        Assert.False(session.IsCompleted);
+        Assert.False(session.IsCancelled);
+        Assert.Equal(0, session.TokensEmitted);
+        Assert.Null(session.Violation);
+    }
+
+    [Fact]
+    public void InferenceSession_RecordToken_IncrementsCount()
+    {
+        using var session = new InferenceSession();
+        session.RecordToken();
+        session.RecordToken();
+        session.RecordToken();
+
+        Assert.Equal(3, session.TokensEmitted);
+    }
+
+    [Fact]
+    public void InferenceSession_Complete_SetsCompleted()
+    {
+        using var session = new InferenceSession();
+        session.Start();
+        session.RecordToken();
+        session.Complete();
+
+        Assert.True(session.IsCompleted);
+        Assert.False(session.IsCancelled);
+        Assert.True(session.Elapsed > TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void InferenceSession_Cancel_SetsCancelled()
+    {
+        using var session = new InferenceSession();
+        session.Start();
+        session.Cancel("test");
+
+        Assert.True(session.IsCancelled);
+        Assert.True(session.Token.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void InferenceSession_GetTelemetry_ReportsState()
+    {
+        using var session = new InferenceSession();
+        session.Start();
+        session.RecordToken();
+        session.RecordToken();
+
+        var telemetry = session.GetTelemetry();
+
+        Assert.Equal(2, telemetry.TokensEmitted);
+        Assert.True(telemetry.IsActive);
+        Assert.True(telemetry.ElapsedMs >= 0);
+    }
+
+    [Fact]
+    public async Task InferenceSession_Watchdog_FiresOnNoTokenTimeout()
+    {
+        using var session = new InferenceSession();
+        session.NoTokenTimeout = TimeSpan.FromMilliseconds(100);
+        session.HeartbeatCheckInterval = TimeSpan.FromMilliseconds(50);
+
+        InferenceViolation? capturedViolation = null;
+        session.OnViolation += (s, v) => capturedViolation = v;
+
+        session.Start();
+        session.RecordToken(); // Need at least one token for no-token check
+
+        // Wait for watchdog to fire
+        await Task.Delay(300);
+
+        Assert.NotNull(capturedViolation);
+        Assert.Equal(ViolationType.NoTokenTimeout, capturedViolation.Type);
+        Assert.True(session.IsCancelled);
+    }
+
+    [Fact]
+    public async Task InferenceSession_Watchdog_FiresOnHardTimeout()
+    {
+        using var session = new InferenceSession();
+        session.HardTimeout = TimeSpan.FromMilliseconds(100);
+        session.NoTokenTimeout = TimeSpan.FromSeconds(60); // High so it doesn't fire
+        session.HeartbeatCheckInterval = TimeSpan.FromMilliseconds(50);
+
+        InferenceViolation? capturedViolation = null;
+        session.OnViolation += (s, v) => capturedViolation = v;
+
+        session.Start();
+        await Task.Delay(300);
+
+        Assert.NotNull(capturedViolation);
+        Assert.Equal(ViolationType.HardTimeout, capturedViolation.Type);
+    }
+
+    [Fact]
+    public async Task InferenceSession_Heartbeat_PreventsNoTokenTimeout()
+    {
+        using var session = new InferenceSession();
+        session.NoTokenTimeout = TimeSpan.FromMilliseconds(200);
+        session.HeartbeatCheckInterval = TimeSpan.FromMilliseconds(50);
+
+        InferenceViolation? capturedViolation = null;
+        session.OnViolation += (s, v) => capturedViolation = v;
+
+        session.Start();
+
+        // Keep sending tokens
+        for (int i = 0; i < 10; i++)
+        {
+            session.RecordToken();
+            await Task.Delay(50);
+        }
+
+        // Should NOT have fired
+        Assert.Null(capturedViolation);
+        Assert.False(session.IsCancelled);
+    }
+
+    [Fact]
+    public void InferenceSession_DoubleComplete_IsIdempotent()
+    {
+        using var session = new InferenceSession();
+        session.Start();
+        session.Complete();
+        session.Complete(); // Should not throw
+
+        Assert.True(session.IsCompleted);
+    }
+
+    [Fact]
+    public void InferenceSession_DoubleCancel_IsIdempotent()
+    {
+        using var session = new InferenceSession();
+        session.Start();
+        session.Cancel("first");
+        session.Cancel("second"); // Should not throw
+
+        Assert.True(session.IsCancelled);
+    }
 }

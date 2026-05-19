@@ -115,7 +115,8 @@ public sealed class InferenceLifecycleManager : IDisposable
                 CanAcceptRequests = _state == InferenceState.Ready || _state == InferenceState.Degraded,
                 StateHistory = _stateHistory.TakeLast(20).ToList(),
                 Metadata = new Dictionary<string, string>(_metadata),
-                Metrics = GetMetrics()
+                Metrics = GetMetrics(),
+                Inference = _localEngine?.GetTelemetry()
             };
         }
     }
@@ -597,6 +598,7 @@ public class HealthResponse
     public List<string> StateHistory { get; init; } = new();
     public Dictionary<string, string> Metadata { get; init; } = new();
     public StartupMetrics Metrics { get; init; } = new();
+    public InferenceEngineTelemetry? Inference { get; init; }
 }
 
 /// <summary>
