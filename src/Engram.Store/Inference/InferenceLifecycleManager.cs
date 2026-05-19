@@ -72,6 +72,8 @@ public sealed class InferenceLifecycleManager : IDisposable
     private string? _degradationReason;
     private InferenceState _degradationFrom;
     private bool _degradationRetryAllowed = true;
+    private long _consecutiveCleanupFailures;
+    private const int MaxConsecutiveCleanupFailures = 3;
 
     // ── Components (injected after construction) ──
     private GpuDetector? _gpuDetector;
@@ -101,6 +103,7 @@ public sealed class InferenceLifecycleManager : IDisposable
     {
         lock (_lock)
         {
+            var inferenceTelemetry = _localEngine?.GetTelemetry();
             return new HealthResponse
             {
                 State = _state.ToString(),
@@ -116,7 +119,14 @@ public sealed class InferenceLifecycleManager : IDisposable
                 StateHistory = _stateHistory.TakeLast(20).ToList(),
                 Metadata = new Dictionary<string, string>(_metadata),
                 Metrics = GetMetrics(),
-                Inference = _localEngine?.GetTelemetry()
+                Inference = inferenceTelemetry,
+                // Survivability metrics from inference engine
+                RuntimeOperational = inferenceTelemetry?.RuntimeOperational ?? false,
+                RecentSuccessRate = inferenceTelemetry?.RecentSuccessRate ?? 1.0,
+                ConsecutiveFailures = inferenceTelemetry?.ConsecutiveFailures ?? 0,
+                GeneratedTokensSinceReset = inferenceTelemetry?.GeneratedTokensSinceReset ?? 0,
+                LastSuccessfulInferenceAt = inferenceTelemetry?.LastSuccessfulInferenceAt,
+                RuntimeDegraded = inferenceTelemetry?.RuntimeDegraded ?? false
             };
         }
     }
@@ -164,6 +174,9 @@ public sealed class InferenceLifecycleManager : IDisposable
         _downloadFunc = downloadFunc;
         _probe = probe;
         _verdictStore = verdictStore;
+
+        // Subscribe to cleanup events for survivability monitoring
+        _localEngine.OnCleanupResult += ReportCleanupResult;
     }
 
     /// <summary>
@@ -477,8 +490,49 @@ public sealed class InferenceLifecycleManager : IDisposable
     }
 
     // ══════════════════════════════════════════
-    //  STATE TRANSITIONS (with guards)
+    //  CLEANUP HEALTH MONITORING
     // ══════════════════════════════════════════
+
+    /// <summary>
+    /// Check cleanup health after inference. Transitions to Degraded if cleanup fails repeatedly.
+    /// Called by the inference engine after each request.
+    /// </summary>
+    public void ReportCleanupResult(CleanupOutcome outcome, string sessionId)
+    {
+        if (outcome == CleanupOutcome.Success || outcome == CleanupOutcome.Skipped)
+        {
+            Interlocked.Exchange(ref _consecutiveCleanupFailures, 0);
+            return;
+        }
+
+        // Cleanup failed or verification failed
+        var failures = Interlocked.Increment(ref _consecutiveCleanupFailures);
+        _log.LifecycleWarn($"Cleanup failure #{failures} for session {sessionId}: {outcome}");
+
+        if (failures >= MaxConsecutiveCleanupFailures)
+        {
+            lock (_lock)
+            {
+                if (_state == InferenceState.Ready)
+                {
+                    _degradationReason = $"Cleanup pipeline failed {failures} consecutive times (last: {outcome})";
+                    _degradationFrom = _state;
+                    _degradationRetryAllowed = true;
+                    TransitionTo(InferenceState.Degraded, _degradationReason);
+                    _log.LifecycleError($"Entered DEGRADED state: {_degradationReason}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reset consecutive cleanup failure counter.
+    /// Called when cleanup succeeds after failures.
+    /// </summary>
+    public void ResetCleanupFailureCount()
+    {
+        Interlocked.Exchange(ref _consecutiveCleanupFailures, 0);
+    }
 
     private bool TransitionTo(InferenceState newState, string reason)
     {
@@ -541,6 +595,12 @@ public sealed class InferenceLifecycleManager : IDisposable
 
     public void Dispose()
     {
+        // Unsubscribe from cleanup events
+        if (_localEngine != null)
+        {
+            _localEngine.OnCleanupResult -= ReportCleanupResult;
+        }
+
         TransitionTo(InferenceState.Offline, "disposing");
         _cts.Cancel();
         _cts.Dispose();
@@ -599,6 +659,14 @@ public class HealthResponse
     public Dictionary<string, string> Metadata { get; init; } = new();
     public StartupMetrics Metrics { get; init; } = new();
     public InferenceEngineTelemetry? Inference { get; init; }
+
+    // ── Survivability metrics ──
+    public bool RuntimeOperational { get; init; }
+    public double RecentSuccessRate { get; init; } = 1.0;
+    public int ConsecutiveFailures { get; init; }
+    public long GeneratedTokensSinceReset { get; init; }
+    public DateTime? LastSuccessfulInferenceAt { get; init; }
+    public bool RuntimeDegraded { get; init; }
 }
 
 /// <summary>

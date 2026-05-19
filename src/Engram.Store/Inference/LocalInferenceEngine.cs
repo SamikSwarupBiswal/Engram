@@ -39,19 +39,23 @@ public class LocalInferenceEngine : IDisposable
     private long _totalViolations;
     private DateTime? _lastInferenceAt;
 
-    // ── KV cache management (Experiment modes) ──
-    /// <summary>
-    /// When true, clears KV cache after each inference request.
-    /// Test: does clearing prevent the ~2000-token collapse?
-    /// </summary>
-    public bool ClearKvCacheAfterInference { get; set; }
-
+    // ── KV cache management (Production lifecycle) ──
     /// <summary>
     /// When true, creates a fresh LLamaContext for each request
     /// and disposes it after. Model weights stay loaded.
     /// Test: is context reuse fundamentally unsafe?
     /// </summary>
     public bool FreshContextPerRequest { get; set; }
+
+    // ── Cleanup telemetry ──
+    private long _cleanupCount;
+    private long _cleanupFailures;
+    private long _cleanupVerificationFailures;
+    private readonly List<double> _cleanupDurations = new();
+    private readonly object _cleanupLock = new();
+
+    // ── Events ──
+    public event Action<CleanupOutcome, string>? OnCleanupResult;
 
     public bool IsReady => _model != null && _context != null;
     public bool IsLoading => _isLoading;
@@ -136,25 +140,130 @@ public class LocalInferenceEngine : IDisposable
     }
 
     // ══════════════════════════════════════
-    //  KV CACHE MANAGEMENT
+    //  KV CACHE MANAGEMENT (Production Lifecycle)
     // ══════════════════════════════════════
 
     /// <summary>
-    /// Clear the KV cache. Erases all cell info and zeroes KV data.
-    /// Call between requests to prevent token accumulation.
+    /// Execute the post-inference cleanup pipeline with lifecycle stages.
+    /// 
+    /// Lifecycle stages:
+    ///   InferenceComplete → PostInferenceCleanupStarted → KvCacheCleared → ContextResetValidated → RuntimeReady
+    /// 
+    /// Cleanup is survivability-critical infrastructure.
     /// </summary>
-    public void ClearKvCache()
+    private CleanupOutcome ExecutePostInferenceCleanup(
+        string sessionId,
+        int kvTokensBefore, int kvTokensAfter,
+        int kvCellsBefore, int kvCellsAfter,
+        out double durationMs)
     {
-        if (_context == null) return;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        durationMs = 0;
+
         try
         {
-            _context.NativeHandle.KvCacheClear();
-            _log.Inference("KV cache cleared");
+            // Stage 1: PostInferenceCleanupStarted
+            _log.Inference($"Session {sessionId}: [LIFECYCLE] PostInferenceCleanupStarted");
+
+            // Stage 2: KvCacheCleared
+            if (_context == null)
+            {
+                _log.InferenceWarn($"Session {sessionId}: [LIFECYCLE] KvCacheClear skipped — context is null");
+                return CleanupOutcome.Skipped;
+            }
+
+            try
+            {
+                _context.NativeHandle.KvCacheClear();
+                _log.Inference($"Session {sessionId}: [LIFECYCLE] KvCacheCleared");
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref _cleanupFailures);
+                _log.InferenceError($"Session {sessionId}: [LIFECYCLE] KvCacheClear FAILED", ex);
+                sw.Stop();
+                durationMs = sw.Elapsed.TotalMilliseconds;
+                RecordCleanupDuration(durationMs);
+                return CleanupOutcome.Failed;
+            }
+
+            // Stage 3: ContextResetValidated (verification)
+            var kvTokensAfterClear = GetKvTokenCount();
+            var kvCellsAfterClear = GetKvUsedCells();
+
+            // Verification: KV should be reset to 0 or -1 (unavailable)
+            if (kvTokensAfterClear > 0)
+            {
+                Interlocked.Increment(ref _cleanupVerificationFailures);
+                _log.InferenceWarn($"Session {sessionId}: [LIFECYCLE] ContextResetValidated FAILED — " +
+                    $"KV tokens not reset: expected ≤0, got {kvTokensAfterClear}");
+                sw.Stop();
+                durationMs = sw.Elapsed.TotalMilliseconds;
+                RecordCleanupDuration(durationMs);
+                OnCleanupResult?.Invoke(CleanupOutcome.VerificationFailed, sessionId);
+                return CleanupOutcome.VerificationFailed;
+            }
+
+            _log.Inference($"Session {sessionId}: [LIFECYCLE] ContextResetValidated — " +
+                $"KV tokens: {kvTokensAfter}→{kvTokensAfterClear}, cells: {kvCellsAfter}→{kvCellsAfterClear}");
+
+            // Stage 4: RuntimeReady
+            Interlocked.Increment(ref _cleanupCount);
+            sw.Stop();
+            durationMs = sw.Elapsed.TotalMilliseconds;
+            RecordCleanupDuration(durationMs);
+
+            _log.Inference($"Session {sessionId}: [LIFECYCLE] RuntimeReady — cleanup {durationMs:F1}ms");
+            OnCleanupResult?.Invoke(CleanupOutcome.Success, sessionId);
+            return CleanupOutcome.Success;
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to clear KV cache");
-            _log.InferenceError("KV cache clear failed", ex);
+            Interlocked.Increment(ref _cleanupFailures);
+            _log.InferenceError($"Session {sessionId}: [LIFECYCLE] Cleanup pipeline failed", ex);
+            sw.Stop();
+            durationMs = sw.Elapsed.TotalMilliseconds;
+            RecordCleanupDuration(durationMs);
+            OnCleanupResult?.Invoke(CleanupOutcome.Failed, sessionId);
+            return CleanupOutcome.Failed;
+        }
+    }
+
+    private void RecordCleanupDuration(double durationMs)
+    {
+        lock (_cleanupLock)
+        {
+            _cleanupDurations.Add(durationMs);
+            // Keep last 1000 durations for drift detection
+            if (_cleanupDurations.Count > 1000)
+                _cleanupDurations.RemoveAt(0);
+        }
+    }
+
+    /// <summary>
+    /// Get cleanup telemetry for survivability analysis.
+    /// </summary>
+    public CleanupTelemetry GetCleanupTelemetry()
+    {
+        lock (_cleanupLock)
+        {
+            var count = Interlocked.Read(ref _cleanupCount);
+            var failures = Interlocked.Read(ref _cleanupFailures);
+            var verificationFailures = Interlocked.Read(ref _cleanupVerificationFailures);
+            var total = count + failures + verificationFailures;
+
+            return new CleanupTelemetry
+            {
+                TotalCleanups = total,
+                SuccessfulCleanups = count,
+                FailedCleanups = failures,
+                VerificationFailures = verificationFailures,
+                SuccessRate = total > 0 ? (double)count / total : 1.0,
+                AverageDurationMs = _cleanupDurations.Count > 0 ? _cleanupDurations.Average() : 0,
+                MaxDurationMs = _cleanupDurations.Count > 0 ? _cleanupDurations.Max() : 0,
+                MinDurationMs = _cleanupDurations.Count > 0 ? _cleanupDurations.Min() : 0,
+                RecentDurations = _cleanupDurations.TakeLast(10).ToList()
+            };
         }
     }
 
@@ -308,14 +417,21 @@ public class LocalInferenceEngine : IDisposable
             var memAfter = GetMemorySnapshot();
             var memDelta = memAfter.WorkingSetMb - memBefore.WorkingSetMb;
 
-            // KV telemetry: snapshot after
+            // KV telemetry: snapshot after (before cleanup)
             var kvTokensAfter = usingFreshContext ? -1 : GetKvTokenCount();
             var kvCellsAfter = usingFreshContext ? -1 : GetKvUsedCells();
 
-            // Experiment 1: Clear KV cache after inference if configured
-            if (ClearKvCacheAfterInference && !usingFreshContext)
+            // ══════════════════════════════════════════════════
+            //  PRODUCTION LIFECYCLE: Mandatory post-inference cleanup
+            // ══════════════════════════════════════════════════
+            var cleanupResult = CleanupOutcome.Skipped;
+            var cleanupDurationMs = 0.0;
+
+            if (!usingFreshContext)
             {
-                ClearKvCache();
+                cleanupResult = ExecutePostInferenceCleanup(
+                    session.SessionId, kvTokensBefore, kvTokensAfter, kvCellsBefore, kvCellsAfter,
+                    out cleanupDurationMs);
             }
 
             // Update global stats
@@ -323,10 +439,15 @@ public class LocalInferenceEngine : IDisposable
             Interlocked.Add(ref _totalTokensGenerated, tokenCount);
             _lastInferenceAt = DateTime.UtcNow;
 
+            // KV after cleanup (verification)
+            var kvTokensAfterCleanup = usingFreshContext ? -1 : GetKvTokenCount();
+            var kvCellsAfterCleanup = usingFreshContext ? -1 : GetKvUsedCells();
+
             _log.Inference($"Session {session.SessionId}: complete — {tokenCount} tokens " +
                 $"in {session.Elapsed.TotalSeconds:F1}s " +
                 $"({tokenCount / Math.Max(0.1, session.Elapsed.TotalSeconds):F1} tok/s) " +
-                $"[memΔ: {memDelta:+0;-0}MB] [kv: {kvTokensBefore}→{kvTokensAfter}]");
+                $"[memΔ: {memDelta:+0;-0}MB] [kv: {kvTokensBefore}→{kvTokensAfter}→{kvTokensAfterCleanup}] " +
+                $"[cleanup: {cleanupResult} {cleanupDurationMs:F1}ms]");
 
             return new InferenceResult
             {
@@ -342,8 +463,11 @@ public class LocalInferenceEngine : IDisposable
                 KvTokensAfter = kvTokensAfter,
                 KvCellsBefore = kvCellsBefore,
                 KvCellsAfter = kvCellsAfter,
+                KvTokensAfterCleanup = kvTokensAfterCleanup,
+                KvCellsAfterCleanup = kvCellsAfterCleanup,
                 UsedFreshContext = usingFreshContext,
-                ClearedKvCache = ClearKvCacheAfterInference && !usingFreshContext
+                CleanupResult = cleanupResult,
+                CleanupDurationMs = cleanupDurationMs
             };
         }
         catch (OperationCanceledException) when (session.IsCancelled && session.Violation != null)
@@ -480,6 +604,7 @@ public class LocalInferenceEngine : IDisposable
     {
         lock (_sessionLock)
         {
+            var cleanup = GetCleanupTelemetry();
             return new InferenceEngineTelemetry
             {
                 TotalInferences = Interlocked.Read(ref _totalInferences),
@@ -489,8 +614,14 @@ public class LocalInferenceEngine : IDisposable
                 ActiveSession = _activeSession?.GetTelemetry(),
                 KvTokensInCache = GetKvTokenCount(),
                 KvUsedCells = GetKvUsedCells(),
-                ClearKvAfterInference = ClearKvCacheAfterInference,
-                FreshContextPerRequest = FreshContextPerRequest
+                FreshContextPerRequest = FreshContextPerRequest,
+                Cleanup = cleanup,
+                // Survivability metrics
+                RuntimeOperational = cleanup.SuccessRate > 0.5 && Interlocked.Read(ref _cleanupVerificationFailures) == 0,
+                RecentSuccessRate = cleanup.SuccessRate,
+                ConsecutiveFailures = 0, // TODO: track consecutive failures
+                GeneratedTokensSinceReset = Interlocked.Read(ref _totalTokensGenerated),
+                RuntimeDegraded = cleanup.FailedCleanups > 0 || cleanup.VerificationFailures > 0
             };
         }
     }
@@ -552,8 +683,13 @@ public class InferenceResult
     public int KvTokensAfter { get; init; } = -1;
     public int KvCellsBefore { get; init; } = -1;
     public int KvCellsAfter { get; init; } = -1;
+    public int KvTokensAfterCleanup { get; init; } = -1;
+    public int KvCellsAfterCleanup { get; init; } = -1;
     public bool UsedFreshContext { get; init; }
-    public bool ClearedKvCache { get; init; }
+
+    // ── Cleanup telemetry ──
+    public CleanupOutcome CleanupResult { get; init; }
+    public double CleanupDurationMs { get; init; }
 
     public static InferenceResult Failed(string error) => new()
     {
@@ -561,6 +697,37 @@ public class InferenceResult
         ErrorMessage = error,
         Provider = "local"
     };
+}
+
+/// <summary>
+/// Outcome of the post-inference cleanup pipeline.
+/// </summary>
+public enum CleanupOutcome
+{
+    /// <summary>Cleanup succeeded, KV verified reset.</summary>
+    Success,
+    /// <summary>Cleanup failed (exception during KvCacheClear).</summary>
+    Failed,
+    /// <summary>KvCacheClear succeeded but verification failed (tokens not reset).</summary>
+    VerificationFailed,
+    /// <summary>Cleanup skipped (fresh context mode or null context).</summary>
+    Skipped
+}
+
+/// <summary>
+/// Telemetry for the cleanup pipeline — survivability-critical infrastructure.
+/// </summary>
+public class CleanupTelemetry
+{
+    public long TotalCleanups { get; init; }
+    public long SuccessfulCleanups { get; init; }
+    public long FailedCleanups { get; init; }
+    public long VerificationFailures { get; init; }
+    public double SuccessRate { get; init; }
+    public double AverageDurationMs { get; init; }
+    public double MaxDurationMs { get; init; }
+    public double MinDurationMs { get; init; }
+    public List<double> RecentDurations { get; init; } = new();
 }
 
 /// <summary>
@@ -586,6 +753,16 @@ public class InferenceEngineTelemetry
     // ── KV cache state ──
     public int KvTokensInCache { get; init; } = -1;
     public int KvUsedCells { get; init; } = -1;
-    public bool ClearKvAfterInference { get; init; }
     public bool FreshContextPerRequest { get; init; }
+
+    // ── Cleanup telemetry ──
+    public CleanupTelemetry? Cleanup { get; init; }
+
+    // ── Survivability metrics ──
+    public bool RuntimeOperational { get; init; }
+    public double RecentSuccessRate { get; init; } = 1.0;
+    public int ConsecutiveFailures { get; init; }
+    public long GeneratedTokensSinceReset { get; init; }
+    public DateTime? LastSuccessfulInferenceAt { get; init; }
+    public bool RuntimeDegraded { get; init; }
 }

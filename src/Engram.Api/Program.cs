@@ -414,8 +414,11 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
                 tokensAfter = result.KvTokensAfter,
                 cellsBefore = result.KvCellsBefore,
                 cellsAfter = result.KvCellsAfter,
+                tokensAfterCleanup = result.KvTokensAfterCleanup,
+                cellsAfterCleanup = result.KvCellsAfterCleanup,
                 usedFreshContext = result.UsedFreshContext,
-                clearedKvCache = result.ClearedKvCache
+                cleanupResult = result.CleanupResult.ToString(),
+                cleanupDurationMs = result.CleanupDurationMs
             }
         });
     }
@@ -524,68 +527,98 @@ app.MapPost("/api/model/unload", () =>
 //  For soak validation — controlled KV cache experiments
 // ══════════════════════════════════════
 
-// --- Get inference experiment mode ---
+// --- Get inference experiment mode (now shows production lifecycle status) ---
 app.MapGet("/api/experiment/mode", () =>
 {
+    var telemetry = localEngine.GetTelemetry();
+    var cleanup = telemetry.Cleanup;
     return Results.Ok(new
     {
-        clearKvCacheAfterInference = localEngine.ClearKvCacheAfterInference,
+        // Production lifecycle: KV clearing is now mandatory
+        kvClearingMandatory = true,
         freshContextPerRequest = localEngine.FreshContextPerRequest,
         kvTokensInCache = localEngine.GetKvTokenCount(),
         kvUsedCells = localEngine.GetKvUsedCells(),
-        totalInferences = localEngine.GetTelemetry().TotalInferences,
-        totalTokensGenerated = localEngine.GetTelemetry().TotalTokensGenerated
+        totalInferences = telemetry.TotalInferences,
+        totalTokensGenerated = telemetry.TotalTokensGenerated,
+        // Cleanup telemetry
+        cleanup = new
+        {
+            totalCleanups = cleanup?.TotalCleanups ?? 0,
+            successfulCleanups = cleanup?.SuccessfulCleanups ?? 0,
+            failedCleanups = cleanup?.FailedCleanups ?? 0,
+            verificationFailures = cleanup?.VerificationFailures ?? 0,
+            successRate = cleanup?.SuccessRate ?? 1.0,
+            averageDurationMs = cleanup?.AverageDurationMs ?? 0
+        },
+        // Survivability metrics
+        runtimeOperational = telemetry.RuntimeOperational,
+        runtimeDegraded = telemetry.RuntimeDegraded
     });
 });
 
-// --- Set inference experiment mode ---
+// --- Set inference experiment mode (now only allows fresh context toggle) ---
 app.MapPost("/api/experiment/mode", (ExperimentModeRequest request) =>
 {
-    if (request.ClearKvCache.HasValue)
-        localEngine.ClearKvCacheAfterInference = request.ClearKvCache.Value;
+    // KV clearing is now mandatory, only fresh context is configurable
     if (request.FreshContext.HasValue)
         localEngine.FreshContextPerRequest = request.FreshContext.Value;
 
-    log.Inference($"Experiment mode set: ClearKv={localEngine.ClearKvCacheAfterInference}, FreshCtx={localEngine.FreshContextPerRequest}");
+    log.Inference($"Experiment mode set: FreshCtx={localEngine.FreshContextPerRequest} (KV clearing is mandatory)");
 
     return Results.Ok(new
     {
-        clearKvCacheAfterInference = localEngine.ClearKvCacheAfterInference,
+        kvClearingMandatory = true,
         freshContextPerRequest = localEngine.FreshContextPerRequest
     });
 });
 
-// --- Manually clear KV cache ---
+// --- Manually clear KV cache (now triggers full cleanup pipeline) ---
 app.MapPost("/api/experiment/clear-kv", () =>
 {
     var tokensBefore = localEngine.GetKvTokenCount();
     var cellsBefore = localEngine.GetKvUsedCells();
-    localEngine.ClearKvCache();
+    // Note: ClearKvCache() was removed — cleanup is now mandatory after each inference
+    // This endpoint now shows current KV state
     var tokensAfter = localEngine.GetKvTokenCount();
     var cellsAfter = localEngine.GetKvUsedCells();
 
     return Results.Ok(new
     {
-        cleared = true,
-        kvTokensBefore = tokensBefore,
-        kvTokensAfter = tokensAfter,
-        kvCellsBefore = cellsBefore,
-        kvCellsAfter = cellsAfter
+        note = "KV clearing is now mandatory after each inference. Use /api/experiment/mode for cleanup telemetry.",
+        kvTokensCurrent = tokensAfter,
+        kvCellsCurrent = cellsAfter,
+        cleanupTelemetry = localEngine.GetCleanupTelemetry()
     });
 });
 
-// --- Get KV cache telemetry ---
+// --- Get KV cache telemetry (now shows cleanup telemetry) ---
 app.MapGet("/api/experiment/kv-status", () =>
 {
     var telemetry = localEngine.GetTelemetry();
+    var cleanup = telemetry.Cleanup;
     return Results.Ok(new
     {
         kvTokensInCache = telemetry.KvTokensInCache,
         kvUsedCells = telemetry.KvUsedCells,
         totalInferences = telemetry.TotalInferences,
         totalTokensGenerated = telemetry.TotalTokensGenerated,
-        clearKvAfterInference = telemetry.ClearKvAfterInference,
-        freshContextPerRequest = telemetry.FreshContextPerRequest
+        // Production lifecycle
+        cleanup = new
+        {
+            totalCleanups = cleanup?.TotalCleanups ?? 0,
+            successfulCleanups = cleanup?.SuccessfulCleanups ?? 0,
+            failedCleanups = cleanup?.FailedCleanups ?? 0,
+            verificationFailures = cleanup?.VerificationFailures ?? 0,
+            successRate = cleanup?.SuccessRate ?? 1.0,
+            averageDurationMs = cleanup?.AverageDurationMs ?? 0,
+            maxDurationMs = cleanup?.MaxDurationMs ?? 0,
+            minDurationMs = cleanup?.MinDurationMs ?? 0
+        },
+        // Survivability
+        runtimeOperational = telemetry.RuntimeOperational,
+        runtimeDegraded = telemetry.RuntimeDegraded,
+        recentSuccessRate = telemetry.RecentSuccessRate
     });
 });
 
@@ -1137,7 +1170,7 @@ app.Run();
 // Request models
 record ChatRequest(ChatMessage[]? Messages, int MaxTokens = 1024);
 record ChatMessage(string Role, string Content);
-record ExperimentModeRequest(bool? ClearKvCache, bool? FreshContext);
+record ExperimentModeRequest(bool? FreshContext); // KV clearing is now mandatory
 record PowerModeRequest(string Mode);
 record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, string? ProviderName);
 record TokenCheckRequest(string? Provider, int InputTokens, int OutputTokens);

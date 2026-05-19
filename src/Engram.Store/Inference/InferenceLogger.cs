@@ -30,6 +30,7 @@ public sealed class InferenceLogger
     public void ModelWarn(string message) => Write("MODEL", message, level: "WARN");
     public void ModelError(string message, Exception? ex = null) => Write("MODEL", message + FormatEx(ex), level: "ERROR");
     public void Inference(string message) => Write("INFERENCE", message);
+    public void InferenceWarn(string message) => Write("INFERENCE", message, level: "WARN");
     public void InferenceError(string message, Exception? ex = null) => Write("INFERENCE", message + FormatEx(ex), level: "ERROR");
     public void Router(string message) => Write("ROUTER", message);
     public void Health(string message) => Write("HEALTH", message);
