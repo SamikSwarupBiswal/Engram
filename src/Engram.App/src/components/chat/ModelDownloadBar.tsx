@@ -1,175 +1,111 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { api } from "../../lib/api";
+import { useState, useEffect, useCallback } from "react";
+import { api, type HealthResponse } from "../../lib/api";
 
 interface ModelDownloadBarProps {
   onComplete: () => void;
   visible?: boolean;
+  health: HealthResponse | null;
 }
 
-type DownloadState = "checking" | "downloading" | "loading" | "ready" | "error";
-
-export function ModelDownloadBar({ onComplete, visible = true }: ModelDownloadBarProps) {
-  const [state, setState] = useState<DownloadState>("checking");
-  const [progress, setProgress] = useState(0);
-  const [statusText, setStatusText] = useState("Checking model status...");
+/**
+ * ModelDownloadBar now reads from the unified /health endpoint.
+ * It does NOT independently poll model status — that was the old fragmented approach.
+ * 
+ * State is RENDERED from backend truth, not INFERRED by frontend.
+ */
+export function ModelDownloadBar({ onComplete, visible = true, health }: ModelDownloadBarProps) {
   const [error, setError] = useState<string | null>(null);
-  const pollIntervalRef = useRef<number | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
-  const stopPolling = () => {
-    if (pollIntervalRef.current !== null) {
-      window.clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
+  // React to lifecycle state changes
+  useEffect(() => {
+    if (!health) return;
+
+    // Model is ready — signal completion
+    if (health.isReady) {
+      onComplete();
+      return;
     }
-  };
 
-  const pollDownload = useCallback(() => {
-    if (pollIntervalRef.current !== null) return;
+    // Clear error when we're no longer in error state
+    if (health.state !== "Error") {
+      setError(null);
+    }
 
-    pollIntervalRef.current = window.setInterval(async () => {
-      try {
-        const status = await api.modelStatus();
-        if (status.downloadError) {
-          stopPolling();
-          setState("error");
-          setError(status.downloadError);
-          return;
-        }
+    // Surface backend errors
+    if (health.state === "Error" && health.error) {
+      setError(health.error);
+    }
+  }, [health, onComplete]);
 
-        if (status.isReady) {
-          stopPolling();
-          setState("ready");
-          onComplete();
-          return;
-        }
+  const handleRetry = useCallback(async () => {
+    setRetrying(true);
+    setError(null);
+    try {
+      // Call lifecycle retry endpoint
+      await fetch(`${"http://127.0.0.1:5000"}/api/health/retry`, { method: "POST" });
+    } catch {
+      setError("Retry failed — API not responding");
+    } finally {
+      setRetrying(false);
+    }
+  }, []);
 
-        if (status.state === "Ready") {
-          // Model is downloaded — try to load it
-          stopPolling();
-          setProgress(100);
-          setStatusText("Model found. Loading into memory...");
-          setState("loading");
-
-          const result = await api.loadModel();
-          if (result.loaded) {
-            setState("ready");
-            onComplete();
-          } else {
-            setState("error");
-            setError("Downloaded but failed to load");
-          }
-          return;
-        }
-
-        if (status.sizeBytes > 0 || status.progress > 0) {
-          const percent = Math.min(99, status.progress * 100);
-          const mb = Math.round(status.sizeBytes / (1024 * 1024));
-          setProgress(percent);
-          setStatusText(mb > 0 ? `Downloading... ${mb} MB` : "Downloading...");
-        }
-      } catch {
-        // API may be busy while the model is downloading or loading.
+  const handleLoadModel = useCallback(async () => {
+    try {
+      const result = await api.loadModel();
+      if (result.loaded) {
+        onComplete();
+      } else {
+        setError("Model download complete but load failed. Check GPU drivers.");
       }
-    }, 2000);
+    } catch {
+      setError("Failed to load model");
+    }
   }, [onComplete]);
 
-  const startDownload = useCallback(async () => {
-    setState("downloading");
-    setProgress(0);
-    setStatusText("Starting download...");
-    setError(null);
+  if (!visible || !health || health.isReady) return null;
 
-    try {
-      await api.downloadModel();
-      pollDownload();
-    } catch {
-      setState("error");
-      setError("Download failed. Check your internet connection.");
-    }
-  }, [pollDownload]);
-
-  const checkModel = useCallback(async () => {
-    try {
-      const status = await api.modelStatus();
-      if (status.isReady) {
-        stopPolling();
-        setState("ready");
-        onComplete();
-        return;
-      }
-
-      if (status.isLoading) {
-        setState("loading");
-        setStatusText("Loading model into memory...");
-        return;
-      }
-
-      if (status.state === "Ready") {
-        // Model is downloaded — try to load
-        setState("loading");
-        setStatusText("Model found. Loading into memory...");
-        const result = await api.loadModel();
-        if (result.loaded) {
-          setState("ready");
-          onComplete();
-        } else {
-          // Model downloaded but can't load (WSL, missing DLLs, etc.)
-          setState("error");
-          setError("Model downloaded but couldn\'t load. Restart the app or check GPU drivers.");
-        }
-        return;
-      }
-
-      if (status.downloadError) {
-        stopPolling();
-        setState("error");
-        setError(status.downloadError);
-        return;
-      }
-
-      if (status.downloadInProgress || status.state === "PartialDownload") {
-        setState("downloading");
-        setProgress(Math.min(99, status.progress * 100));
-        if (status.sizeBytes > 0) {
-          const mb = Math.round(status.sizeBytes / (1024 * 1024));
-          setStatusText(`Downloading... ${mb} MB`);
-        } else {
-          setStatusText("Downloading...");
-        }
-        pollDownload();
-        return;
-      }
-
-      void startDownload();
-    } catch {
-      setState("error");
-      setError("Cannot connect to API");
-    }
-  }, [onComplete, pollDownload, startDownload]);
-
-  useEffect(() => {
-    void checkModel();
-    return () => stopPolling();
-  }, [checkModel]);
-
-  if (!visible || state === "ready") return null;
+  const state = health.state;
+  const progress = health.progress;
 
   return (
     <div className="border-t border-white/[0.06] bg-[#1a1a1a] px-4 py-3">
       <div className="mx-auto max-w-[48rem]">
-        {state === "checking" && (
+        {/* Starting / Detecting Backend */}
+        {(state === "Starting" || state === "DetectingBackend") && (
           <div className="flex items-center gap-3">
             <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
-            <span className="text-[13px] text-[#b4b4b4]">{statusText}</span>
+            <span className="text-[13px] text-[#b4b4b4]">
+              {state === "Starting" ? "Starting Engram..." : `Detecting GPU backend...`}
+            </span>
+            <div className="ml-auto flex gap-1">
+              <div className="h-1 w-1 animate-bounce rounded-full bg-yellow-400" style={{ animationDelay: "0ms" }} />
+              <div className="h-1 w-1 animate-bounce rounded-full bg-yellow-400" style={{ animationDelay: "150ms" }} />
+              <div className="h-1 w-1 animate-bounce rounded-full bg-yellow-400" style={{ animationDelay: "300ms" }} />
+            </div>
           </div>
         )}
 
-        {state === "downloading" && (
+        {/* Backend Ready — waiting for model */}
+        {state === "BackendReady" && (
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 rounded-full bg-cyan-500" />
+            <span className="text-[13px] text-[#ececec]">Engram</span>
+            <span className="text-[11px] text-[#888]">
+              — {health.backend} backend ready. Preparing model...
+            </span>
+          </div>
+        )}
+
+        {/* Downloading Model */}
+        {state === "DownloadingModel" && (
           <div>
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
                 <span className="text-[13px] text-[#ececec]">Engram</span>
-                <span className="text-[11px] text-[#888]">- {statusText}</span>
+                <span className="text-[11px] text-[#888]">— Downloading model...</span>
               </div>
               <span className="text-[12px] font-medium text-emerald-400">{Math.round(progress)}%</span>
             </div>
@@ -182,11 +118,14 @@ export function ModelDownloadBar({ onComplete, visible = true }: ModelDownloadBa
           </div>
         )}
 
-        {state === "loading" && (
+        {/* Loading Model into Memory */}
+        {state === "LoadingModel" && (
           <div className="flex items-center gap-3">
             <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
             <span className="text-[13px] text-[#ececec]">Engram</span>
-            <span className="text-[11px] text-[#888]">- {statusText}</span>
+            <span className="text-[11px] text-[#888]">
+              — Loading model into {health.backend || "GPU"} memory...
+            </span>
             <div className="ml-auto flex gap-1">
               <div className="h-1 w-1 animate-bounce rounded-full bg-blue-400" style={{ animationDelay: "0ms" }} />
               <div className="h-1 w-1 animate-bounce rounded-full bg-blue-400" style={{ animationDelay: "150ms" }} />
@@ -195,17 +134,37 @@ export function ModelDownloadBar({ onComplete, visible = true }: ModelDownloadBa
           </div>
         )}
 
-        {state === "error" && (
+        {/* Error State */}
+        {state === "Error" && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-2 w-2 rounded-full bg-red-500" />
-              <span className="text-[13px] text-red-400">{error}</span>
+              <span className="text-[13px] text-red-400">{error || health.error || "Unknown error"}</span>
             </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleRetry}
+                disabled={retrying}
+                className="rounded-lg border border-white/[0.08] px-3 py-1 text-[12px] text-[#b4b4b4] hover:bg-white/[0.06] disabled:opacity-50"
+              >
+                {retrying ? "Retrying..." : "Retry"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Degraded — CPU fallback */}
+        {state === "Degraded" && (
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 rounded-full bg-orange-500" />
+            <span className="text-[13px] text-orange-400">
+              GPU unavailable — running on CPU (slower)
+            </span>
             <button
-              onClick={() => void startDownload()}
-              className="rounded-lg border border-white/[0.08] px-3 py-1 text-[12px] text-[#b4b4b4] hover:bg-white/[0.06]"
+              onClick={handleLoadModel}
+              className="ml-auto rounded-lg border border-white/[0.08] px-3 py-1 text-[12px] text-[#b4b4b4] hover:bg-white/[0.06]"
             >
-              Retry
+              Load Model
             </button>
           </div>
         )}

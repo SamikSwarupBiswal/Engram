@@ -342,11 +342,27 @@ export const api = {
     }),
 };
 
-export async function checkApiHealth(): Promise<boolean> {
+export interface HealthResponse {
+  state: string;           // Starting | DetectingBackend | BackendReady | DownloadingModel | LoadingModel | Ready | Error | Degraded | Offline
+  backend: string | null;
+  modelLoaded: boolean;
+  modelName: string | null;
+  progress: number;        // 0-100
+  error: string | null;
+  uptimeSeconds: number;
+  retryCount: number;
+  isReady: boolean;
+  canAcceptRequests: boolean;
+  stateHistory: string[];
+  metadata: Record<string, string>;
+}
+
+export async function checkApiHealth(): Promise<HealthResponse | null> {
   try {
-    const res = await fetch(`${API_BASE}/`, { signal: AbortSignal.timeout(3000) });
-    return res.ok;
+    const res = await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    return res.json();
   } catch {
-    return false;
+    return null;
   }
 }

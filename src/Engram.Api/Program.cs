@@ -81,10 +81,23 @@ var driftAlertStore = new DriftAlertStore(paths);
 var archiveManager = new ArchiveManager(nodeStore, salienceScorer, paths);
 var discoverySOP = new DiscoverySOP(identityStore);
 var interventionPolicy = new InterventionPolicy(identityStore);
+// ── Structured Logger ──
+var log = InferenceLogger.Instance;
+log.Boot("Engram.Api starting...");
+log.Boot($"Workspace: {paths.Root}");
+log.Boot($"Runtime: {System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier}");
+log.Boot($"Process ID: {Environment.ProcessId}");
+
+// ── Inference Components ──
 var gpuDetector = new GpuDetector();
 var modelManager = new ModelManager();
 var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
 var inferenceRouter = new InferenceRouter(localEngine);
+
+// ── Lifecycle Manager (single source of truth) ──
+var lifecycle = new InferenceLifecycleManager();
+lifecycle.Configure(gpuDetector, modelManager, localEngine, inferenceRouter);
+
 var tokenBudget = new TokenBudget(paths.Config);
 var gwsManager = new GoogleWorkspaceManager(paths.Config);
 var researchAgent = new ResearchAgent(paths.Config);
@@ -98,18 +111,9 @@ var ocrService = new OcrService();
 var stateDetector = new UiStateDetector();
 var perceptionPipeline = new VisualPerceptionPipeline(paths.Raw, screenCapture, ocrService, stateDetector);
 var layoutSnap = new LayoutSnapService();
-var modelDownloadLock = new object();
-Task? modelDownloadTask = null;
-ModelDownloadProgress? modelDownloadProgress = null;
-string? modelDownloadError = null;
 
-// --- Health ---
-app.MapGet("/api/health", () => Results.Ok(new
-{
-    status = "healthy",
-    timestamp = DateTimeOffset.UtcNow,
-    version = "1.0.0"
-}));
+// ── Health: Single source of truth for all readiness state ──
+app.MapGet("/api/health", () => Results.Ok(lifecycle.GetHealth()));
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -384,22 +388,12 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
     });
 });
 
-// --- Model Status ---
+// --- Model Status (delegates to lifecycle manager) ---
 app.MapGet("/api/model/status", () =>
 {
+    var health = lifecycle.GetHealth();
     var config = ModelManager.Phi4Mini;
     var status = modelManager.GetStatus(config);
-    var gpu = gpuDetector.Detect();
-    bool downloadInProgress;
-    ModelDownloadProgress? latestProgress;
-    string? latestError;
-
-    lock (modelDownloadLock)
-    {
-        downloadInProgress = modelDownloadTask is { IsCompleted: false };
-        latestProgress = modelDownloadProgress;
-        latestError = modelDownloadError;
-    }
 
     return Results.Ok(new
     {
@@ -407,13 +401,13 @@ app.MapGet("/api/model/status", () =>
         description = config.Description,
         state = status.State.ToString(),
         path = status.Path,
-        sizeBytes = latestProgress?.BytesDownloaded ?? status.SizeBytes,
-        progress = latestProgress?.Progress ?? status.Progress,
-        gpu = new { backend = gpu.Backend.ToString(), device = gpu.DeviceName, vramMb = gpu.VramMb, layers = gpu.LayerCount },
-        isReady = localEngine.IsReady,
-        isLoading = localEngine.IsLoading,
-        downloadInProgress,
-        downloadError = latestError
+        sizeBytes = status.SizeBytes,
+        progress = health.Progress,
+        gpu = new { backend = health.Backend ?? "unknown", device = health.Metadata.GetValueOrDefault("gpuDevice", "?"), vramMb = health.Metadata.GetValueOrDefault("gpuVramMb", "0"), layers = health.Metadata.GetValueOrDefault("gpuLayers", "0") },
+        isReady = health.IsReady,
+        isLoading = health.State == "LoadingModel",
+        downloadInProgress = health.State == "DownloadingModel",
+        downloadError = health.State == "Error" ? health.Error : null
     });
 });
 
@@ -421,61 +415,58 @@ app.MapGet("/api/model/status", () =>
 app.MapPost("/api/model/download", () =>
 {
     var config = ModelManager.Phi4Mini;
-
     if (modelManager.IsModelReady(config))
         return Results.Ok(new { status = "already_downloaded", path = ModelManager.GetModelPath(config) });
 
-    lock (modelDownloadLock)
+    // If lifecycle is already handling download (background init), just acknowledge
+    if (lifecycle.State == InferenceState.DownloadingModel)
+        return Results.Accepted("/api/model/status", new { status = "downloading" });
+
+    // Manual download trigger (user clicked download before background init reached this phase)
+    lifecycle.ReportDownloadProgress(0);
+    log.Model("Manual download triggered");
+
+    _ = Task.Run(async () =>
     {
-        if (modelDownloadTask is { IsCompleted: false })
-            return Results.Accepted("/api/model/status", new { status = "downloading" });
-
-        modelDownloadError = null;
-        modelDownloadProgress = null;
-
-        var progress = new Progress<ModelDownloadProgress>(p =>
+        try
         {
-            lock (modelDownloadLock)
+            var progress = new Progress<ModelDownloadProgress>(p =>
             {
-                modelDownloadProgress = p;
-            }
-        });
-
-        modelDownloadTask = Task.Run(async () =>
+                lifecycle.ReportDownloadProgress(p.Progress * 100);
+            });
+            await modelManager.DownloadModelAsync(config, progress, CancellationToken.None);
+            lifecycle.ReportDownloadComplete();
+            log.Model("Manual download complete, transitioning lifecycle");
+            // Lifecycle will pick up from here on next state check
+        }
+        catch (Exception ex)
         {
-            try
-            {
-                await modelManager.DownloadModelAsync(config, progress, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                lock (modelDownloadLock)
-                {
-                    modelDownloadError = ex.Message;
-                }
-            }
-        });
-    }
+            lifecycle.ReportDownloadError(ex.Message);
+            log.ModelError("Manual download failed", ex);
+        }
+    });
 
     return Results.Accepted("/api/model/status", new { status = "downloading" });
 });
 
-// --- Load Model ---
-app.MapPost("/api/model/load", () =>
+// --- Load Model (async via lifecycle manager) ---
+app.MapPost("/api/model/load", async () =>
 {
-    var loaded = localEngine.LoadModel();
+    log.Model("Model load requested via API");
+    var loaded = await lifecycle.LoadModelAsync();
+    var health = lifecycle.GetHealth();
     return Results.Ok(new
     {
         loaded,
-        isReady = localEngine.IsReady,
-        gpu = localEngine.GpuInfo?.Description
+        isReady = health.IsReady,
+        gpu = health.Backend
     });
 });
 
 // --- Unload Model ---
 app.MapPost("/api/model/unload", () =>
 {
-    localEngine.UnloadModel();
+    lifecycle.UnloadModel();
     return Results.Ok(new { unloaded = true });
 });
 
@@ -999,8 +990,28 @@ app.MapPost("/v1/copilotkit", async (HttpContext context) =>
     await context.Response.WriteAsync("data: [DONE]\n\n");
 });
 
-Console.WriteLine("Engram API starting...");
-Console.WriteLine("Workspace: " + paths.Root);
+// --- Lifecycle Logs (for debugging startup) ---
+app.MapGet("/api/health/logs", (int? count) =>
+{
+    return Results.Ok(new { entries = InferenceLogger.Instance.GetRecent(count ?? 50) });
+});
+
+// --- Lifecycle Retry ---
+app.MapPost("/api/health/retry", () =>
+{
+    lifecycle.Retry();
+    return Results.Ok(new { state = lifecycle.State.ToString() });
+});
+
+log.Api("All endpoints registered");
+log.Api($"Listening on: {string.Join(", ", app.Urls)}");
+
+// Start non-blocking background initialization
+log.Lifecycle("Starting background initialization...");
+lifecycle.StartInitialization();
+
+log.Api("=== ENGRAM API READY (accepting HTTP) ===");
+log.Api("Model initialization running in background — poll /api/health for state");
 
 app.Run();
 

@@ -31,7 +31,10 @@ public class ApiEndpointFullTests : IClassFixture<WebApplicationFactory<Program>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("healthy", json.GetProperty("status").GetString());
+        // Health now returns lifecycle state, not static "healthy"
+        Assert.True(json.TryGetProperty("state", out _), "Health response must include 'state' field");
+        Assert.True(json.TryGetProperty("isReady", out _), "Health response must include 'isReady' field");
+        Assert.True(json.TryGetProperty("uptimeSeconds", out _), "Health response must include 'uptimeSeconds' field");
     }
 
     // ─── Identity ───

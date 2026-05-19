@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Sidebar, type ChatSession } from "./components/sidebar/Sidebar";
 import { ChatPanel } from "./components/chat/ChatPanel";
 import { Titlebar } from "./components/layout/Titlebar";
-import { api, checkApiHealth } from "./lib/api";
+import { api, checkApiHealth, type HealthResponse } from "./lib/api";
 import { DiscoveryInterview } from "./components/discovery/DiscoveryInterview";
 import { ModelDownloadBar } from "./components/chat/ModelDownloadBar";
 import { GoogleWorkspacePanel } from "./components/settings/GoogleWorkspacePanel";
@@ -30,19 +30,26 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>(loadSessions);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
   const [discoveryDone, setDiscoveryDone] = useState<boolean | null>(null);
-  const [modelReady, setModelReady] = useState(false);
-  const handleModelReady = useCallback(() => setModelReady(true), []);
+
+  // Derive state from health — single source of truth
+  const apiOnline = health !== null;
+  const modelReady = health?.isReady ?? false;
 
   useEffect(() => {
-    checkApiHealth().then((online) => {
-      setApiOnline(online);
-      if (online) api.discoveryStatus().then(d => setDiscoveryDone(d.complete)).catch(() => setDiscoveryDone(false));
-    });
-    const interval = setInterval(() => checkApiHealth().then(setApiOnline), 15000);
+    // Unified health polling — replaces fragmented health/model checks
+    const pollHealth = async () => {
+      const h = await checkApiHealth();
+      setHealth(h);
+      if (h && discoveryDone === null) {
+        api.discoveryStatus().then(d => setDiscoveryDone(d.complete)).catch(() => setDiscoveryDone(false));
+      }
+    };
+    pollHealth();
+    const interval = setInterval(pollHealth, 3000); // Faster poll during startup
     return () => clearInterval(interval);
-  }, []);
+  }, [discoveryDone]);
 
   const handleNewChat = useCallback(() => {
     const newSession: ChatSession = {
@@ -97,7 +104,8 @@ export default function App() {
           {apiOnline && !modelReady && (
             <ModelDownloadBar
               visible={discoveryDone === true && activeView === "chat"}
-              onComplete={handleModelReady}
+              onComplete={() => {/* modelReady is derived from health, no manual state needed */}}
+              health={health}
             />
           )}
           {discoveryDone === false && (
