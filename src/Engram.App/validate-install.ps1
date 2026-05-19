@@ -62,8 +62,8 @@ $health = Wait-ForState "Ready" 180
 if ($health) {
     Write-Check "Reached Ready state" ($health.state -eq "Ready") "state=$($health.state)"
     Write-Check "Not false-ready" ($health.state -ne "Ready" -or $health.modelLoaded) "modelLoaded=$($health.modelLoaded)"
-    Write-Check "State history includes DetectingBackend" ($health.stateHistory -contains "DetectingBackend") "history=$($health.stateHistory -join ', ')"
-    Write-Check "State history includes LoadingModel" ($health.stateHistory -contains "LoadingModel") ""
+    Write-Check "State history includes DetectingBackend" ($health.stateHistory | Where-Object { $_ -match "DetectingBackend" }) "history=$($health.stateHistory -join ', ')"
+    Write-Check "State history includes LoadingModel" ($health.stateHistory | Where-Object { $_ -match "LoadingModel" }) ""
 } else {
     Write-Check "Reached Ready state" $false "Timed out after 180s"
 }
@@ -73,7 +73,7 @@ Write-Host ""
 Write-Host "[3/7] Backend Detection" -ForegroundColor Yellow
 if ($health) {
     Write-Check "Backend detected" (-not [string]::IsNullOrEmpty($health.backend)) "backend=$($health.backend)"
-    Write-Check "GPU info available" ($health.metadata.ContainsKey("gpuDevice")) "device=$($health.metadata['gpuDevice'])"
+    Write-Check "GPU info available" ($null -ne $health.metadata.gpuDevice) "device=$($health.metadata.gpuDevice)"
 }
 
 # ── Check 4: First Inference ──

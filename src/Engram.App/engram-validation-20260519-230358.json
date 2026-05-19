@@ -1,0 +1,1305 @@
+﻿{
+    "exportedAt":  "2026-05-19T17:33:58.6953517Z",
+    "version":  "1.0.0",
+    "appVersion":  "1.0.0",
+    "system":  {
+                   "os":  "Microsoft Windows 10.0.26200",
+                   "runtime":  "win-x64",
+                   "processorCount":  32,
+                   "is64Bit":  true,
+                   "machineName":  "LAPTOP-KTSI16VC",
+                   "workingSetMb":  3170.2
+               },
+    "lifecycle":  {
+                      "state":  "Ready",
+                      "backend":  "Cpu",
+                      "modelLoaded":  true,
+                      "modelName":  "Phi-4-mini",
+                      "progress":  100,
+                      "error":  null,
+                      "uptimeSeconds":  132,
+                      "retryCount":  0,
+                      "isReady":  true,
+                      "canAcceptRequests":  true,
+                      "stateHistory":  [
+                                           "17:31:46 Starting → DetectingBackend (startup sequence)",
+                                           "17:31:52 DetectingBackend → BackendReady (backend verified: Cpu)",
+                                           "17:31:52 BackendReady → LoadingModel (model file ready)",
+                                           "17:31:52 LoadingModel → Ready (initialization complete)"
+                                       ],
+                      "metadata":  {
+                                       "gpuLayers":  "0",
+                                       "gpuVramMb":  "0",
+                                       "probeSource":  "live",
+                                       "probeDurationMs":  "5760",
+                                       "gpuDevice":  "CPU"
+                                   },
+                      "metrics":  {
+                                      "backendDetectionMs":  4,
+                                      "modelDownloadMs":  null,
+                                      "modelLoadMs":  595,
+                                      "totalStartupMs":  6491,
+                                      "readyAt":  "2026-05-19T17:31:52.850966Z",
+                                      "errorAt":  null,
+                                      "degradationReason":  null,
+                                      "degradationFrom":  "Starting"
+                                  }
+                  },
+    "survivability":  {
+                          "runtimeOperational":  true,
+                          "recentSuccessRate":  1,
+                          "consecutiveFailures":  0,
+                          "generatedTokensSinceReset":  1131,
+                          "lastSuccessfulInferenceAt":  null,
+                          "runtimeDegraded":  false
+                      },
+    "inference":  {
+                      "totalInferences":  101,
+                      "totalTokensGenerated":  1131,
+                      "totalViolations":  0,
+                      "lastInferenceAt":  "2026-05-19T17:33:58.5146215Z",
+                      "kvTokensInCache":  0,
+                      "kvUsedCells":  0,
+                      "freshContextPerRequest":  false
+                  },
+    "cleanup":  {
+                    "totalCleanups":  101,
+                    "successfulCleanups":  101,
+                    "failedCleanups":  0,
+                    "verificationFailures":  0,
+                    "successRate":  1,
+                    "averageDurationMs":  15.648105940594066,
+                    "maxDurationMs":  24.5186,
+                    "minDurationMs":  14.2622,
+                    "recentDurations":  [
+                                            14.9489,
+                                            14.7952,
+                                            14.3567,
+                                            14.2622,
+                                            14.5876,
+                                            16.4488,
+                                            15.4415,
+                                            16.1394,
+                                            14.5978,
+                                            16.2087
+                                        ]
+                },
+    "backendVerdicts":  {
+                            "Cpu":  {
+                                        "backend":  "Cpu",
+                                        "status":  0,
+                                        "failureStage":  null,
+                                        "reason":  null,
+                                        "gpuDevice":  "CPU",
+                                        "driverVersion":  null,
+                                        "vramMb":  0,
+                                        "machineHash":  "38DF02E43376",
+                                        "appVersion":  "1.0.0",
+                                        "timestamp":  "2026-05-19T17:31:52.2435558Z",
+                                        "probeDurationMs":  5760,
+                                        "isExpired":  false
+                                    }
+                        },
+    "logs":  [
+                 {
+                     "timestamp":  "17:33:32.675",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:32.675",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:33.755",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e complete: 10 tokens in 1.1s (9.3 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:33.765",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:33.782",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:33.782",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:33.782",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e: [LIFECYCLE] RuntimeReady — cleanup 17.2ms"
+                 },
+                 {
+                     "timestamp":  "17:33:33.782",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 58d8216e: complete — 10 tokens in 1.1s (9.3 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 17.2ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:33.793",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:33.793",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:34.780",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36 complete: 10 tokens in 1.0s (10.1 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:34.788",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:34.802",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:34.802",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:34.802",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36: [LIFECYCLE] RuntimeReady — cleanup 14.7ms"
+                 },
+                 {
+                     "timestamp":  "17:33:34.802",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 893fda36: complete — 10 tokens in 1.0s (10.1 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.7ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:34.811",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:34.811",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:35.792",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd complete: 10 tokens in 1.0s (10.2 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:35.800",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:35.816",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:35.816",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:35.816",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd: [LIFECYCLE] RuntimeReady — cleanup 15.6ms"
+                 },
+                 {
+                     "timestamp":  "17:33:35.816",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d1fd3dbd: complete — 10 tokens in 1.0s (10.2 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 15.6ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:35.824",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:35.824",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:36.819",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe complete: 10 tokens in 1.0s (10.0 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:36.827",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:36.842",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:36.842",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:36.842",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe: [LIFECYCLE] RuntimeReady — cleanup 14.5ms"
+                 },
+                 {
+                     "timestamp":  "17:33:36.842",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 509d0fbe: complete — 10 tokens in 1.0s (10.0 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.5ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:36.848",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:36.848",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:37.841",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3 complete: 10 tokens in 1.0s (10.1 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:37.849",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:37.864",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:37.864",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:37.864",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3: [LIFECYCLE] RuntimeReady — cleanup 15.0ms"
+                 },
+                 {
+                     "timestamp":  "17:33:37.864",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 87a7a9b3: complete — 10 tokens in 1.0s (10.1 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 15.0ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:37.876",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:37.876",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:38.862",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4 complete: 10 tokens in 1.0s (10.1 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:38.870",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:38.885",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:38.885",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:38.885",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4: [LIFECYCLE] RuntimeReady — cleanup 15.3ms"
+                 },
+                 {
+                     "timestamp":  "17:33:38.885",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 662cefb4: complete — 10 tokens in 1.0s (10.1 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 15.3ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:38.892",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:38.892",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:39.858",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a complete: 10 tokens in 1.0s (10.4 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:39.867",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:39.884",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:39.884",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:39.884",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a: [LIFECYCLE] RuntimeReady — cleanup 17.0ms"
+                 },
+                 {
+                     "timestamp":  "17:33:39.884",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7479327a: complete — 10 tokens in 1.0s (10.4 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 17.0ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:39.894",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:39.894",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:40.884",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8 complete: 10 tokens in 1.0s (10.1 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:40.894",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:40.909",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:40.909",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:40.909",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8: [LIFECYCLE] RuntimeReady — cleanup 15.3ms"
+                 },
+                 {
+                     "timestamp":  "17:33:40.909",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d4f599e8: complete — 10 tokens in 1.0s (10.1 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 15.3ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:40.918",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:40.918",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:41.933",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac complete: 10 tokens in 1.0s (9.9 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:41.942",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:41.960",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:41.960",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:41.960",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac: [LIFECYCLE] RuntimeReady — cleanup 17.7ms"
+                 },
+                 {
+                     "timestamp":  "17:33:41.960",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session bca9cdac: complete — 10 tokens in 1.0s (9.9 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 17.7ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:41.966",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:41.966",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:43.015",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1 complete: 10 tokens in 1.0s (9.5 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:43.024",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:43.040",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:43.040",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:43.040",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1: [LIFECYCLE] RuntimeReady — cleanup 15.9ms"
+                 },
+                 {
+                     "timestamp":  "17:33:43.040",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 7ca70af1: complete — 10 tokens in 1.0s (9.5 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 15.9ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:43.048",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:43.048",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:44.079",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60 complete: 10 tokens in 1.0s (9.7 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:44.088",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:44.103",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:44.103",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:44.103",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60: [LIFECYCLE] RuntimeReady — cleanup 14.8ms"
+                 },
+                 {
+                     "timestamp":  "17:33:44.103",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 3b446c60: complete — 10 tokens in 1.0s (9.7 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.8ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:44.112",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:44.112",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:45.117",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb complete: 10 tokens in 1.0s (10.0 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:45.126",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:45.141",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:45.141",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:45.141",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb: [LIFECYCLE] RuntimeReady — cleanup 14.8ms"
+                 },
+                 {
+                     "timestamp":  "17:33:45.141",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session b3a704fb: complete — 10 tokens in 1.0s (10.0 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.8ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:45.150",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:45.150",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:46.107",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279 complete: 10 tokens in 1.0s (10.4 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:46.115",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:46.131",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:46.131",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:46.131",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279: [LIFECYCLE] RuntimeReady — cleanup 16.2ms"
+                 },
+                 {
+                     "timestamp":  "17:33:46.131",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 29bf6279: complete — 10 tokens in 1.0s (10.4 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 16.2ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:46.141",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:46.141",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:47.123",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb complete: 10 tokens in 1.0s (10.2 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:47.132",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:47.147",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:47.147",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:47.147",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb: [LIFECYCLE] RuntimeReady — cleanup 14.4ms"
+                 },
+                 {
+                     "timestamp":  "17:33:47.147",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session d5b97bfb: complete — 10 tokens in 1.0s (10.2 tok/s) [memΔ: -+0MB] [kv: 0→31→0] [cleanup: Success 14.4ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:47.156",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:47.156",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:48.141",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266 complete: 10 tokens in 1.0s (10.2 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:48.150",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:48.164",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:48.164",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:48.164",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266: [LIFECYCLE] RuntimeReady — cleanup 14.7ms"
+                 },
+                 {
+                     "timestamp":  "17:33:48.164",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55a0b266: complete — 10 tokens in 1.0s (10.2 tok/s) [memΔ: -5MB] [kv: 0→31→0] [cleanup: Success 14.7ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:48.177",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:48.177",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:49.167",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89 complete: 10 tokens in 1.0s (10.1 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:49.175",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:49.190",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:49.190",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:49.190",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89: [LIFECYCLE] RuntimeReady — cleanup 14.9ms"
+                 },
+                 {
+                     "timestamp":  "17:33:49.190",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session ec32ca89: complete — 10 tokens in 1.0s (10.1 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.9ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:49.200",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:49.200",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:50.176",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d complete: 10 tokens in 1.0s (10.3 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:50.184",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:50.198",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:50.198",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:50.198",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d: [LIFECYCLE] RuntimeReady — cleanup 14.8ms"
+                 },
+                 {
+                     "timestamp":  "17:33:50.198",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 975b8e7d: complete — 10 tokens in 1.0s (10.3 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.8ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:50.208",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:50.208",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:51.209",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da complete: 10 tokens in 1.0s (10.0 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:51.217",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:51.232",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:51.232",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:51.232",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da: [LIFECYCLE] RuntimeReady — cleanup 14.4ms"
+                 },
+                 {
+                     "timestamp":  "17:33:51.232",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 55d8c8da: complete — 10 tokens in 1.0s (10.0 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.4ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:51.241",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:51.241",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:52.236",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7 complete: 10 tokens in 1.0s (10.0 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:52.245",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:52.259",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:52.259",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:52.259",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7: [LIFECYCLE] RuntimeReady — cleanup 14.3ms"
+                 },
+                 {
+                     "timestamp":  "17:33:52.259",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 18704bb7: complete — 10 tokens in 1.0s (10.0 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.3ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:52.269",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:52.269",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:53.235",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf complete: 10 tokens in 1.0s (10.3 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:53.243",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:53.258",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:53.258",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:53.258",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf: [LIFECYCLE] RuntimeReady — cleanup 14.6ms"
+                 },
+                 {
+                     "timestamp":  "17:33:53.258",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 9a7265bf: complete — 10 tokens in 1.0s (10.3 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 14.6ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:53.267",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:53.267",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:54.278",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432 complete: 10 tokens in 1.0s (9.9 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:54.288",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:54.304",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:54.304",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:54.304",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432: [LIFECYCLE] RuntimeReady — cleanup 16.4ms"
+                 },
+                 {
+                     "timestamp":  "17:33:54.304",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 34074432: complete — 10 tokens in 1.0s (9.9 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 16.4ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:54.314",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:54.314",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:55.335",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da complete: 10 tokens in 1.0s (9.8 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:55.343",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:55.358",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:55.358",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:55.358",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da: [LIFECYCLE] RuntimeReady — cleanup 15.4ms"
+                 },
+                 {
+                     "timestamp":  "17:33:55.358",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session a303a0da: complete — 10 tokens in 1.0s (9.8 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 15.4ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:55.371",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:55.371",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:56.378",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5 complete: 10 tokens in 1.0s (9.9 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:56.389",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:56.405",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:56.405",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:56.405",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5: [LIFECYCLE] RuntimeReady — cleanup 16.1ms"
+                 },
+                 {
+                     "timestamp":  "17:33:56.405",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 076712e5: complete — 10 tokens in 1.0s (9.9 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 16.1ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:56.415",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:56.415",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:57.439",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a complete: 10 tokens in 1.0s (9.8 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:57.447",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:57.461",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:57.461",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:57.461",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a: [LIFECYCLE] RuntimeReady — cleanup 14.6ms"
+                 },
+                 {
+                     "timestamp":  "17:33:57.461",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 6c3d646a: complete — 10 tokens in 1.0s (9.8 tok/s) [memΔ: +1MB] [kv: 0→31→0] [cleanup: Success 14.6ms]"
+                 },
+                 {
+                     "timestamp":  "17:33:57.471",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2 started (noToken=30s, hard=300s)"
+                 },
+                 {
+                     "timestamp":  "17:33:57.471",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2: generating (maxTokens=20)"
+                 },
+                 {
+                     "timestamp":  "17:33:58.489",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2 complete: 10 tokens in 1.0s (9.8 tok/s)"
+                 },
+                 {
+                     "timestamp":  "17:33:58.498",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2: [LIFECYCLE] PostInferenceCleanupStarted"
+                 },
+                 {
+                     "timestamp":  "17:33:58.514",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2: [LIFECYCLE] KvCacheCleared"
+                 },
+                 {
+                     "timestamp":  "17:33:58.514",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2: [LIFECYCLE] ContextResetValidated — KV tokens: 31→0, cells: 31→0"
+                 },
+                 {
+                     "timestamp":  "17:33:58.514",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2: [LIFECYCLE] RuntimeReady — cleanup 16.2ms"
+                 },
+                 {
+                     "timestamp":  "17:33:58.514",
+                     "tag":  "INFERENCE",
+                     "level":  "INFO",
+                     "message":  "Session 737d3fd2: complete — 10 tokens in 1.0s (9.8 tok/s) [memΔ: +0MB] [kv: 0→31→0] [cleanup: Success 16.2ms]"
+                 }
+             ]
+}
