@@ -33,7 +33,7 @@ public sealed class InferenceSession : IDisposable
     public string SessionId { get; }
     public TimeSpan NoTokenTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public TimeSpan HardTimeout { get; set; } = TimeSpan.FromMinutes(5);
-    public TimeSpan HeartbeatCheckInterval { get; init; } = TimeSpan.FromSeconds(5);
+    public TimeSpan HeartbeatCheckInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     // ── Public state ──
     public long TokensEmitted => Interlocked.Read(ref _tokensEmitted);
