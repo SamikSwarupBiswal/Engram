@@ -335,6 +335,58 @@ app.MapPost("/api/intervention/check", (InterventionRequest request) =>
     });
 });
 
+// ── Engram System Prompt Builder ──
+// Builds context-aware system prompt from user identity, goals, and wiki memory.
+// Keeps it compact — Phi-4-mini has 4096 token context, system prompt must be lean.
+static string BuildEngramSystemPrompt(IdentityStore identityStore, WikiNodeStore nodeStore)
+{
+    var sb = new System.Text.StringBuilder();
+
+    sb.Append("You are Engram, a personal semantic memory assistant. ");
+    sb.Append("You help the user remember decisions, track goals, and recall their digital life. ");
+    sb.Append("You have access to their wiki memory, goals, and preferences. ");
+    sb.Append("Be concise, direct, and personal. Refer to the user by name when natural.\n");
+
+    // User identity
+    var profile = identityStore.LoadProfile();
+    if (profile != null)
+    {
+        sb.Append($"\nUser: {profile.DisplayName}");
+        if (profile.Goals?.Count > 0)
+            sb.Append($"\nGoals: {string.Join("; ", profile.Goals.Take(5))}");
+        if (profile.ComfortTriggers?.Count > 0)
+            sb.Append($"\nPreferences: {string.Join("; ", profile.ComfortTriggers.Take(3))}");
+        if (profile.RecurringAnxieties?.Count > 0)
+            sb.Append($"\nConcerns: {string.Join("; ", profile.RecurringAnxieties.Take(3))}");
+    }
+
+    // Anti-goals (hard constraints)
+    var antiGoals = identityStore.LoadAntiGoals();
+    if (antiGoals?.Count > 0)
+    {
+        sb.Append($"\nAvoid: {string.Join("; ", antiGoals.Take(3).Select(a => a.Description))}");
+    }
+
+    // Recent wiki context (top 5 most salient nodes)
+    try
+    {
+        var nodes = nodeStore.LoadAll()
+            .OrderByDescending(n => n.Salience)
+            .Take(5)
+            .ToList();
+        if (nodes.Count > 0)
+        {
+            sb.Append("\nRecent memory: ");
+            sb.Append(string.Join("; ", nodes.Select(n => $"{n.Title} ({n.NodeType})")));
+        }
+    }
+    catch { }
+
+    sb.Append($"\nDate: {DateTime.Now:yyyy-MM-dd HH:mm}");
+
+    return sb.ToString();
+}
+
 // --- Chat Completions (real inference) ---
 app.MapPost("/v1/chat/completions", async (HttpContext context) =>
 {
@@ -381,9 +433,17 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
     {
         Role = m.Role ?? "user",
         Content = m.Content ?? ""
-    }).ToArray() ?? Array.Empty<Engram.Store.Inference.ChatMessage>();
+    }).ToList() ?? new List<Engram.Store.Inference.ChatMessage>();
 
-    var result = await inferenceRouter.ChatCompletionAsync(messages, body?.MaxTokens ?? 1024, context.RequestAborted);
+    // ── Inject Engram system prompt with user context ──
+    var engramSystemPrompt = BuildEngramSystemPrompt(identityStore, nodeStore);
+    messages.Insert(0, new Engram.Store.Inference.ChatMessage
+    {
+        Role = "system",
+        Content = engramSystemPrompt
+    });
+
+    var result = await inferenceRouter.ChatCompletionAsync(messages.ToArray(), body?.MaxTokens ?? 1024, context.RequestAborted);
 
     if (result.Success)
     {
