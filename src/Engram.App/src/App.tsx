@@ -949,6 +949,30 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
           </div>
         )}
 
+        {/* Runtime Diagnostics */}
+        <div>
+          <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Runtime Diagnostics</h3>
+          <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+            <p className="text-[11px] text-[#888] mb-3">Export runtime diagnostics for support or validation. Includes lifecycle state, cleanup telemetry, backend verdicts, and recent logs.</p>
+            <button onClick={async () => {
+              try {
+                const data = await api.diagnosticsExport();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `engram-diagnostics-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (e) {
+                alert('Failed to export diagnostics: ' + (e instanceof Error ? e.message : 'unknown error'));
+              }
+            }} className="w-full rounded-lg bg-white/[0.06] px-3 py-2 text-[12px] text-[#b4b4b4] hover:bg-white/[0.1]">
+              Export Runtime Diagnostics
+            </button>
+          </div>
+        </div>
+
         {/* Data */}
         <div>
           <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Data</h3>

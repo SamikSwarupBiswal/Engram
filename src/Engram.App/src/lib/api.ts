@@ -340,6 +340,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(config),
     }),
+
+  // Diagnostics Export
+  diagnosticsExport: () =>
+    apiFetch<Record<string, unknown>>("/api/diagnostics/export"),
 };
 
 export interface StartupMetrics {

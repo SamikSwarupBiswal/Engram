@@ -1155,6 +1155,103 @@ app.MapPost("/api/health/retry", () =>
     return Results.Ok(new { state = lifecycle.State.ToString() });
 });
 
+// --- Diagnostics Export (for support + validation) ---
+app.MapGet("/api/diagnostics/export", () =>
+{
+    var health = lifecycle.GetHealth();
+    var inferenceTelemetry = localEngine.GetTelemetry();
+    var cleanupTelemetry = localEngine.GetCleanupTelemetry();
+    var verdicts = verdictStore.GetAll();
+    var recentLogs = InferenceLogger.Instance.GetRecent(200);
+
+    var diagnostics = new
+    {
+        exportedAt = DateTime.UtcNow,
+        version = "1.0.0",
+        appVersion = "1.0.0",
+
+        // System info
+        system = new
+        {
+            os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            runtime = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
+            processorCount = Environment.ProcessorCount,
+            is64Bit = Environment.Is64BitOperatingSystem,
+            machineName = Environment.MachineName,
+            workingSetMb = Math.Round(Environment.WorkingSet / (1024.0 * 1024.0), 1)
+        },
+
+        // Lifecycle state (single source of truth)
+        lifecycle = new
+        {
+            state = health.State,
+            backend = health.Backend,
+            modelLoaded = health.ModelLoaded,
+            modelName = health.ModelName,
+            progress = health.Progress,
+            error = health.Error,
+            uptimeSeconds = health.UptimeSeconds,
+            retryCount = health.RetryCount,
+            isReady = health.IsReady,
+            canAcceptRequests = health.CanAcceptRequests,
+            stateHistory = health.StateHistory,
+            metadata = health.Metadata,
+            metrics = health.Metrics
+        },
+
+        // Survivability metrics
+        survivability = new
+        {
+            runtimeOperational = health.RuntimeOperational,
+            recentSuccessRate = health.RecentSuccessRate,
+            consecutiveFailures = health.ConsecutiveFailures,
+            generatedTokensSinceReset = health.GeneratedTokensSinceReset,
+            lastSuccessfulInferenceAt = health.LastSuccessfulInferenceAt,
+            runtimeDegraded = health.RuntimeDegraded
+        },
+
+        // Inference engine telemetry
+        inference = new
+        {
+            totalInferences = inferenceTelemetry.TotalInferences,
+            totalTokensGenerated = inferenceTelemetry.TotalTokensGenerated,
+            totalViolations = inferenceTelemetry.TotalViolations,
+            lastInferenceAt = inferenceTelemetry.LastInferenceAt,
+            kvTokensInCache = inferenceTelemetry.KvTokensInCache,
+            kvUsedCells = inferenceTelemetry.KvUsedCells,
+            freshContextPerRequest = inferenceTelemetry.FreshContextPerRequest
+        },
+
+        // Cleanup telemetry (survivability-critical)
+        cleanup = new
+        {
+            totalCleanups = cleanupTelemetry.TotalCleanups,
+            successfulCleanups = cleanupTelemetry.SuccessfulCleanups,
+            failedCleanups = cleanupTelemetry.FailedCleanups,
+            verificationFailures = cleanupTelemetry.VerificationFailures,
+            successRate = cleanupTelemetry.SuccessRate,
+            averageDurationMs = cleanupTelemetry.AverageDurationMs,
+            maxDurationMs = cleanupTelemetry.MaxDurationMs,
+            minDurationMs = cleanupTelemetry.MinDurationMs,
+            recentDurations = cleanupTelemetry.RecentDurations
+        },
+
+        // Backend verdicts
+        backendVerdicts = verdicts,
+
+        // Recent logs (last 200 entries)
+        logs = recentLogs.Select(l => new
+        {
+            timestamp = l.Timestamp.ToString("HH:mm:ss.fff"),
+            tag = l.Tag,
+            level = l.Level,
+            message = l.Message
+        })
+    };
+
+    return Results.Ok(diagnostics);
+});
+
 log.Api("All endpoints registered");
 log.Api($"Listening on: {string.Join(", ", app.Urls)}");
 
