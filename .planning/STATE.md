@@ -1,10 +1,10 @@
 # Engram State
 
-**Status:** Semantic Continuity + Cognitive Stabilization COMPLETE.
-**Last Activity:** 2026-05-20
-**Branch:** `soak-validation` (84 commits)
-**Tests:** 1110/1110 passing
-**Latest Commit:** `33a8dd3` feat: add InterventionGenerator — the beginning of actual agency
+**Status:** Behavioral Reality Validation COMPLETE. Truth-preserving cognition operational.
+**Last Activity:** 2026-05-26
+**Branch:** `master`
+**Tests:** 1330/1331 passing (1 pre-existing model file failure)
+**Latest Commit:** `61df7ef` feat: behavioral reality validation — Phase 7 truth-preserving cognition
 
 ## What Engram Is
 
@@ -241,7 +241,11 @@ PUT  /api/identity                  Update profile
 | Contradiction Detector | 10 |
 | Retrieval Budget | 16 |
 | Intervention Generator | 10 |
-| **Total** | **1110** |
+| **Sprint 4: Cognitive Stabilization** | **32** |
+| **Sprint 5: Human-Compatible Cognition** | **23** |
+| **Sprint 6: Semantic Perception** | **22** |
+| **Sprint 7: Behavioral Reality Validation** | **62** |
+| **Total** | **1331** |
 
 ## Billing (Token Budget)
 
@@ -334,6 +338,42 @@ InterventionGenerator creates proactive guidance:
 - "You said this deadline mattered, but no related activity has occurred in 5 days."
 - "You repeatedly mention wanting deep work, but your timeline shows constant context switching."
 - Pattern detection: synthesizes multiple contradictions into higher-level alerts
+
+## Behavioral Reality Validation — COMPLETE (Phase 24, Sprint 7)
+
+The organism now proves it understands reality correctly instead of hallucinating patterns from noise.
+
+### Key Architectural Change
+EnvironmentModel now takes `IBehavioralModeStrategy` — behavioral mode detection is injectable, testable, and replayable. This makes the entire perception layer verifiable.
+
+### Perception Replay System
+- **PerceptionEventRecorder** — captures perception events as immutable snapshots
+- **PerceptionReplayEngine** — deterministic replay through any strategy
+- **InterpretationComparator** — A/B comparison, systematic error detection
+
+### Truth-Preserving Infrastructure
+- **InterpretationAccuracyTracker** — records what Engram concluded vs what was true
+- **FalsePatternDetector** — anti-overinterpretation (research≠procrastination, etc.)
+- **TruthCalibrationStore** — persistent human corrections
+
+### Cognitive Restraint
+9 gates controlling when Engram should speak:
+1. Confidence threshold
+2. Silence threshold
+3. Flow state protection (don't interrupt deep work)
+4. Accuracy gate (stay silent on unreliable modes)
+5. Over-interpretation gate
+6. Frequently corrected gate
+7. Category ignored gate
+8. Intervention fatigue gate
+9. Consecutive suppression release
+
+### Timeline Semantics
+Transforms event history into life continuity:
+- Sessions (contiguous activity periods)
+- Arcs (multi-session efforts)
+- Momentum (building vs fading)
+- Regressions (previously active modes becoming rare)
 
 ## Known Issues
 

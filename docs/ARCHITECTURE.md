@@ -14,6 +14,7 @@ High-level architecture overview for the Engram personal semantic operating laye
 8. **Epistemically restrained:** Confidence-weighted, counter-evidence-aware, narrative-diverse cognition.
 9. **Psychologically sustainable:** Tone regulation, positive evidence, curiosity, user agency protection.
 10. **Privacy-first perception:** Maximum semantic usefulness with minimum invasiveness.
+11. **Truth-preserving cognition:** Interpretations must be verifiable, correctable, and restrained.
 
 ## Layer Architecture
 
@@ -31,6 +32,12 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  NarrativeBalanceController │ CounterEvidenceDetector   │
 │  NarrativeInterpretationEngine │ SemanticHealthMonitor   │
 ├─────────────────────────────────────────────────────────┤
+│                    Behavioral Reality Validation Layer    │
+│  PerceptionEventRecorder │ PerceptionReplayEngine       │
+│  InterpretationComparator │ InterpretationAccuracyTracker│
+│  FalsePatternDetector │ TruthCalibrationStore            │
+│  CognitiveRestraintEngine │ TimelineSemanticsEngine     │
+├─────────────────────────────────────────────────────────┤
 │                    Human-Compatible Cognition Layer       │
 │  ToneBalanceEngine │ MomentumDetector │ CuriosityEngine │
 │  InterventionConsentModel │ ReflectionExpiryEngine      │
@@ -44,8 +51,9 @@ High-level architecture overview for the Engram personal semantic operating laye
 ├─────────────────────────────────────────────────────────┤
 │                    Perception Layer                       │
 │  ActiveWindowService │ FileWatcherService               │
-│  EnvironmentModel │ PerceptionDashboard                 │
+│  EnvironmentModel (IBehavioralModeStrategy) │ PerceptionDashboard │
 │  VisualPerceptionPipeline │ OcrService                  │
+│  BehavioralModeStrategy │ PerceptionEventRecorder       │
 ├─────────────────────────────────────────────────────────┤
 │                    Memory Layer                          │
 │  ConversationMemoryExtractor → WikiMetabolizer           │
@@ -193,7 +201,7 @@ Cycle:
 | Engram.Store/Memory/ | ConversationMemoryExtractor, Pipeline, PromptAssembler | 22 |
 | Engram.Store/Metabolism/ | BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator, InterventionStore, ContradictionHistoryStore, TensionEvolutionEngine, ContradictionResolutionDetector | 23, Sprint 3 |
 | Engram.Store/Metabolism/ | ReflectionConfidenceModel, IdentityStabilityEngine, NarrativeBalanceController, CounterEvidenceDetector, NarrativeInterpretationEngine, SemanticHealthMonitor | Sprint 4 |
-| Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine | Sprint 5 |
+| Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine, CognitiveRestraintEngine | Sprint 5, Sprint 7 |
 | Engram.Store/Orchestration/ | IntentClassifier, TaskRouter | 22 |
 | Engram.Store/Search/ | TF-IDF, SemanticSearchEngine, BriefGenerator | 5, 22 |
 | Engram.Store/Wiki/ | WikiNodeStore, Metabolizer, Serializer | 4 |
@@ -203,7 +211,7 @@ Cycle:
 | Engram.Store/Agent/ | Research agent, browser, citations | 14 |
 | Engram.Store/Automation/ | Action executor, permission gate | 15 |
 | Engram.Store/Security/ | Encryption, export, delete, sync | 16 |
-| Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard | 17, Sprint 6 |
+| Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard, BehavioralModeStrategy, PerceptionEventRecorder, PerceptionReplayEngine, InterpretationComparator, InterpretationAccuracyTracker, FalsePatternDetector, TruthCalibrationStore, TimelineSemanticsEngine | 17, Sprint 6, Sprint 7 |
 | Engram.Store/Cloud/ | Cloud pipeline, providers, audit | 8 |
 | Engram.Store/Billing/ | Token budget, pricing | 9 |
 | Engram.Store/Google/ | Gmail, Calendar, Drive metadata | 13 |

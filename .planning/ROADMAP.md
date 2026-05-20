@@ -21,11 +21,12 @@
 - [x] **Phase 17: Engram System Prompt** [CRITICAL] — 2026-05-19
 - [x] **Phase 18: Semantic Continuity** [CRITICAL] — 2026-05-20
 - [x] **Phase 19: Cognitive Stabilization** [CRITICAL] — 2026-05-20
+- [x] **Phase 20: Behavioral Reality Validation** [CRITICAL] — 2026-05-26
 
 ## Current State
 
-- All 19 phases implemented
-- 1110/1110 tests passing
+- All 20 phases implemented
+- 1330/1331 tests passing (1 pre-existing model file failure)
 - 83 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -36,6 +37,9 @@
 - **Chat is now the intent interface into the semantic operating system**
 - **Background metabolism runs every 5 minutes**
 - **Behavioral intelligence detects contradictions between goals and behavior**
+- **Perception replay system makes interpretations verifiable**
+- **Cognitive restraint engine prevents intervention fatigue**
+- **Human truth calibration keeps interpretations grounded in reality**
 
 ## Architecture State
 
@@ -66,20 +70,21 @@ Background (every 5 minutes):
 3. **Crash reporting** — Capture and report sidecar crashes
 4. **Telemetry opt-in** — Anonymous usage stats for debugging
 
-### Priority 2: Semantic Coherence (STOP horizontal expansion)
+### Priority 2: Semantic Coherence — ADDRESSED
 
-The next phase is NOT more features. It's making the existing semantic organism:
-- Coherent (deduplication, contradiction resolution)
-- Persistent (long-term memory stability)
-- Metabolically stable (background metabolism reliability)
-- Behaviorally trustworthy (intervention accuracy)
+Phase 7 (Behavioral Reality Validation) directly addressed this:
+- Perception replay makes interpretations verifiable
+- False pattern detection prevents over-interpretation
+- Human truth calibration grounds interpretations in reality
+- Cognitive restraint prevents intervention fatigue
+- Timeline semantics provide life continuity
 
-### Priority 3: Intervention Refinement
+### Priority 3: Intervention Refinement — NEXT
 
 1. **Intervention accuracy** — Track which interventions users act on
 2. **Intervention timing** — Don't interrupt focus, deliver at natural breaks
 3. **Intervention personalization** — Learn what types of interventions work
-4. **Intervention fatigue** — Don't overwhelm with too many alerts
+4. **Intervention fatigue** — Don't overwhelm with too many alerts (CognitiveRestraintEngine addresses this)
 
 ### Priority 4: Memory Quality
 
@@ -105,6 +110,12 @@ The next phase is NOT more features. It's making the existing semantic organism:
 - D-070: ContradictionDetector for behavioral intelligence
 - D-071: RetrievalBudgetManager with 2000 token budget
 - D-072: InterventionGenerator with configurable threshold
+- D-073: IBehavioralModeStrategy for injectable mode detection
+- D-074: PerceptionSnapshot as immutable record (input + interpretation + sequence)
+- D-075: CognitiveRestraintEngine with 9 restraint gates
+- D-076: TruthCalibrationStore for persistent human corrections
+- D-077: FalsePatternDetector for anti-overinterpretation
+- D-078: TimelineSemanticsEngine for sessions/arcs/momentum/regressions
 
 ## Anti-Patterns (DO NOT BUILD)
 

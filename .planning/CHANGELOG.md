@@ -752,17 +752,75 @@ Transforming chat-driven cognition into environment-aware cognition.
 
 ---
 
-## Final Statistics (as of Sprint 6)
+## Sprint 7: Behavioral Reality Validation (May 26, 2026)
+
+**Commit:** `61df7ef`
+
+Phase 7 is NOT more features. It proves Engram understands reality correctly instead of hallucinating patterns from noise. The transition from symbolic perception to truth-preserving cognition.
+
+### Architectural Change
+
+**EnvironmentModel** now takes `IBehavioralModeStrategy` — behavioral mode detection is injectable, testable, and replayable. This single change makes the entire perception layer verifiable. The old `DetectBehavioralMode()` private method was extracted into `DefaultBehavioralModeStrategy`.
+
+### New Components (8 files, 3509 lines)
+
+**BehavioralModeStrategy** (IBehavioralModeStrategy + DefaultBehavioralModeStrategy) — Injectable mode detection. The Phase 6 string-match logic becomes the baseline strategy that can be compared against alternatives.
+
+**PerceptionEventRecorder** — Taps EventBus, captures every perception event as an immutable `PerceptionSnapshot` record with raw input, interpretation, sequence number, and strategy name. Max 10,000 snapshots in memory.
+
+**PerceptionReplayEngine** — Deterministic replay of snapshots through any strategy. Same inputs always produce same outputs. Enables A/B comparison of strategies and ground truth validation.
+
+**InterpretationComparator** — Compares interpretation sets, finds divergences, detects systematic error patterns (e.g., "research→browsing" happening repeatedly). Generates comparison reports with divergence rates and pattern counts.
+
+**InterpretationAccuracyTracker** — Records outcomes (Correct, Incorrect, Partial, Unknown). Generates per-mode accuracy reports. Tracks error patterns over time. This is the feedback loop that prevents the semantic graph from diverging from reality.
+
+**FalsePatternDetector** — Anti-overinterpretation infrastructure. Prevents: research≠procrastination, exploration≠drift, context-switching≠instability, fatigue≠abandonment. Detects when modes are being systematically misinterpreted (error rate above threshold with sufficient sample size).
+
+**TruthCalibrationStore** — Persistent human corrections stored as JSON. Correction types: WrongInterpretation, PatternDismissed, Temporary, CategoryIgnored. Enables "was Engram correct?" longitudinal feedback. Not RLHF — real correction.
+
+**CognitiveRestraintEngine** — 9 restraint gates controlling when Engram should speak:
+1. Confidence threshold (don't speak when uncertain)
+2. Silence threshold (respect quiet periods between interventions)
+3. Flow state protection (don't interrupt deep work)
+4. Accuracy gate (stay silent on modes with poor track record)
+5. Over-interpretation gate (suppress flagged modes)
+6. Frequently corrected gate (honor human corrections)
+7. Category ignored gate (respect explicit ignores)
+8. Intervention fatigue gate (max interventions per hour)
+9. Consecutive suppression release (high-severity bypass after prolonged silence)
+
+**TimelineSemanticsEngine** — Transforms event history into life continuity:
+- Sessions: contiguous periods of similar activity (gap > 30min = new session)
+- Arcs: multi-session efforts toward a sustained mode (gap > 2hr = new arc)
+- Momentum signals: is session duration building or fading?
+- Regression signals: previously active modes becoming rare (>20% share drop)
+
+### Telemetry
+
+Phase7Metrics added to CognitiveDiagnosticsSnapshot:
+- PerceptionSnapshotsRecorded, PerceptionReplaysPerformed
+- InterpretationsCorrect/Incorrect/Partial, InterpretationAccuracy
+- OverinterpretationWarnings, HumanCorrectionsRecorded
+- RestraintDecisionsAllowed/Suppressed, RestraintSuppressionRate
+- TimelineSessionsDetected, TimelineArcsDetected, MomentumSignalsDetected, RegressionSignalsDetected
+
+**Tests:** 1330 passing (62 new), 1 pre-existing failure (model file)
+
+---
+
+## Final Statistics (as of Sprint 7)
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 90+ |
-| Test count | 1268/1268 passing (1 pre-existing failure) |
-| C# source files | ~200+ |
-| Lines of code | ~35,000+ |
+| Total commits | 92+ |
+| Test count | 1330/1331 passing (1 pre-existing model file failure) |
+| C# source files | ~210+ |
+| Lines of code | ~38,500+ |
 | API endpoints | 83+ |
-| Cognitive sprints | 6 (Sprint 1-6) |
-| New components (Sprint 3-6) | 21 |
+| Cognitive sprints | 7 (Sprint 1-7) |
+| New components (Sprint 3-7) | 29 |
+| Phase 7 components | 8 |
+| Phase 7 tests | 62 |
 
 ---
 
