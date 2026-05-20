@@ -35,6 +35,7 @@ public class BackgroundMetabolismService : BackgroundService
     private readonly DriftDetector _driftDetector;
     private readonly ArchiveManager _archiveManager;
     private readonly ConversationMemoryExtractor _extractor;
+    private readonly SemanticDeduplicator _deduplicator;
     private readonly IEventBus? _eventBus;
     private readonly ILogger<BackgroundMetabolismService>? _logger;
 
@@ -66,6 +67,7 @@ public class BackgroundMetabolismService : BackgroundService
         DriftDetector driftDetector,
         ArchiveManager archiveManager,
         ConversationMemoryExtractor extractor,
+        SemanticDeduplicator deduplicator,
         IEventBus? eventBus = null,
         ILogger<BackgroundMetabolismService>? logger = null)
     {
@@ -75,6 +77,7 @@ public class BackgroundMetabolismService : BackgroundService
         _driftDetector = driftDetector;
         _archiveManager = archiveManager;
         _extractor = extractor;
+        _deduplicator = deduplicator;
         _eventBus = eventBus;
         _logger = logger;
     }
@@ -133,7 +136,14 @@ public class BackgroundMetabolismService : BackgroundService
             var nodes = _nodeStore.LoadAll();
             result.NodesAnalyzed = nodes.Count;
 
-            // Step 2: Recompute salience for all nodes
+            // Step 2: Deduplicate (prevent wiki rot)
+            var dedupResult = _deduplicator.Deduplicate();
+            result.MergesPerformed = dedupResult.MergesPerformed;
+
+            // Step 3: Reload after dedup
+            nodes = _nodeStore.LoadAll();
+
+            // Step 4: Recompute salience for all nodes
             var salienceUpdated = RecomputeSalience(nodes);
             result.SalienceUpdated = salienceUpdated;
 
@@ -440,6 +450,7 @@ public class MetabolismCycleResult
 {
     public bool Success { get; set; }
     public int NodesAnalyzed { get; set; }
+    public int MergesPerformed { get; set; }
     public int SalienceUpdated { get; set; }
     public int ContradictionsDetected { get; set; }
     public int NodesArchived { get; set; }

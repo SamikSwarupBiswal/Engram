@@ -31,9 +31,10 @@ public class BackgroundMetabolismServiceTests : IDisposable
         _archiveManager = new ArchiveManager(_nodeStore, _salienceScorer, _paths);
         _extractor = new ConversationMemoryExtractor();
         _eventBus = new InMemoryEventBus();
+        var deduplicator = new SemanticDeduplicator(_nodeStore);
         _service = new BackgroundMetabolismService(
             _nodeStore, _metabolizer, _salienceScorer, _driftDetector,
-            _archiveManager, _extractor, _eventBus);
+            _archiveManager, _extractor, deduplicator, _eventBus);
     }
 
     public void Dispose()

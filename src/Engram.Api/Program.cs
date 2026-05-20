@@ -132,9 +132,10 @@ var taskRouter = new Engram.Store.Orchestration.TaskRouter(
     identityStore, salienceScorer, driftDetector, eventBus);
 
 // ── Background Metabolism (the brain) ──
+var deduplicator = new Engram.Store.Metabolism.SemanticDeduplicator(nodeStore);
 var backgroundMetabolism = new Engram.Store.Metabolism.BackgroundMetabolismService(
     nodeStore, wikiMetabolizer, salienceScorer, driftDetector,
-    archiveManager, conversationExtractor, eventBus);
+    archiveManager, conversationExtractor, deduplicator, eventBus);
 // Start as a background hosted service
 _ = backgroundMetabolism.StartAsync(CancellationToken.None);
 var ocrService = new OcrService();
