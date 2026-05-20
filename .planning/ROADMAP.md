@@ -22,11 +22,12 @@
 - [x] **Phase 18: Semantic Continuity** [CRITICAL] — 2026-05-20
 - [x] **Phase 19: Cognitive Stabilization** [CRITICAL] — 2026-05-20
 - [x] **Phase 20: Behavioral Reality Validation** [CRITICAL] — 2026-05-26
+- [x] **Phase 21: Longitudinal Human Reality Testing** [CRITICAL] — 2026-05-26
 
 ## Current State
 
-- All 20 phases implemented
-- 1330/1331 tests passing (1 pre-existing model file failure)
+- All 21 phases implemented
+- 1362/1363 tests passing (1 pre-existing model file failure)
 - 83 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -116,6 +117,10 @@ Phase 7 (Behavioral Reality Validation) directly addressed this:
 - D-076: TruthCalibrationStore for persistent human corrections
 - D-077: FalsePatternDetector for anti-overinterpretation
 - D-078: TimelineSemanticsEngine for sessions/arcs/momentum/regressions
+- D-079: NarrativeDriftAuditor for weekly self-model reality check
+- D-080: InterventionFatigueTracker for user response measurement
+- D-081: AmbiguityToleranceEngine for 'I don't know' infrastructure
+- D-082: SemanticCompressor analyze-only mode (report, don't modify)
 
 ## Anti-Patterns (DO NOT BUILD)
 

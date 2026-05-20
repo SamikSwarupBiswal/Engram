@@ -48,12 +48,15 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  SalienceScorer │ DriftDetector │ ArchiveManager         │
 │  InterventionGenerator │ InterventionStore              │
 │  ContradictionHistoryStore │ TensionEvolutionEngine      │
+│  NarrativeDriftAuditor │ InterventionFatigueTracker     │
+│  MemoryPollutionDetector │ SemanticCompressor            │
 ├─────────────────────────────────────────────────────────┤
 │                    Perception Layer                       │
 │  ActiveWindowService │ FileWatcherService               │
 │  EnvironmentModel (IBehavioralModeStrategy) │ PerceptionDashboard │
 │  VisualPerceptionPipeline │ OcrService                  │
 │  BehavioralModeStrategy │ PerceptionEventRecorder       │
+│  AmbiguityToleranceEngine                               │
 ├─────────────────────────────────────────────────────────┤
 │                    Memory Layer                          │
 │  ConversationMemoryExtractor → WikiMetabolizer           │
@@ -201,7 +204,7 @@ Cycle:
 | Engram.Store/Memory/ | ConversationMemoryExtractor, Pipeline, PromptAssembler | 22 |
 | Engram.Store/Metabolism/ | BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator, InterventionStore, ContradictionHistoryStore, TensionEvolutionEngine, ContradictionResolutionDetector | 23, Sprint 3 |
 | Engram.Store/Metabolism/ | ReflectionConfidenceModel, IdentityStabilityEngine, NarrativeBalanceController, CounterEvidenceDetector, NarrativeInterpretationEngine, SemanticHealthMonitor | Sprint 4 |
-| Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine, CognitiveRestraintEngine | Sprint 5, Sprint 7 |
+| Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine, CognitiveRestraintEngine, NarrativeDriftAuditor, InterventionFatigueTracker, MemoryPollutionDetector, SemanticCompressor | Sprint 5, Sprint 7, Sprint 8 |
 | Engram.Store/Orchestration/ | IntentClassifier, TaskRouter | 22 |
 | Engram.Store/Search/ | TF-IDF, SemanticSearchEngine, BriefGenerator | 5, 22 |
 | Engram.Store/Wiki/ | WikiNodeStore, Metabolizer, Serializer | 4 |
@@ -211,7 +214,7 @@ Cycle:
 | Engram.Store/Agent/ | Research agent, browser, citations | 14 |
 | Engram.Store/Automation/ | Action executor, permission gate | 15 |
 | Engram.Store/Security/ | Encryption, export, delete, sync | 16 |
-| Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard, BehavioralModeStrategy, PerceptionEventRecorder, PerceptionReplayEngine, InterpretationComparator, InterpretationAccuracyTracker, FalsePatternDetector, TruthCalibrationStore, TimelineSemanticsEngine | 17, Sprint 6, Sprint 7 |
+| Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard, BehavioralModeStrategy, PerceptionEventRecorder, PerceptionReplayEngine, InterpretationComparator, InterpretationAccuracyTracker, FalsePatternDetector, TruthCalibrationStore, TimelineSemanticsEngine, AmbiguityToleranceEngine | 17, Sprint 6, Sprint 7, Sprint 8 |
 | Engram.Store/Cloud/ | Cloud pipeline, providers, audit | 8 |
 | Engram.Store/Billing/ | Token budget, pricing | 9 |
 | Engram.Store/Google/ | Gmail, Calendar, Drive metadata | 13 |

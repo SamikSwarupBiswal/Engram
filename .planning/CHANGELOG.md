@@ -812,15 +812,39 @@ Phase7Metrics added to CognitiveDiagnosticsSnapshot:
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 92+ |
-| Test count | 1330/1331 passing (1 pre-existing model file failure) |
-| C# source files | ~210+ |
-| Lines of code | ~38,500+ |
+| Total commits | 94+ |
+| Test count | 1362/1363 passing (1 pre-existing model file failure) |
+| C# source files | ~215+ |
+| Lines of code | ~40,500+ |
 | API endpoints | 83+ |
-| Cognitive sprints | 7 (Sprint 1-7) |
-| New components (Sprint 3-7) | 29 |
+| Cognitive sprints | 8 (Sprint 1-8) |
+| New components (Sprint 3-8) | 34 |
 | Phase 7 components | 8 |
 | Phase 7 tests | 62 |
+| Phase 8 components | 5 |
+| Phase 8 tests | 38 |
+
+---
+
+## Sprint 8: Longitudinal Human Reality Testing (May 26, 2026)
+
+**Commit:** `70bb84f`
+
+The proving ground. Infrastructure for real-world validation over weeks of actual human behavior.
+
+### New Components (5 files, 38 tests)
+
+**NarrativeDriftAuditor** — Weekly self-model reality check. Compares stored self-model (goals, priorities, preferences) against current wiki state. Produces alignment scores (goal alignment, priority alignment, freshness, coherence) and drift warnings. Trend tracking: improving/stable/degrading.
+
+**InterventionFatigueTracker** — Measures how the user responds to interventions: presented, acknowledged, acted, dismissed, ignored, silence. Fatigue score = weighted dismissals + ignores + low action rate. Per-category breakdown. ShouldReduceFrequency() gate.
+
+**MemoryPollutionDetector** — Detects graph degradation: stale nodes (>30 days), orphaned nodes (no links), overrepresented types, retrieval loops (high-salience nodes dominating), low-salience nodes. Pollution score and prune candidates.
+
+**SemanticCompressor** — Analyze-only compression recommendations. Prune candidates (stale + low salience + no links), merge candidates (high title similarity), archive candidates (old + low salience), abstraction candidates (many facts). Does NOT modify graph — only reports.
+
+**AmbiguityToleranceEngine** — Teaches Engram to say "I don't know." 4 ambiguity signals: low confidence, close competition, multiple candidates, negative-default bias. 5 ambiguity levels → 5 actions (proceed confidently → say unknown). FormatAmbiguousResponse() for human-readable output. IsOverConfident() detects systems that NEVER say "I don't know."
+
+**Tests:** 1362/1363 passing (38 new, 1 pre-existing model file failure)
 
 ---
 

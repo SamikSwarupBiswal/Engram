@@ -1,10 +1,10 @@
 # Engram State
 
-**Status:** Behavioral Reality Validation COMPLETE. Truth-preserving cognition operational.
+**Status:** Longitudinal Human Reality Testing COMPLETE. Ambiguity tolerance operational.
 **Last Activity:** 2026-05-26
 **Branch:** `master`
-**Tests:** 1330/1331 passing (1 pre-existing model file failure)
-**Latest Commit:** `61df7ef` feat: behavioral reality validation — Phase 7 truth-preserving cognition
+**Tests:** 1362/1363 passing (1 pre-existing model file failure)
+**Latest Commit:** `70bb84f` feat: longitudinal human reality testing — Phase 8
 
 ## What Engram Is
 
@@ -245,7 +245,8 @@ PUT  /api/identity                  Update profile
 | **Sprint 5: Human-Compatible Cognition** | **23** |
 | **Sprint 6: Semantic Perception** | **22** |
 | **Sprint 7: Behavioral Reality Validation** | **62** |
-| **Total** | **1331** |
+| **Sprint 8: Longitudinal Reality Testing** | **38** |
+| **Total** | **1363** |
 
 ## Billing (Token Budget)
 
@@ -374,6 +375,42 @@ Transforms event history into life continuity:
 - Arcs (multi-session efforts)
 - Momentum (building vs fading)
 - Regressions (previously active modes becoming rare)
+
+## Longitudinal Human Reality Testing — COMPLETE (Phase 25, Sprint 8)
+
+Infrastructure for real-world validation over weeks of actual human behavior.
+
+### Narrative Drift Auditor
+Weekly self-model reality check:
+- Goal alignment (active goals vs total goals)
+- Priority alignment (priorities with recent activity)
+- Freshness (average days since last touch)
+- Coherence (nodes with links vs total)
+- Trend tracking (improving/stable/degrading)
+
+### Intervention Fatigue Tracker
+Measures user response to interventions:
+- Dismissal rate, ignore rate, action rate
+- Fatigue score (weighted: dismissals 0.4, ignores 0.3, low action 0.3)
+- Per-category breakdown
+- ShouldReduceFrequency() gate
+
+### Memory Pollution Detector
+Detects graph degradation:
+- Stale nodes (>30 days), orphaned nodes (no links)
+- Overrepresented types, retrieval loops
+- Prune candidates
+
+### Semantic Compressor
+Analyze-only compression recommendations:
+- Prune, merge, archive, abstraction candidates
+- Does NOT modify graph — only reports
+
+### Ambiguity Tolerance Engine
+Teaches Engram to say "I don't know":
+- 4 ambiguity signals (low confidence, close competition, multiple candidates, negative-default bias)
+- 5 ambiguity levels → 5 actions
+- IsOverConfident() — detects systems that NEVER say "I don't know"
 
 ## Known Issues
 
