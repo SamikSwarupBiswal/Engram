@@ -487,7 +487,7 @@ After: Full context with user identity, goals, memory, and constraints.
 
 ---
 
-## Final Statistics
+## Final Statistics (as of Phase 21)
 
 | Metric | Value |
 |--------|-------|
@@ -498,17 +498,161 @@ After: Full context with user identity, goals, memory, and constraints.
 | API endpoints | 83 |
 | Frontend views | 10 |
 | Installer size | ~77MB |
-| Model size | ~2.3GB (Phi-4-mini Q4_K_M) |
-| Context size | 4096 tokens |
-| Inference speed | ~1.1 tok/s (CPU), ~15-30 tok/s (Vulkan) |
-| Soak test | 100/100 requests, 0 failures, 0 KV misses |
-| Cleanup success rate | 100% |
-| Old collapse threshold | Request 33 |
-| New collapse threshold | None (KV cleared after every request) |
 
 ---
 
-## Architecture Decisions (52+)
+## Phase 22: Semantic Continuity Sprint (May 20)
+
+**Commits:** `9135a8a`, `7c95074`, `5be4683`
+
+The chat endpoint was transformed from a generic chatbot into the intent interface into the semantic operating system.
+
+### IntentClassifier + TaskRouter
+
+**Commit:** `9135a8a`
+
+The central nervous system:
+- `IntentClassifier` — classifies user intent into 7 types via regex/heuristic (no LLM dependency)
+  - MemoryQuery, TimelineQuery, DriftAnalysis, StateSynthesis, ResearchTask, AutomationTask, Conversational
+- `TaskRouter` — routes intents to appropriate subsystems, assembles contextual system prompts
+- Chat endpoint now: User → IntentClassifier → TaskRouter → Contextual Prompt → LLM → Response
+- Every response includes `_intent` metadata (type, confidence, routing_duration_ms, retrieved_nodes)
+
+### Conversation Memory Pipeline
+
+**Commit:** `9135a8a`
+
+Chat conversations now feed the wiki:
+- `ConversationMemoryExtractor` — extracts Person, Project, Goal, Decision, Preference, Anxiety, Task
+- `ConversationMemoryPipeline` — bridges extraction → WikiMetabolizer → wiki nodes
+- `ConversationMemoryCandidate` — memory type enum + candidate model
+- WikiMetabolizer extended for `conversation_*` event types
+- Memory extraction is fire-and-forget (non-blocking)
+
+### PromptAssembler (Retrieval-Augmented)
+
+**Commit:** `9135a8a`
+
+Query-aware prompt assembly:
+- Queries SemanticSearchEngine for relevant wiki nodes
+- Supplements with high-salience fallback nodes
+- Includes identity context (goals, anti-goals, preferences)
+- Replaced shallow `BuildEngramSystemPrompt()` (top 5 salient) with retrieval-aware version
+
+### EventBus + TimelineSubscriber
+
+**Commit:** `9135a8a`
+
+Central event stream:
+- `IEventBus` — interface for pub/sub
+- `InMemoryEventBus` — thread-safe, typed + wildcard + global subscriptions
+- `EventEnvelope` — event type, payload, metadata, correlation ID
+- `TimelineSubscriber` — auto-subscribes to all events, writes to timeline
+- Well-known EventTypes: ChatCompleted, WikiNodeUpdated, MemoryExtracted, DriftDetected, etc.
+
+### SemanticSearchEngine
+
+**Commit:** `9135a8a`
+
+Enhanced hybrid search:
+- Salience weighting (recent/important nodes rank higher)
+- Type-based boosting (Person/Project/Goal get priority)
+- Exact phrase matching (multi-word queries match as phrases)
+- Fuzzy matching for partial matches
+
+**Tests:** 1110/1110 passing (35 IntentClassifier, 21 TaskRouter, 52 ConversationMemory, 19 PromptAssembler, 19 EventBus, 9 TimelineSubscriber, 17 SemanticSearch)
+
+---
+
+## Phase 23: Cognitive Stabilization Sprint (May 20)
+
+**Commits:** `7c95074`, `5be4683`, `afcf7d9`, `33a8dd3`
+
+The semantic organism is now continuously cognitive, not reactive.
+
+### BackgroundMetabolismService
+
+**Commit:** `7c95074`
+
+THE BRAIN — IHostedService running every 5 minutes:
+1. Load all nodes
+2. SemanticDeduplicator — prevent wiki rot
+3. Reload after dedup
+4. SalienceScorer — time decay for all nodes
+5. DriftDetector — contradiction detection
+6. ContradictionDetector — behavioral intelligence
+7. ArchiveManager — archive stale nodes (salience < 0.1)
+8. Generate tension reports
+9. EventBus — emit events
+
+Thread-safe, survives exceptions, tracks cycle history.
+
+### SemanticDeduplicator
+
+**Commit:** `5be4683`
+
+Prevents wiki rot:
+- Computes similarity using title, summary, facts, links
+- Jaccard-like word overlap for text similarity
+- Merges duplicate facts and their sources
+- Keeps node with higher salience
+- Configurable threshold (default 0.7)
+
+### ContradictionDetector
+
+**Commit:** `afcf7d9`
+
+Behavioral intelligence (THE MOAT):
+- **GoalActivityGap** — Goal fading while unrelated activity high
+- **PriorityDrift** — Declared priorities not reflected in behavior
+- **AbandonedCommitment** — Commitment with no follow-through
+- **IdentityBehaviorGap** — Identity claims not supported by behavior
+
+### RetrievalBudgetManager
+
+**Commit:** `afcf7d9`
+
+Prevents prompt entropy explosion:
+- 2000 token budget for retrieved context
+- Scores by salience (0.4), recency (0.3), relevance (0.3)
+- Max 10 nodes, 3 facts per node
+- Compresses context when budget exceeded
+- Integrated into PromptAssembler
+
+### InterventionGenerator
+
+**Commit:** `33a8dd3`
+
+The beginning of actual agency:
+- Generates human-readable intervention messages
+- Synthesizes multiple contradictions into pattern alerts
+- Configurable threshold (Low/Medium/High/Critical)
+- Emits events to EventBus
+- Tracks intervention status (Pending/Acknowledged/Dismissed/Acted)
+
+Example interventions:
+- "You said this deadline mattered, but no related activity has occurred in 5 days."
+- "You repeatedly mention wanting deep work, but your timeline shows constant context switching."
+
+**Tests:** 1110/1110 passing (19 BackgroundMetabolism, 14 Deduplicator, 10 ContradictionDetector, 16 RetrievalBudget, 10 InterventionGenerator)
+
+---
+
+## Final Statistics (as of Phase 23)
+
+| Metric | Value |
+|--------|-------|
+| Total commits | 84 |
+| Test count | 1110/1110 passing |
+| C# source files | ~190 |
+| Lines of code | ~32,000 |
+| API endpoints | 83 |
+| Frontend views | 10 |
+| Installer size | ~77MB |
+
+---
+
+## Architecture Decisions (68+)
 
 Key decisions documented in `.planning/architecture-decisions.md`:
 
@@ -520,12 +664,20 @@ Key decisions documented in `.planning/architecture-decisions.md`:
 - D-048-050: Token budget system
 - D-053-055: AES-256-GCM encryption
 - D-058: Permission gate auto-approves safe actions
+- D-064: Intent classification via regex/heuristic (no LLM dependency)
+- D-065: TaskRouter as central nervous system
+- D-066: ConversationMemoryPipeline as fire-and-forget
+- D-067: EventBus as in-memory pub/sub (no external dependencies)
+- D-068: BackgroundMetabolismService as IHostedService (5min cycle)
+- D-069: SemanticDeduplicator with 0.7 similarity threshold
+- D-070: ContradictionDetector for behavioral intelligence
+- D-071: RetrievalBudgetManager with 2000 token budget
+- D-072: InterventionGenerator with configurable threshold
 
 ---
 
 ## Known Remaining Issues
 
-1. **Installer sidecar crash** — NSIS installs DLLs but Tauri's shell command doesn't resolve them. Fix in progress.
-2. **Vulkan on clean machines** — Need graceful CPU fallback (implemented via BackendProbe + VerdictStore).
-3. **Windows Defender** — May quarantine unsigned binaries. Need code signing for production.
-4. **Frontend system prompt awareness** — The frontend doesn't show what context the model has about the user.
+1. **Windows Defender** — May quarantine unsigned binaries. Need code signing for production.
+2. **Vulkan on clean machines** — BackendProbe + VerdictStore handle graceful CPU fallback.
+3. **Frontend system prompt awareness** — The frontend doesn't show what context the model has about the user.

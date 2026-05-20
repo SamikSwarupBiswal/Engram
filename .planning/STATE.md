@@ -1,16 +1,18 @@
 # Engram State
 
-**Status:** Runtime survivability FIXED. Packaged product VALIDATED. System prompt ACTIVE.
-**Last Activity:** 2026-05-19
-**Branch:** `soak-validation` (77 commits)
-**Tests:** 869/869 passing
-**Latest Commit:** `0d4afc7` feat: Engram system prompt with user identity context
+**Status:** Semantic Continuity + Cognitive Stabilization COMPLETE.
+**Last Activity:** 2026-05-20
+**Branch:** `soak-validation` (84 commits)
+**Tests:** 1110/1110 passing
+**Latest Commit:** `33a8dd3` feat: add InterventionGenerator — the beginning of actual agency
 
 ## What Engram Is
 
 Engram is a persistent semantic operating layer for Windows designed to manage a user's digital life by bridging intent and action. It operates on the principle of Longitudinal Continuity — remembering decisions, extracting commitments, and operating the OS to perform research or tasks on the user's behalf.
 
 Desktop app (Tauri v2 + React) with .NET 8 API sidecar. Install via .exe installer (~77MB). Model auto-downloads on first launch (~2.3GB).
+
+**THE CHAT IS NOT A CHATBOT.** It's the intent interface into the semantic operating system. Every message is classified by intent, routed to the appropriate subsystem, and responded to with contextual memory retrieval.
 
 ## Architecture
 
@@ -20,12 +22,52 @@ User double-clicks Engram
     → Spawns .NET API sidecar on 127.0.0.1:5000
     → Loads React frontend
     → Frontend connects to sidecar automatically
-    → All 10 views work (Chat, Search, Wiki, Timeline, Settings, Archive, Research, Automation, ModelDownloadBar, DiscoveryInterview)
+    → All 10 views work
     → Model auto-downloads on first launch
     → Inference lifecycle: Starting → DetectingBackend → BackendReady → LoadingModel → Ready
-    → Chat uses context-aware system prompt (user identity, goals, wiki memory)
-    → Every inference: KV cache cleared after completion, cleanup verified
+    → Chat uses INTENT-CLASSIFIED, RETRIEVAL-AUGMENTED system prompt
+    → BackgroundMetabolismService runs every 5 minutes
+    → Every inference: KV cache cleared after completion
     → User closes app → sidecar killed
+```
+
+### Chat Pipeline (Intent Interface)
+
+```
+User Message
+↓
+IntentClassifier (7 types: MemoryQuery, TimelineQuery, DriftAnalysis, StateSynthesis, ResearchTask, AutomationTask, Conversational)
+↓
+TaskRouter (central nervous system)
+↓
+(subsystem retrieval)
+  → SemanticSearchEngine (salience + recency + relevance scoring)
+  → WikiNodeStore (knowledge graph)
+  → IdentityStore (goals, priorities, anti-goals)
+  → DriftDetector (behavioral contradictions)
+↓
+PromptAssembler (RetrievalBudgetManager: 2000 token budget)
+↓
+LLM Reasoning (Phi-4-mini)
+↓
+Response + Memory Extraction → WikiMetabolizer → EventBus
+```
+
+### Background Metabolism (The Brain)
+
+```
+BackgroundMetabolismService (every 5 minutes)
+  → SemanticDeduplicator (prevent wiki rot)
+  → SalienceScorer (time decay)
+  → DriftDetector (contradiction detection)
+  → ContradictionDetector (behavioral intelligence)
+    → GoalActivityGap (goal fading while unrelated activity high)
+    → PriorityDrift (declared priorities not reflected in behavior)
+    → AbandonedCommitment (no follow-through)
+    → IdentityBehaviorGap (identity claims not supported by behavior)
+  → ArchiveManager (archive stale nodes)
+  → InterventionGenerator (proactive guidance)
+  → EventBus (emit events)
 ```
 
 ## Tech Stack
@@ -40,7 +82,7 @@ User double-clicks Engram
 | Storage | Markdown files (.engram/) |
 | Cloud | OpenAI-compatible API (any provider) |
 | Encryption | AES-256-GCM |
-| Search | DuckDuckGo HTML |
+| Search | TF-IDF + salience/recency/relevance scoring |
 | OAuth | Google Workspace |
 
 ## Project Structure
@@ -54,15 +96,19 @@ Engram/
 │   │   ├── Billing/           Token budget, pricing
 │   │   ├── Capture/           Event capture (clipboard, files, windows)
 │   │   ├── Cloud/             Cloud pipeline, providers, audit
+│   │   ├── Events/            EventBus, EventEnvelope, TimelineSubscriber
 │   │   ├── Google/            Gmail, Calendar, Drive metadata
 │   │   ├── Identity/          User profile, discovery, intervention
 │   │   ├── Inference/         LLamaSharp, GPU detection, model mgmt, KV lifecycle
+│   │   ├── Memory/            ConversationMemoryExtractor, Pipeline, PromptAssembler
+│   │   ├── Metabolism/        BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator
+│   │   ├── Orchestration/     IntentClassifier, TaskRouter
 │   │   ├── Perception/        Screen capture, OCR, layout snap
 │   │   ├── Salience/          Decay scoring, drift detection
-│   │   ├── Search/            TF-IDF search, brief generator
+│   │   ├── Search/            TF-IDF search, semantic search, brief generator
 │   │   ├── Security/          Encryption, export, delete, sync
 │   │   ├── Validation/        Input validation, sanitization
-│   │   └── Wiki/              Wiki node store, serializer
+│   │   └── Wiki/              Wiki node store, serializer, metabolizer
 │   ├── Engram.Cli/            Developer CLI
 │   ├── Engram.Api/            ASP.NET Minimal API (sidecar)
 │   └── Engram.App/            Tauri + React frontend
@@ -72,7 +118,7 @@ Engram/
 │       ├── build-*.ps1         Build scripts
 │       └── validate-install.ps1  Post-install validation
 ├── tests/
-│   └── Engram.Store.Tests/    869 tests
+│   └── Engram.Store.Tests/    1110 tests
 └── .planning/                 All planning docs
 ```
 
@@ -81,7 +127,7 @@ Engram/
 ```
 GET  /                              Health
 GET  /api/health                    Lifecycle health (single source of truth)
-GET  /api/health/logs               Lifecycle logs (for debugging startup)
+GET  /api/health/logs               Lifecycle logs
 POST /api/health/retry              Retry after error
 GET  /api/search                    Search wiki
 GET  /api/wiki                      List wiki nodes
@@ -145,7 +191,7 @@ POST /api/research/:id/cancel       Cancel research
 POST /api/gws/connect               OAuth token exchange
 POST /api/gws/disconnect            Revoke access
 POST /api/gws/sync                  Sync all metadata
-POST /v1/chat/completions           Chat (real inference with Engram system prompt)
+POST /v1/chat/completions           Chat (intent-classified, retrieval-augmented)
 PUT  /api/identity                  Update profile
 ```
 
@@ -164,7 +210,7 @@ PUT  /api/identity                  Update profile
 | ModelDownloadBar | /api/model/status, /api/model/download, /api/model/load | Connected |
 | DiscoveryInterview | /api/discovery/status, /api/discovery | Connected |
 
-## Tests: 869/869
+## Tests: 1110/1110
 
 | Category | Count |
 |----------|-------|
@@ -183,7 +229,19 @@ PUT  /api/identity                  Update profile
 | API Integration | ~18 |
 | Edge Cases | ~39 |
 | Inference | ~19 |
-| **Total** | **869** |
+| Intent Classifier | 35 |
+| Task Router | 21 |
+| Conversation Memory | 52 |
+| Prompt Assembler | 19 |
+| Event Bus | 19 |
+| Timeline Subscriber | 9 |
+| Semantic Search | 17 |
+| Background Metabolism | 19 |
+| Semantic Deduplicator | 14 |
+| Contradiction Detector | 10 |
+| Retrieval Budget | 16 |
+| Intervention Generator | 10 |
+| **Total** | **1110** |
 
 ## Billing (Token Budget)
 
@@ -203,18 +261,6 @@ Localhost APIs always free (bypass tier guard)
 **Root Cause:** KV cache exhaustion causing catastrophic phase-transition collapse at request ~33
 **Fix:** Mandatory KV cache clearing after every inference request with verification
 
-### Before Fix
-- Collapse at request 33 (deterministic, based on total tokens consumed)
-- Health endpoint reported false-positive "Ready" while runtime was dead
-- No feedback loop from inference failures to lifecycle state
-
-### After Fix
-- 100/100 requests succeed, 0 KV misses
-- Cleanup verification after every request (KV must reset to 0)
-- Auto-transition to Degraded state after 3 consecutive cleanup failures
-- `RuntimeOperational`, `RecentSuccessRate`, `ConsecutiveFailures` in health response
-- Packaged installer validated on clean machine
-
 ### Survivability Metrics (from validation)
 ```
 Soak test: 100/100 requests, 0 failures
@@ -225,14 +271,69 @@ Runtime operational: true
 Post-soak state: Ready
 ```
 
-## Engram System Prompt — ACTIVE
+## Semantic Continuity — COMPLETE (Phase 22)
 
-The chat endpoint now injects a context-aware system prompt:
-- User name, goals, preferences, concerns from IdentityStore
-- Anti-goals as hard constraints
-- Top 5 wiki nodes by salience as recent memory
-- Current date/time
-- Kept lean (~200 tokens) for Phi-4-mini's 4096 context
+The chat endpoint was transformed from a generic chatbot into the intent interface into the semantic operating system.
+
+### Intent Classification
+7 intent types detected from user messages:
+- **MemoryQuery** — "What do you know about..." → retrieves from wiki
+- **TimelineQuery** — "What was I doing..." → queries activity history
+- **DriftAnalysis** — "Am I making progress?" → compares goals vs behavior
+- **StateSynthesis** — "What matters most?" → synthesizes current state
+- **ResearchTask** — "Find the best..." → research on topic
+- **AutomationTask** — "Open VSCode..." → executes actions
+- **Conversational** — general chat → standard prompt assembly
+
+### Memory Pipeline
+Every chat conversation automatically:
+1. Extracts entities (Person, Project, Goal, Decision, Preference, Anxiety, Task)
+2. Converts to RawEvents
+3. Feeds to WikiMetabolizer
+4. Creates/updates wiki nodes
+5. Publishes events to EventBus
+6. Invalidates search index
+
+### Event Bus
+Central event stream connecting all subsystems:
+- Typed subscriptions (e.g., "chat.completed")
+- Wildcard subscriptions (e.g., "wiki.*")
+- Global subscriptions (all events)
+- Thread-safe, non-blocking publish
+
+## Cognitive Stabilization — COMPLETE (Phase 23)
+
+The semantic organism is now continuously cognitive, not reactive.
+
+### BackgroundMetabolismService
+IHostedService running every 5 minutes:
+1. SemanticDeduplicator — prevents wiki rot
+2. SalienceScorer — time decay for all nodes
+3. DriftDetector — contradiction detection
+4. ContradictionDetector — behavioral intelligence
+5. ArchiveManager — archives stale nodes
+6. InterventionGenerator — proactive guidance
+7. EventBus — emits events
+
+### Behavioral Intelligence (The Moat)
+ContradictionDetector compares declared intent vs observed behavior:
+- **GoalActivityGap** — Goal fading while unrelated activity high
+- **PriorityDrift** — Declared priorities not reflected in behavior
+- **AbandonedCommitment** — Commitment with no follow-through
+- **IdentityBehaviorGap** — Identity claims not supported by behavior
+
+### Retrieval Hygiene
+RetrievalBudgetManager prevents prompt entropy explosion:
+- 2000 token budget for retrieved context
+- Scores by salience (0.4), recency (0.3), relevance (0.3)
+- Max 10 nodes, 3 facts per node
+- Compresses context when budget exceeded
+
+### Intervention Engine
+InterventionGenerator creates proactive guidance:
+- "You said this deadline mattered, but no related activity has occurred in 5 days."
+- "You repeatedly mention wanting deep work, but your timeline shows constant context switching."
+- Pattern detection: synthesizes multiple contradictions into higher-level alerts
 
 ## Known Issues
 
@@ -240,34 +341,15 @@ The chat endpoint now injects a context-aware system prompt:
 2. **Vulkan on clean machines** — BackendProbe + VerdictStore handle graceful CPU fallback.
 3. **Frontend system prompt awareness** — The frontend doesn't show what context the model has about the user.
 
-## Decisions (52+)
+## Decisions (68+)
 
-D-001..D-035: Earlier phases
-D-036: Power Mode = Eco/Turbo
-D-037: .NET sidecar as inference router
-D-038: Installer variants
-D-039: Model at %LOCALAPPDATA%/Engram/models/
-D-040: Vulkan fallback chain
-D-041: Min hardware requirements
-D-042: CopilotKit runtimeUrl
-D-043: Tauri spawns .NET sidecar
-D-044: Discovery interview on first launch
-D-045: Intervention policy gates proactive actions
-D-046: OpenAI-compatible provider
-D-047: Localhost APIs always free
-D-048: Token budget system
-D-049: Token pricing model
-D-050: Token packs
-D-051: Atomic TryReserve
-D-052: WikiNodeStore.Delete
-D-053: AES-256-GCM encryption
-D-054: PBKDF2 key derivation (100k iterations)
-D-055: Secure wipe before delete
-D-056: Hash-based sync dedup
-D-057: DuckDuckGo for research (no API key)
-D-058: Permission gate auto-approves safe actions
-D-059: KV cache clearing mandatory after every request
-D-060: Cleanup verification (KV must reset to 0)
-D-061: Degraded state after 3 consecutive cleanup failures
-D-062: Diagnostics export for support/validation
-D-063: Context-aware system prompt from user identity + wiki
+D-001..D-063: Earlier phases
+D-064: Intent classification via regex/heuristic (no LLM dependency)
+D-065: TaskRouter as central nervous system
+D-066: ConversationMemoryPipeline as fire-and-forget
+D-067: EventBus as in-memory pub/sub (no external dependencies)
+D-068: BackgroundMetabolismService as IHostedService (5min cycle)
+D-069: SemanticDeduplicator with 0.7 similarity threshold
+D-070: ContradictionDetector for behavioral intelligence
+D-071: RetrievalBudgetManager with 2000 token budget
+D-072: InterventionGenerator with configurable threshold

@@ -9,44 +9,135 @@ High-level architecture overview for the Engram personal semantic operating laye
 3. **Source-linked memory:** Every wiki fact traces back to raw event evidence.
 4. **Replaceable providers:** OCR, models, browser automation, and workspace connectors sit behind interfaces.
 5. **Consent-driven:** Sensitive capture sources are disabled by default. Excluded apps are never captured.
+6. **Continuously cognitive:** Background metabolism runs every 5 minutes. Engram is not reactive.
+7. **Intent-driven chat:** The chat is the intent interface into the semantic operating system, not a generic chatbot.
 
 ## Layer Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    User Surfaces                         │
-│  Engram.Tray (system tray)  │  Engram.Search (Alt+Space)│
+│  Engram.App (Tauri + React)  │  Chat (Intent Interface) │
+├─────────────────────────────────────────────────────────┤
+│                    Orchestration Layer                    │
+│  IntentClassifier → TaskRouter → Subsystem Retrieval    │
+│  PromptAssembler (RetrievalBudgetManager)                │
 ├─────────────────────────────────────────────────────────┤
 │                    Intelligence Layer                     │
-│  Engram.Memory (wiki, metabolizer, drift, salience)      │
-│  Engram.Agents (research, synthesis, automation)         │
+│  BackgroundMetabolismService (IHostedService, 5min)      │
+│  SemanticDeduplicator │ ContradictionDetector            │
+│  SalienceScorer │ DriftDetector │ ArchiveManager         │
+│  InterventionGenerator                                   │
+├─────────────────────────────────────────────────────────┤
+│                    Memory Layer                          │
+│  ConversationMemoryExtractor → WikiMetabolizer           │
+│  WikiNodeStore │ SemanticSearchEngine                    │
+│  EventBus │ TimelineSubscriber                           │
 ├─────────────────────────────────────────────────────────┤
 │                    Ingestion Layer                        │
-│  Engram.Connectors (file, clipboard, OCR, GWS, browser) │
+│  ClipboardWatcher │ ActiveWindowTracker │ FileWatcher    │
+│  OcrService │ GoogleWorkspaceManager                     │
 ├─────────────────────────────────────────────────────────┤
-│                    Service Layer                         │
-│  Engram.Service (background process, scheduling, routing)│
+│                    Inference Layer                        │
+│  InferenceRouter │ LocalInferenceEngine │ CloudPipeline  │
+│  InferenceLifecycleManager │ GpuDetector                 │
 ├─────────────────────────────────────────────────────────┤
 │                    Storage Layer                         │
-│  Engram.Store (.engram/ local workspace, raw events)     │
-├─────────────────────────────────────────────────────────┤
-│                    Cloud Layer (Pro Tier)                 │
-│  Engram.CloudGateway (model routing, cost controls)      │
-│  Engram.CleanCache (shared non-private research cache)   │
-│  Engram.Sync (encrypted multi-device continuity)         │
+│  .engram/raw/ (immutable events)                         │
+│  .engram/wiki/ (metabolized memory)                      │
+│  .engram/config/ (identity, priorities, anti-goals)      │
+│  .engram/archives/ (decayed nodes)                       │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## Data Flow
 
 ```
-[Capture Sources] → [Raw Events] → [Wiki Memory] → [Search/Briefs]
-       │                  │              │                │
-   File watcher      .engram/raw/    .engram/wiki/    Alt+Space
-   Clipboard         YYYY-MM-DD/     *.md nodes       Morning brief
-   Active window     [event_id].json index.md         Evening brief
-   OCR/Screenshot                   user_identity.md
-   GWS metadata                     priorities.md
+[User Message]
+      ↓
+[IntentClassifier] → 7 intent types
+      ↓
+[TaskRouter] → route to subsystem
+      ↓
+[SemanticSearchEngine] + [WikiNodeStore] + [IdentityStore]
+      ↓
+[PromptAssembler] + [RetrievalBudgetManager]
+      ↓
+[LLM Reasoning] → Response
+      ↓
+[ConversationMemoryExtractor] → [WikiMetabolizer] → [WikiNodeStore]
+      ↓
+[EventBus] → [TimelineSubscriber] → [.engram/raw/]
+
+--- Background (every 5 minutes) ---
+
+[BackgroundMetabolismService]
+      ↓
+[SemanticDeduplicator] → merge duplicates
+      ↓
+[SalienceScorer] → time decay
+      ↓
+[ContradictionDetector] → behavioral intelligence
+      ↓
+[ArchiveManager] → archive stale nodes
+      ↓
+[InterventionGenerator] → proactive guidance
+      ↓
+[EventBus] → emit events
+```
+
+## Chat Pipeline (Intent Interface)
+
+The chat is NOT a generic chatbot. It's the intent interface into the semantic operating system.
+
+```
+User: "What do you know about my startup?"
+      ↓
+IntentClassifier → MemoryQuery (confidence: 0.85)
+      ↓
+TaskRouter → HandleMemoryQuery()
+      ↓
+SemanticSearchEngine.Search("startup") → retrieve relevant wiki nodes
+      ↓
+PromptAssembler → assemble contextual system prompt with retrieved nodes
+      ↓
+LLM → reason over memory graph
+      ↓
+Response + Memory Extraction → WikiMetabolizer → wiki nodes
+```
+
+### Intent Types
+
+| Intent | Example | Subsystem |
+|--------|---------|-----------|
+| MemoryQuery | "What do you know about..." | SemanticSearchEngine |
+| TimelineQuery | "What was I doing..." | WikiNodeStore (recent) |
+| DriftAnalysis | "Am I making progress?" | ContradictionDetector |
+| StateSynthesis | "What matters most?" | IdentityStore + WikiNodeStore |
+| ResearchTask | "Find the best..." | ResearchAgent |
+| AutomationTask | "Open VSCode..." | ActionExecutor |
+| Conversational | "Hello" | PromptAssembler |
+
+## Background Metabolism (The Brain)
+
+The BackgroundMetabolismService runs every 5 minutes as an IHostedService:
+
+```
+Cycle:
+1. Load all wiki nodes
+2. SemanticDeduplicator → merge duplicates (prevent wiki rot)
+3. Reload after dedup
+4. SalienceScorer → recompute salience (time decay)
+5. DriftDetector → detect contradictions
+6. ContradictionDetector → behavioral intelligence
+   - GoalActivityGap (goal fading while unrelated activity high)
+   - PriorityDrift (declared priorities not reflected in behavior)
+   - AbandonedCommitment (no follow-through)
+   - IdentityBehaviorGap (identity claims not supported by behavior)
+7. ArchiveManager → archive stale nodes (salience < 0.1)
+8. Generate tension reports
+9. InterventionGenerator → proactive guidance
+10. EventBus → emit events
 ```
 
 ## Local Store Layout (.engram/)
@@ -75,17 +166,27 @@ High-level architecture overview for the Engram personal semantic operating laye
 
 | Project | Purpose | Phase |
 |---------|---------|-------|
-| Engram.Store | Local store library, raw event writer, workspace init | 1 |
-| Engram.Cli | Developer CLI, init/replay commands | 1 |
-| Engram.Service | Background Windows process, scheduling, routing | 3+ |
-| Engram.Tray | System tray UI (context, credits, pause) | 5 |
-| Engram.Search | Alt+Space semantic search surface | 5 |
-| Engram.Connectors | File watcher, clipboard, active-window, OCR, GWS | 3, 9 |
-| Engram.Memory | Raw-to-wiki metabolizer, salience, drift detector | 4, 6, 7 |
-| Engram.Agents | Research runner, synthesis, computer-use automation | 10, 11 |
-| Engram.CloudGateway | Model routing, cost controls, managed credit pooling | 8 |
-| Engram.CleanCache | Shared non-private research cache | 8 |
-| Engram.Sync | Encrypted multi-device sync | 12 |
+| Engram.Store | Core library (all logic) | 1+ |
+| Engram.Store/Events/ | EventBus, TimelineSubscriber | 22 |
+| Engram.Store/Memory/ | ConversationMemoryExtractor, Pipeline, PromptAssembler | 22 |
+| Engram.Store/Metabolism/ | BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator | 23 |
+| Engram.Store/Orchestration/ | IntentClassifier, TaskRouter | 22 |
+| Engram.Store/Search/ | TF-IDF, SemanticSearchEngine, BriefGenerator | 5, 22 |
+| Engram.Store/Wiki/ | WikiNodeStore, Metabolizer, Serializer | 4 |
+| Engram.Store/Identity/ | User profile, discovery, intervention | 6 |
+| Engram.Store/Salience/ | Decay scoring, drift detection | 7 |
+| Engram.Store/Inference/ | LLamaSharp, GPU detection, model mgmt, KV lifecycle | 11 |
+| Engram.Store/Agent/ | Research agent, browser, citations | 14 |
+| Engram.Store/Automation/ | Action executor, permission gate | 15 |
+| Engram.Store/Security/ | Encryption, export, delete, sync | 16 |
+| Engram.Store/Perception/ | Screen capture, OCR, layout snap | 17 |
+| Engram.Store/Cloud/ | Cloud pipeline, providers, audit | 8 |
+| Engram.Store/Billing/ | Token budget, pricing | 9 |
+| Engram.Store/Google/ | Gmail, Calendar, Drive metadata | 13 |
+| Engram.Store/Capture/ | Event capture (clipboard, files, windows) | 3 |
+| Engram.Cli | Developer CLI | 1 |
+| Engram.Api | ASP.NET Minimal API (sidecar) | 1 |
+| Engram.App | Tauri + React frontend | 10 |
 
 ## Provider Interfaces
 

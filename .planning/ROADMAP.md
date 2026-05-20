@@ -19,11 +19,13 @@
 - [x] **Phase 15: Runtime Survivability** [CRITICAL] — 2026-05-19
 - [x] **Phase 16: Packaged Product Validation** [CRITICAL] — 2026-05-19
 - [x] **Phase 17: Engram System Prompt** [CRITICAL] — 2026-05-19
+- [x] **Phase 18: Semantic Continuity** [CRITICAL] — 2026-05-20
+- [x] **Phase 19: Cognitive Stabilization** [CRITICAL] — 2026-05-20
 
 ## Current State
 
-- All 17 phases implemented
-- 869/869 tests passing
+- All 19 phases implemented
+- 1110/1110 tests passing
 - 83 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -31,6 +33,29 @@
 - Runtime survivability FIXED (100/100 soak test)
 - Engram system prompt ACTIVE (user identity + wiki context)
 - Diagnostics export + post-install validation script
+- **Chat is now the intent interface into the semantic operating system**
+- **Background metabolism runs every 5 minutes**
+- **Behavioral intelligence detects contradictions between goals and behavior**
+
+## Architecture State
+
+```
+User Message
+  → IntentClassifier (7 types)
+  → TaskRouter (central nervous system)
+  → SemanticSearchEngine + WikiNodeStore + IdentityStore
+  → PromptAssembler + RetrievalBudgetManager
+  → LLM Reasoning
+  → Response + Memory Extraction → WikiMetabolizer → EventBus
+
+Background (every 5 minutes):
+  → SemanticDeduplicator (prevent wiki rot)
+  → SalienceScorer (time decay)
+  → ContradictionDetector (behavioral intelligence)
+  → ArchiveManager (archive stale nodes)
+  → InterventionGenerator (proactive guidance)
+  → EventBus (emit events)
+```
 
 ## What's Next
 
@@ -41,28 +66,55 @@
 3. **Crash reporting** — Capture and report sidecar crashes
 4. **Telemetry opt-in** — Anonymous usage stats for debugging
 
-### Priority 2: Intelligence Enhancement
+### Priority 2: Semantic Coherence (STOP horizontal expansion)
 
-1. **Context window management** — Summarize old conversation turns when context fills
-2. **Wiki-aware responses** — Model can query wiki during conversation (tool use)
-3. **Memory metabolism** — Automatic wiki node creation from conversation
-4. **Drift detection in chat** — Detect when user contradicts stored goals
+The next phase is NOT more features. It's making the existing semantic organism:
+- Coherent (deduplication, contradiction resolution)
+- Persistent (long-term memory stability)
+- Metabolically stable (background metabolism reliability)
+- Behaviorally trustworthy (intervention accuracy)
 
-### Priority 3: Multi-Device
+### Priority 3: Intervention Refinement
 
-1. **Cloud sync** — Encrypted wiki sync across devices
-2. **Multi-device identity** — Same user profile on multiple machines
-3. **Conflict resolution** — Merge wiki changes from multiple devices
+1. **Intervention accuracy** — Track which interventions users act on
+2. **Intervention timing** — Don't interrupt focus, deliver at natural breaks
+3. **Intervention personalization** — Learn what types of interventions work
+4. **Intervention fatigue** — Don't overwhelm with too many alerts
 
-### Priority 4: Advanced Automation
+### Priority 4: Memory Quality
 
-1. **Browser automation** — Playwright-based web research
-2. **Email automation** — Draft emails, schedule meetings
-3. **File organization** — Auto-sort Downloads, rename files
-4. **Calendar intelligence** — Proactive scheduling suggestions
+1. **Fact verification** — Cross-reference facts across sources
+2. **Source confidence** — Weight facts by source reliability
+3. **Memory consolidation** — Merge related facts over time
+4. **Memory forgetting** — Intentional forgetting of irrelevant details
 
-### Priority 5: Platform Expansion
+### Priority 5: Platform Expansion (DEFERRED)
 
 1. **macOS support** — Tauri supports macOS, need LLamaSharp backend
 2. **Linux support** — Tauri + LLamaSharp work on Linux
 3. **Mobile companion** — iOS/Android app for quick capture
+
+## Key Decisions
+
+- D-064: Intent classification via regex/heuristic (no LLM dependency)
+- D-065: TaskRouter as central nervous system
+- D-066: ConversationMemoryPipeline as fire-and-forget
+- D-067: EventBus as in-memory pub/sub (no external dependencies)
+- D-068: BackgroundMetabolismService as IHostedService (5min cycle)
+- D-069: SemanticDeduplicator with 0.7 similarity threshold
+- D-070: ContradictionDetector for behavioral intelligence
+- D-071: RetrievalBudgetManager with 2000 token budget
+- D-072: InterventionGenerator with configurable threshold
+
+## Anti-Patterns (DO NOT BUILD)
+
+- ❌ MCP integration
+- ❌ Multi-agent systems
+- ❌ Browser-use hype
+- ❌ Cloud sync
+- ❌ Voice assistants
+- ❌ Mobile apps
+- ❌ Giant vector databases
+- ❌ Autonomous internet agents
+
+**Reason:** The bottleneck is semantic coherence, not features. Adding more features before the existing system is coherent will create more fragmentation.
