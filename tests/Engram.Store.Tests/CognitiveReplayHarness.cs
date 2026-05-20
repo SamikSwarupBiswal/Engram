@@ -82,6 +82,13 @@ public class CognitiveReplayHarness : IDisposable
     public CognitiveRestraintEngine RestraintEngine { get; }
     public TimelineSemanticsEngine TimelineSemantics { get; }
 
+    // Phase 8: Longitudinal Human Reality Testing
+    public NarrativeDriftAuditor DriftAuditor { get; }
+    public InterventionFatigueTracker FatigueTracker { get; }
+    public MemoryPollutionDetector PollutionDetector { get; }
+    public SemanticCompressor Compressor { get; }
+    public AmbiguityToleranceEngine AmbiguityEngine { get; }
+
     // Events & telemetry
     public InMemoryEventBus EventBus { get; }
     public CognitiveTelemetry Telemetry { get; }
@@ -155,6 +162,13 @@ public class CognitiveReplayHarness : IDisposable
         CalibrationStore = new TruthCalibrationStore(Path.Combine(_tempDir, "calibration"));
         RestraintEngine = new CognitiveRestraintEngine();
         TimelineSemantics = new TimelineSemanticsEngine();
+
+        // Phase 8: Longitudinal Human Reality Testing
+        DriftAuditor = new NarrativeDriftAuditor(NodeStore, IdentityStore);
+        FatigueTracker = new InterventionFatigueTracker();
+        PollutionDetector = new MemoryPollutionDetector(NodeStore);
+        Compressor = new SemanticCompressor(NodeStore);
+        AmbiguityEngine = new AmbiguityToleranceEngine();
 
         // Background metabolism (the brain)
         MetabolismService = new BackgroundMetabolismService(

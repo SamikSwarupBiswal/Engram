@@ -98,6 +98,18 @@ public class CognitiveTelemetry
     private long _momentumSignalsDetected;
     private long _regressionSignalsDetected;
 
+    // ── Phase 8: Longitudinal Human Reality Testing ──
+    private long _driftAuditsRun;
+    private double _lastDriftAlignment;
+    private long _phase8InterventionsDismissed;
+    private long _phase8InterventionsIgnored;
+    private long _phase8InterventionsActedOn;
+    private long _memoryPollutionWarnings;
+    private long _compressionActionsExecuted;
+    private long _ambiguityEvaluations;
+    private long _ambiguousObservations;
+    private long _unknownClassifications;
+
     // ── System ──
     private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
 
@@ -476,6 +488,67 @@ public class CognitiveTelemetry
     };
 
     // ═══════════════════════════════════════════
+    // PHASE 8: LONGITUDINAL HUMAN REALITY TESTING
+    // ═══════════════════════════════════════════
+
+    public void RecordDriftAudit(double alignment)
+    {
+        Interlocked.Increment(ref _driftAuditsRun);
+        _lastDriftAlignment = alignment;
+    }
+
+    public void RecordInterventionDismissed()
+    {
+        Interlocked.Increment(ref _phase8InterventionsDismissed);
+    }
+
+    public void RecordInterventionIgnored()
+    {
+        Interlocked.Increment(ref _phase8InterventionsIgnored);
+    }
+
+    public void RecordInterventionActedOn()
+    {
+        Interlocked.Increment(ref _phase8InterventionsActedOn);
+    }
+
+    public void RecordMemoryPollutionWarning()
+    {
+        Interlocked.Increment(ref _memoryPollutionWarnings);
+    }
+
+    public void RecordCompressionAction()
+    {
+        Interlocked.Increment(ref _compressionActionsExecuted);
+    }
+
+    public void RecordAmbiguityEvaluation(bool isAmbiguous)
+    {
+        Interlocked.Increment(ref _ambiguityEvaluations);
+        if (isAmbiguous)
+            Interlocked.Increment(ref _ambiguousObservations);
+    }
+
+    public void RecordUnknownClassification()
+    {
+        Interlocked.Increment(ref _unknownClassifications);
+    }
+
+    public Phase8Metrics GetPhase8Metrics() => new()
+    {
+        DriftAuditsRun = Interlocked.Read(ref _driftAuditsRun),
+        LastDriftAlignment = _lastDriftAlignment,
+        InterventionsDismissed = Interlocked.Read(ref _phase8InterventionsDismissed),
+        InterventionsIgnored = Interlocked.Read(ref _phase8InterventionsIgnored),
+        InterventionsActedOn = Interlocked.Read(ref _phase8InterventionsActedOn),
+        MemoryPollutionWarnings = Interlocked.Read(ref _memoryPollutionWarnings),
+        CompressionActionsExecuted = Interlocked.Read(ref _compressionActionsExecuted),
+        AmbiguityEvaluations = Interlocked.Read(ref _ambiguityEvaluations),
+        AmbiguousObservations = Interlocked.Read(ref _ambiguousObservations),
+        UnknownClassifications = Interlocked.Read(ref _unknownClassifications)
+    };
+
+    // ═══════════════════════════════════════════
     // FULL DIAGNOSTICS SNAPSHOT
     // ═══════════════════════════════════════════
 
@@ -496,7 +569,8 @@ public class CognitiveTelemetry
         Timeline = GetTimelineMetrics(),
         Automation = GetAutomationMetrics(),
         Perception = GetPerceptionMetrics(),
-        Phase7 = GetPhase7Metrics()
+        Phase7 = GetPhase7Metrics(),
+        Phase8 = GetPhase8Metrics()
     };
 }
 
@@ -518,6 +592,7 @@ public class CognitiveDiagnosticsSnapshot
     public AutomationMetrics Automation { get; set; } = new();
     public PerceptionMetrics Perception { get; set; } = new();
     public Phase7Metrics Phase7 { get; set; } = new();
+    public Phase8Metrics Phase8 { get; set; } = new();
 }
 
 public class MemoryPipelineMetrics
@@ -633,6 +708,28 @@ public class Phase7Metrics
 
     public double RestraintSuppressionRate => (RestraintDecisionsAllowed + RestraintDecisionsSuppressed) > 0
         ? (double)RestraintDecisionsSuppressed / (RestraintDecisionsAllowed + RestraintDecisionsSuppressed)
+        : 0;
+}
+
+public class Phase8Metrics
+{
+    public long DriftAuditsRun { get; set; }
+    public double LastDriftAlignment { get; set; }
+    public long InterventionsDismissed { get; set; }
+    public long InterventionsIgnored { get; set; }
+    public long InterventionsActedOn { get; set; }
+    public long MemoryPollutionWarnings { get; set; }
+    public long CompressionActionsExecuted { get; set; }
+    public long AmbiguityEvaluations { get; set; }
+    public long AmbiguousObservations { get; set; }
+    public long UnknownClassifications { get; set; }
+
+    public double InterventionDismissalRate => (InterventionsDismissed + InterventionsIgnored + InterventionsActedOn) > 0
+        ? (double)InterventionsDismissed / (InterventionsDismissed + InterventionsIgnored + InterventionsActedOn)
+        : 0;
+
+    public double AmbiguityRate => AmbiguityEvaluations > 0
+        ? (double)AmbiguousObservations / AmbiguityEvaluations
         : 0;
 }
 
