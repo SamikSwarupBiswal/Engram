@@ -1,4 +1,5 @@
 using Engram.Store;
+using Engram.Store.Events;
 using Engram.Store.Search;
 using Engram.Store.Wiki;
 using Engram.Store.Salience;
@@ -112,6 +113,23 @@ var keyManager = new KeyManager(paths.Config);
 var dataExport = new DataExport(paths.Root);
 var dataDelete = new DataDelete(paths.Root);
 var screenCapture = new ScreenCaptureService();
+
+// ── Memory Pipeline (semantic continuity) ──
+var conversationExtractor = new Engram.Store.Memory.ConversationMemoryExtractor();
+var eventBus = new Engram.Store.Events.InMemoryEventBus();
+var memoryPipeline = new Engram.Store.Memory.ConversationMemoryPipeline(conversationExtractor, new WikiMetabolizer(nodeStore), eventBus);
+var promptAssembler = new Engram.Store.Memory.PromptAssembler(identityStore, nodeStore, searchEngine);
+var wikiMetabolizer = new WikiMetabolizer(nodeStore);
+var timelineSubscriber = new TimelineSubscriber(eventBus, writer);
+timelineSubscriber.Start(); // Start listening to all events
+
+// ── Task Router (intent orchestration) ──
+var intentClassifier = new Engram.Store.Orchestration.IntentClassifier();
+var semanticSearchEngine = new Engram.Store.Search.SemanticSearchEngine(nodeStore, salienceScorer);
+var driftDetector = new Engram.Store.Salience.DriftDetector(nodeStore);
+var taskRouter = new Engram.Store.Orchestration.TaskRouter(
+    intentClassifier, semanticSearchEngine, nodeStore, promptAssembler,
+    identityStore, salienceScorer, driftDetector, eventBus);
 var ocrService = new OcrService();
 var stateDetector = new UiStateDetector();
 var perceptionPipeline = new VisualPerceptionPipeline(paths.Raw, screenCapture, ocrService, stateDetector);
@@ -335,59 +353,8 @@ app.MapPost("/api/intervention/check", (InterventionRequest request) =>
     });
 });
 
-// ── Engram System Prompt Builder ──
-// Builds context-aware system prompt from user identity, goals, and wiki memory.
-// Keeps it compact — Phi-4-mini has 4096 token context, system prompt must be lean.
-static string BuildEngramSystemPrompt(IdentityStore identityStore, WikiNodeStore nodeStore)
-{
-    var sb = new System.Text.StringBuilder();
-
-    sb.Append("You are Engram, a personal semantic memory assistant. ");
-    sb.Append("You help the user remember decisions, track goals, and recall their digital life. ");
-    sb.Append("You have access to their wiki memory, goals, and preferences. ");
-    sb.Append("Be concise, direct, and personal. Refer to the user by name when natural.\n");
-
-    // User identity
-    var profile = identityStore.LoadProfile();
-    if (profile != null)
-    {
-        sb.Append($"\nUser: {profile.DisplayName}");
-        if (profile.Goals?.Count > 0)
-            sb.Append($"\nGoals: {string.Join("; ", profile.Goals.Take(5))}");
-        if (profile.ComfortTriggers?.Count > 0)
-            sb.Append($"\nPreferences: {string.Join("; ", profile.ComfortTriggers.Take(3))}");
-        if (profile.RecurringAnxieties?.Count > 0)
-            sb.Append($"\nConcerns: {string.Join("; ", profile.RecurringAnxieties.Take(3))}");
-    }
-
-    // Anti-goals (hard constraints)
-    var antiGoals = identityStore.LoadAntiGoals();
-    if (antiGoals?.Count > 0)
-    {
-        sb.Append($"\nAvoid: {string.Join("; ", antiGoals.Take(3).Select(a => a.Description))}");
-    }
-
-    // Recent wiki context (top 5 most salient nodes)
-    try
-    {
-        var nodes = nodeStore.LoadAll()
-            .OrderByDescending(n => n.Salience)
-            .Take(5)
-            .ToList();
-        if (nodes.Count > 0)
-        {
-            sb.Append("\nRecent memory: ");
-            sb.Append(string.Join("; ", nodes.Select(n => $"{n.Title} ({n.NodeType})")));
-        }
-    }
-    catch { }
-
-    sb.Append($"\nDate: {DateTime.Now:yyyy-MM-dd HH:mm}");
-
-    return sb.ToString();
-}
-
 // --- Chat Completions (real inference) ---
+// This is NOT a generic chatbot — it's the intent interface into the semantic operating system.
 app.MapPost("/v1/chat/completions", async (HttpContext context) =>
 {
     // ── Lifecycle guard: reject requests when not ready ──
@@ -429,24 +396,45 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
         context.Request.Body,
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
+    var userMessage = body?.Messages?.LastOrDefault()?.Content ?? "";
+
+    // ── Step 1: Classify intent ──
+    var intent = intentClassifier.Classify(userMessage);
+    log.Router($"Intent: {intent.Intent} ({intent.Confidence:F2}) from '{userMessage[..Math.Min(50, userMessage.Length)]}'");
+
+    // ── Step 2: Route through TaskRouter to get contextual system prompt ──
+    var taskResult = await taskRouter.RouteAsync(userMessage, context.RequestAborted);
+
+    // ── Step 3: Build message array with contextual system prompt ──
     var messages = body?.Messages?.Select(m => new Engram.Store.Inference.ChatMessage
     {
         Role = m.Role ?? "user",
         Content = m.Content ?? ""
     }).ToList() ?? new List<Engram.Store.Inference.ChatMessage>();
 
-    // ── Inject Engram system prompt with user context ──
-    var engramSystemPrompt = BuildEngramSystemPrompt(identityStore, nodeStore);
+    // Use the task router's contextual system prompt (not generic)
     messages.Insert(0, new Engram.Store.Inference.ChatMessage
     {
         Role = "system",
-        Content = engramSystemPrompt
+        Content = taskResult.SystemPrompt
     });
 
+    // ── Step 4: Run inference ──
     var result = await inferenceRouter.ChatCompletionAsync(messages.ToArray(), body?.MaxTokens ?? 1024, context.RequestAborted);
 
     if (result.Success)
     {
+        // ── Step 5: Memory Pipeline: extract memories from this conversation ──
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                memoryPipeline.ProcessConversation(userMessage, result.Content ?? "");
+                searchEngine.InvalidateIndex(); // Rebuild search index with new nodes
+            }
+            catch { /* Memory extraction is fire-and-forget */ }
+        });
+
         return Results.Ok(new
         {
             id = "chatcmpl-" + Guid.NewGuid().ToString("n"),
@@ -468,6 +456,13 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
             },
             model = result.Model,
             provider = result.Provider,
+            _intent = new
+            {
+                type = intent.Intent.ToString(),
+                confidence = intent.Confidence,
+                routing_duration_ms = taskResult.Duration.TotalMilliseconds,
+                retrieved_nodes = taskResult.RetrievedNodes.Count
+            },
             _kv = new
             {
                 tokensBefore = result.KvTokensBefore,
