@@ -2,6 +2,7 @@ using Engram.Store.Events;
 using Engram.Store.Identity;
 using Engram.Store.Memory;
 using Engram.Store.Metabolism;
+using Engram.Store.Perception;
 using Engram.Store.Salience;
 using Engram.Store.Search;
 using Engram.Store.Wiki;
@@ -71,6 +72,16 @@ public class CognitiveReplayHarness : IDisposable
     public RetrievalBudgetManager BudgetManager { get; }
     public PromptAssembler PromptAssembler { get; }
 
+    // Phase 7: Behavioral Reality Validation
+    public PerceptionEventRecorder PerceptionRecorder { get; }
+    public PerceptionReplayEngine ReplayEngine { get; }
+    public InterpretationComparator Comparator { get; }
+    public InterpretationAccuracyTracker AccuracyTracker { get; }
+    public FalsePatternDetector FalsePatternDetector { get; }
+    public TruthCalibrationStore CalibrationStore { get; }
+    public CognitiveRestraintEngine RestraintEngine { get; }
+    public TimelineSemanticsEngine TimelineSemantics { get; }
+
     // Events & telemetry
     public InMemoryEventBus EventBus { get; }
     public CognitiveTelemetry Telemetry { get; }
@@ -134,6 +145,16 @@ public class CognitiveReplayHarness : IDisposable
         CuriosityEngine = new CuriosityEngine(NodeStore, ContradictionHistoryStore, MomentumDetector);
         ConsentModel = new InterventionConsentModel(Paths);
         ExpiryEngine = new ReflectionExpiryEngine(ContradictionHistoryStore, InterventionStore);
+
+        // Phase 7: Behavioral Reality Validation
+        PerceptionRecorder = new PerceptionEventRecorder(EventBus);
+        ReplayEngine = new PerceptionReplayEngine();
+        Comparator = new InterpretationComparator();
+        AccuracyTracker = new InterpretationAccuracyTracker();
+        FalsePatternDetector = new FalsePatternDetector(AccuracyTracker);
+        CalibrationStore = new TruthCalibrationStore(Path.Combine(_tempDir, "calibration"));
+        RestraintEngine = new CognitiveRestraintEngine();
+        TimelineSemantics = new TimelineSemanticsEngine();
 
         // Background metabolism (the brain)
         MetabolismService = new BackgroundMetabolismService(

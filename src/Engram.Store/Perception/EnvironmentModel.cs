@@ -21,6 +21,7 @@ namespace Engram.Store.Perception;
 public class EnvironmentModel
 {
     private readonly IEventBus _eventBus;
+    private readonly IBehavioralModeStrategy _modeStrategy;
     private readonly ILogger<EnvironmentModel>? _logger;
 
     private readonly object _lock = new();
@@ -34,9 +35,11 @@ public class EnvironmentModel
 
     public EnvironmentModel(
         IEventBus eventBus,
+        IBehavioralModeStrategy? modeStrategy = null,
         ILogger<EnvironmentModel>? logger = null)
     {
         _eventBus = eventBus;
+        _modeStrategy = modeStrategy ?? new DefaultBehavioralModeStrategy();
         _logger = logger;
     }
 
@@ -65,8 +68,8 @@ public class EnvironmentModel
                 _currentPrimaryProject = project;
             }
 
-            // Detect behavioral mode
-            var newMode = DetectBehavioralMode(processName, windowTitle, focusDuration);
+            // Detect behavioral mode via strategy (injectable for replay)
+            var newMode = _modeStrategy.DetectMode(processName, windowTitle, focusDuration);
             if (newMode != _currentBehavioralMode)
             {
                 TransitionBehavioralMode(newMode);
@@ -160,49 +163,6 @@ public class EnvironmentModel
 
             return distribution;
         }
-    }
-
-    private string DetectBehavioralMode(string processName, string windowTitle, TimeSpan focusDuration)
-    {
-        var processLower = processName.ToLowerInvariant();
-        var titleLower = windowTitle.ToLowerInvariant();
-
-        // Deep work: long focus on code/editor
-        if (focusDuration.TotalMinutes > 10 &&
-            (processLower.Contains("code") || processLower.Contains("visual studio") ||
-             processLower.Contains("intellij") || processLower.Contains("vim")))
-        {
-            return "deep_work";
-        }
-
-        // Research: browser with research-related titles
-        if (processLower.Contains("chrome") || processLower.Contains("firefox") || processLower.Contains("edge"))
-        {
-            if (titleLower.Contains("search") || titleLower.Contains("stackoverflow") ||
-                titleLower.Contains("github") || titleLower.Contains("documentation") ||
-                titleLower.Contains("mdn") || titleLower.Contains("wiki"))
-            {
-                return "research";
-            }
-            return "browsing";
-        }
-
-        // Communication
-        if (processLower.Contains("slack") || processLower.Contains("teams") ||
-            processLower.Contains("discord") || processLower.Contains("outlook"))
-        {
-            return "communication";
-        }
-
-        // Terminal/CLI work
-        if (processLower.Contains("terminal") || processLower.Contains("cmd") ||
-            processLower.Contains("powershell") || processLower.Contains("wt"))
-        {
-            return "terminal_work";
-        }
-
-        // Default: context switching or exploration
-        return "exploration";
     }
 
     private void TransitionBehavioralMode(string newMode)

@@ -82,6 +82,22 @@ public class CognitiveTelemetry
     private long _activeWindowEventsProcessed;
     private long _semanticSummariesGenerated;
 
+    // ── Phase 7: Behavioral Reality Validation ──
+    private long _perceptionSnapshotsRecorded;
+    private long _perceptionReplaysPerformed;
+    private long _interpretationDivergencesFound;
+    private long _interpretationsCorrect;
+    private long _interpretationsIncorrect;
+    private long _interpretationsPartial;
+    private long _overinterpretationWarnings;
+    private long _humanCorrectionsRecorded;
+    private long _restraintDecisionsAllowed;
+    private long _restraintDecisionsSuppressed;
+    private long _timelineSessionsDetected;
+    private long _timelineArcsDetected;
+    private long _momentumSignalsDetected;
+    private long _regressionSignalsDetected;
+
     // ── System ──
     private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
 
@@ -391,6 +407,75 @@ public class CognitiveTelemetry
     };
 
     // ═══════════════════════════════════════════
+    // PHASE 7: BEHAVIORAL REALITY VALIDATION
+    // ═══════════════════════════════════════════
+
+    public void RecordPerceptionSnapshot()
+    {
+        Interlocked.Increment(ref _perceptionSnapshotsRecorded);
+    }
+
+    public void RecordPerceptionReplay(int divergences)
+    {
+        Interlocked.Increment(ref _perceptionReplaysPerformed);
+        Interlocked.Add(ref _interpretationDivergencesFound, divergences);
+    }
+
+    public void RecordInterpretationOutcome(bool correct, bool partial = false)
+    {
+        if (correct)
+            Interlocked.Increment(ref _interpretationsCorrect);
+        else if (partial)
+            Interlocked.Increment(ref _interpretationsPartial);
+        else
+            Interlocked.Increment(ref _interpretationsIncorrect);
+    }
+
+    public void RecordOverinterpretationWarning()
+    {
+        Interlocked.Increment(ref _overinterpretationWarnings);
+    }
+
+    public void RecordHumanCorrection()
+    {
+        Interlocked.Increment(ref _humanCorrectionsRecorded);
+    }
+
+    public void RecordRestraintDecision(bool allowed)
+    {
+        if (allowed)
+            Interlocked.Increment(ref _restraintDecisionsAllowed);
+        else
+            Interlocked.Increment(ref _restraintDecisionsSuppressed);
+    }
+
+    public void RecordTimelineAnalysis(int sessions, int arcs, int momentum, int regressions)
+    {
+        Interlocked.Add(ref _timelineSessionsDetected, sessions);
+        Interlocked.Add(ref _timelineArcsDetected, arcs);
+        Interlocked.Add(ref _momentumSignalsDetected, momentum);
+        Interlocked.Add(ref _regressionSignalsDetected, regressions);
+    }
+
+    public Phase7Metrics GetPhase7Metrics() => new()
+    {
+        PerceptionSnapshotsRecorded = Interlocked.Read(ref _perceptionSnapshotsRecorded),
+        PerceptionReplaysPerformed = Interlocked.Read(ref _perceptionReplaysPerformed),
+        InterpretationDivergencesFound = Interlocked.Read(ref _interpretationDivergencesFound),
+        InterpretationsCorrect = Interlocked.Read(ref _interpretationsCorrect),
+        InterpretationsIncorrect = Interlocked.Read(ref _interpretationsIncorrect),
+        InterpretationsPartial = Interlocked.Read(ref _interpretationsPartial),
+        OverinterpretationWarnings = Interlocked.Read(ref _overinterpretationWarnings),
+        HumanCorrectionsRecorded = Interlocked.Read(ref _humanCorrectionsRecorded),
+        RestraintDecisionsAllowed = Interlocked.Read(ref _restraintDecisionsAllowed),
+        RestraintDecisionsSuppressed = Interlocked.Read(ref _restraintDecisionsSuppressed),
+        TimelineSessionsDetected = Interlocked.Read(ref _timelineSessionsDetected),
+        TimelineArcsDetected = Interlocked.Read(ref _timelineArcsDetected),
+        MomentumSignalsDetected = Interlocked.Read(ref _momentumSignalsDetected),
+        RegressionSignalsDetected = Interlocked.Read(ref _regressionSignalsDetected)
+    };
+
+    // ═══════════════════════════════════════════
     // FULL DIAGNOSTICS SNAPSHOT
     // ═══════════════════════════════════════════
 
@@ -410,7 +495,8 @@ public class CognitiveTelemetry
         Retrieval = GetRetrievalMetrics(),
         Timeline = GetTimelineMetrics(),
         Automation = GetAutomationMetrics(),
-        Perception = GetPerceptionMetrics()
+        Perception = GetPerceptionMetrics(),
+        Phase7 = GetPhase7Metrics()
     };
 }
 
@@ -431,6 +517,7 @@ public class CognitiveDiagnosticsSnapshot
     public TimelineMetrics Timeline { get; set; } = new();
     public AutomationMetrics Automation { get; set; } = new();
     public PerceptionMetrics Perception { get; set; } = new();
+    public Phase7Metrics Phase7 { get; set; } = new();
 }
 
 public class MemoryPipelineMetrics
@@ -521,6 +608,32 @@ public class PerceptionMetrics
     public long OcrEventsProcessed { get; set; }
     public long ActiveWindowEventsProcessed { get; set; }
     public long SemanticSummariesGenerated { get; set; }
+}
+
+public class Phase7Metrics
+{
+    public long PerceptionSnapshotsRecorded { get; set; }
+    public long PerceptionReplaysPerformed { get; set; }
+    public long InterpretationDivergencesFound { get; set; }
+    public long InterpretationsCorrect { get; set; }
+    public long InterpretationsIncorrect { get; set; }
+    public long InterpretationsPartial { get; set; }
+    public long OverinterpretationWarnings { get; set; }
+    public long HumanCorrectionsRecorded { get; set; }
+    public long RestraintDecisionsAllowed { get; set; }
+    public long RestraintDecisionsSuppressed { get; set; }
+    public long TimelineSessionsDetected { get; set; }
+    public long TimelineArcsDetected { get; set; }
+    public long MomentumSignalsDetected { get; set; }
+    public long RegressionSignalsDetected { get; set; }
+
+    public double InterpretationAccuracy => (InterpretationsCorrect + InterpretationsIncorrect + InterpretationsPartial) > 0
+        ? (double)InterpretationsCorrect / (InterpretationsCorrect + InterpretationsIncorrect + InterpretationsPartial)
+        : 0;
+
+    public double RestraintSuppressionRate => (RestraintDecisionsAllowed + RestraintDecisionsSuppressed) > 0
+        ? (double)RestraintDecisionsSuppressed / (RestraintDecisionsAllowed + RestraintDecisionsSuppressed)
+        : 0;
 }
 
 public class InterventionRecord
