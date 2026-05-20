@@ -27,6 +27,8 @@ public class PromptAssembler
     private readonly WikiNodeStore _nodeStore;
     private readonly SearchEngine _searchEngine;
     private readonly RetrievalBudgetManager _budgetManager;
+    private readonly Metabolism.ContradictionHistoryStore? _contradictionHistoryStore;
+    private readonly Metabolism.InterventionStore? _interventionStore;
     private readonly ILogger<PromptAssembler>? _logger;
 
     /// <summary>Maximum tokens for the system prompt (conservative for Phi-4-mini 4096 context).</summary>
@@ -40,12 +42,16 @@ public class PromptAssembler
         WikiNodeStore nodeStore,
         SearchEngine searchEngine,
         RetrievalBudgetManager? budgetManager = null,
+        Metabolism.ContradictionHistoryStore? contradictionHistoryStore = null,
+        Metabolism.InterventionStore? interventionStore = null,
         ILogger<PromptAssembler>? logger = null)
     {
         _identityStore = identityStore;
         _nodeStore = nodeStore;
         _searchEngine = searchEngine;
         _budgetManager = budgetManager ?? new RetrievalBudgetManager();
+        _contradictionHistoryStore = contradictionHistoryStore;
+        _interventionStore = interventionStore;
         _logger = logger;
     }
 
@@ -70,6 +76,9 @@ public class PromptAssembler
 
         // Retrieval-augmented wiki context
         AppendRelevantWikiContext(sb, userMessage);
+
+        // Behavioral continuity: unresolved tensions and recent interventions
+        AppendBehavioralContext(sb);
 
         // Timestamp
         sb.Append($"\nDate: {DateTime.Now:yyyy-MM-dd HH:mm}");
@@ -207,6 +216,66 @@ public class PromptAssembler
                 }
             }
             catch { }
+        }
+    }
+
+    /// <summary>
+    /// Append behavioral context: unresolved tensions, recent interventions.
+    /// This is Sprint 3 — behavioral continuity in prompts.
+    /// </summary>
+    private void AppendBehavioralContext(StringBuilder sb)
+    {
+        try
+        {
+            var hasContent = false;
+
+            // Inject escalating contradictions (behavioral tensions)
+            if (_contradictionHistoryStore != null)
+            {
+                var active = _contradictionHistoryStore.LoadActive();
+                var escalating = active
+                    .Where(c => c.Trend == Metabolism.ContradictionTrend.Worsening ||
+                                c.Trend == Metabolism.ContradictionTrend.Recurring)
+                    .OrderByDescending(c => c.CurrentSeverity)
+                    .Take(3)
+                    .ToList();
+
+                if (escalating.Count > 0)
+                {
+                    sb.Append("\nBehavioral tensions:\n");
+                    foreach (var tension in escalating)
+                    {
+                        sb.Append($"- {tension.Type}: {tension.DeclaredIntent} " +
+                                  $"(seen {tension.ObservationCount}x, {tension.Trend}, " +
+                                  $"severity: {tension.CurrentSeverity})\n");
+                    }
+                    hasContent = true;
+                }
+            }
+
+            // Inject recent interventions
+            if (_interventionStore != null)
+            {
+                var recent = _interventionStore.LoadRecent(TimeSpan.FromDays(7));
+                var pending = recent
+                    .Where(i => i.Status == Metabolism.InterventionStatus.Pending)
+                    .Take(2)
+                    .ToList();
+
+                if (pending.Count > 0)
+                {
+                    if (!hasContent) sb.Append("\n");
+                    sb.Append("Pending guidance:\n");
+                    foreach (var intervention in pending)
+                    {
+                        sb.Append($"- {intervention.Message}\n");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to append behavioral context");
         }
     }
 

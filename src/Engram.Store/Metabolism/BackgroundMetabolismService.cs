@@ -39,6 +39,9 @@ public class BackgroundMetabolismService : BackgroundService
     private readonly ContradictionDetector _contradictionDetector;
     private readonly IEventBus? _eventBus;
     private readonly InterventionGenerator? _interventionGenerator;
+    private readonly InterventionStore? _interventionStore;
+    private readonly ContradictionHistoryStore? _contradictionHistoryStore;
+    private readonly ContradictionResolutionDetector? _resolutionDetector;
     private readonly CognitiveTelemetry? _telemetry;
     private readonly ILogger<BackgroundMetabolismService>? _logger;
 
@@ -74,6 +77,9 @@ public class BackgroundMetabolismService : BackgroundService
         ContradictionDetector contradictionDetector,
         IEventBus? eventBus = null,
         InterventionGenerator? interventionGenerator = null,
+        InterventionStore? interventionStore = null,
+        ContradictionHistoryStore? contradictionHistoryStore = null,
+        ContradictionResolutionDetector? resolutionDetector = null,
         CognitiveTelemetry? telemetry = null,
         ILogger<BackgroundMetabolismService>? logger = null)
     {
@@ -87,6 +93,9 @@ public class BackgroundMetabolismService : BackgroundService
         _contradictionDetector = contradictionDetector;
         _eventBus = eventBus;
         _interventionGenerator = interventionGenerator;
+        _interventionStore = interventionStore;
+        _contradictionHistoryStore = contradictionHistoryStore;
+        _resolutionDetector = resolutionDetector;
         _telemetry = telemetry;
         _logger = logger;
     }
@@ -169,6 +178,27 @@ public class BackgroundMetabolismService : BackgroundService
             {
                 var interventions = _interventionGenerator.GenerateInterventions(behavioralContradictions);
                 result.InterventionsGenerated = interventions.Count;
+
+                // Persist interventions (Sprint 3: first-class semantic entities)
+                if (_interventionStore != null)
+                {
+                    foreach (var intervention in interventions)
+                        _interventionStore.Save(intervention);
+                }
+            }
+
+            // Step 6c: Record contradictions in history (Sprint 3: longitudinal tracking)
+            if (_contradictionHistoryStore != null)
+            {
+                foreach (var contradiction in behavioralContradictions)
+                    _contradictionHistoryStore.Record(contradiction);
+            }
+
+            // Step 6d: Detect resolved contradictions (Sprint 3: resolution detection)
+            if (_resolutionDetector != null)
+            {
+                var resolutions = _resolutionDetector.DetectResolutions();
+                result.ContradictionsResolved = resolutions.Count;
             }
 
             // Step 4: Archive stale nodes
@@ -482,6 +512,7 @@ public class MetabolismCycleResult
     public int NodesArchived { get; set; }
     public int TensionsGenerated { get; set; }
     public int InterventionsGenerated { get; set; }
+    public int ContradictionsResolved { get; set; }
     public TimeSpan Duration { get; set; }
     public string? Error { get; set; }
 }
