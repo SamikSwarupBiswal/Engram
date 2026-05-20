@@ -136,10 +136,14 @@ var taskRouter = new Engram.Store.Orchestration.TaskRouter(
 var deduplicator = new Engram.Store.Metabolism.SemanticDeduplicator(nodeStore);
 var contradictionDetector = new Engram.Store.Metabolism.ContradictionDetector(nodeStore, identityStore);
 var interventionGenerator = new Engram.Store.Metabolism.InterventionGenerator(identityStore, eventBus);
+var interventionStore = new Engram.Store.Metabolism.InterventionStore(paths);
+var contradictionHistoryStore = new Engram.Store.Metabolism.ContradictionHistoryStore(paths);
+var resolutionDetector = new Engram.Store.Metabolism.ContradictionResolutionDetector(contradictionHistoryStore, nodeStore);
 var backgroundMetabolism = new Engram.Store.Metabolism.BackgroundMetabolismService(
     nodeStore, wikiMetabolizer, salienceScorer, driftDetector,
     archiveManager, conversationExtractor, deduplicator, contradictionDetector,
-    eventBus, interventionGenerator, cognitiveTelemetry);
+    eventBus, interventionGenerator, interventionStore, contradictionHistoryStore,
+    resolutionDetector, cognitiveTelemetry);
 // Start as a background hosted service
 _ = backgroundMetabolism.StartAsync(CancellationToken.None);
 var ocrService = new OcrService();
@@ -1353,6 +1357,38 @@ app.MapGet("/api/cognitive/diagnostics/automation", () =>
 
 app.MapGet("/api/cognitive/diagnostics/perception", () =>
     Results.Ok(cognitiveTelemetry.GetPerceptionMetrics()));
+
+
+// ── Sprint 3: Behavioral Cognition Endpoints ──
+app.MapGet("/api/cognitive/interventions", () =>
+    Results.Ok(interventionStore.LoadAll()));
+
+app.MapGet("/api/cognitive/interventions/stats", () =>
+    Results.Ok(interventionStore.GetStats()));
+
+app.MapGet("/api/cognitive/contradictions", () =>
+    Results.Ok(contradictionHistoryStore.LoadAll()));
+
+app.MapGet("/api/cognitive/contradictions/active", () =>
+    Results.Ok(contradictionHistoryStore.LoadActive()));
+
+app.MapGet("/api/cognitive/contradictions/escalating", () =>
+    Results.Ok(contradictionHistoryStore.LoadEscalating()));
+
+app.MapGet("/api/cognitive/contradictions/stats", () =>
+    Results.Ok(contradictionHistoryStore.GetStats()));
+
+app.MapGet("/api/cognitive/tensions/scores", () =>
+{
+    var tensionEngine = new Engram.Store.Metabolism.TensionEvolutionEngine(contradictionHistoryStore);
+    return Results.Ok(tensionEngine.ScoreActiveTensions());
+});
+
+app.MapGet("/api/cognitive/tensions/clusters", () =>
+{
+    var tensionEngine = new Engram.Store.Metabolism.TensionEvolutionEngine(contradictionHistoryStore);
+    return Results.Ok(tensionEngine.ClusterTensions());
+});
 
 log.Api("All endpoints registered");
 log.Api($"Listening on: {string.Join(", ", app.Urls)}");

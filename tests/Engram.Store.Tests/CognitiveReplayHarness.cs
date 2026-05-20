@@ -41,6 +41,10 @@ public class CognitiveReplayHarness : IDisposable
     public ContradictionDetector ContradictionDetector { get; }
     public InterventionGenerator InterventionGenerator { get; }
     public BackgroundMetabolismService MetabolismService { get; }
+    public InterventionStore InterventionStore { get; }
+    public ContradictionHistoryStore ContradictionHistoryStore { get; }
+    public ContradictionResolutionDetector ResolutionDetector { get; }
+    public TensionEvolutionEngine TensionEngine { get; }
 
     // Memory pipeline
     public ConversationMemoryExtractor Extractor { get; }
@@ -93,11 +97,18 @@ public class CognitiveReplayHarness : IDisposable
         BudgetManager = new RetrievalBudgetManager();
         PromptAssembler = new PromptAssembler(IdentityStore, NodeStore, SearchEngine, BudgetManager);
 
+        // Sprint 3: persistent stores
+        InterventionStore = new InterventionStore(Paths);
+        ContradictionHistoryStore = new ContradictionHistoryStore(Paths);
+        ResolutionDetector = new ContradictionResolutionDetector(ContradictionHistoryStore, NodeStore);
+        TensionEngine = new TensionEvolutionEngine(ContradictionHistoryStore);
+
         // Background metabolism (the brain)
         MetabolismService = new BackgroundMetabolismService(
             NodeStore, Metabolizer, SalienceScorer, DriftDetector,
             ArchiveManager, Extractor, Deduplicator, ContradictionDetector,
-            EventBus, InterventionGenerator, Telemetry);
+            EventBus, InterventionGenerator, InterventionStore,
+            ContradictionHistoryStore, ResolutionDetector, Telemetry);
 
         // Capture all events for assertions
         EventBus.SubscribeAll(e => CapturedEvents.Add(e));
