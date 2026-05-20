@@ -46,6 +46,14 @@ public class CognitiveReplayHarness : IDisposable
     public ContradictionResolutionDetector ResolutionDetector { get; }
     public TensionEvolutionEngine TensionEngine { get; }
 
+    // Phase 4: Cognitive Stabilization
+    public ReflectionConfidenceModel ConfidenceModel { get; }
+    public IdentityStabilityEngine StabilityEngine { get; }
+    public NarrativeBalanceController BalanceController { get; }
+    public CounterEvidenceDetector CounterEvidenceDetector { get; }
+    public NarrativeInterpretationEngine InterpretationEngine { get; }
+    public SemanticHealthMonitor HealthMonitor { get; }
+
     // Memory pipeline
     public ConversationMemoryExtractor Extractor { get; }
     public ConversationMemoryPipeline MemoryPipeline { get; }
@@ -102,6 +110,16 @@ public class CognitiveReplayHarness : IDisposable
         ContradictionHistoryStore = new ContradictionHistoryStore(Paths);
         ResolutionDetector = new ContradictionResolutionDetector(ContradictionHistoryStore, NodeStore);
         TensionEngine = new TensionEvolutionEngine(ContradictionHistoryStore);
+
+        // Phase 4: Cognitive Stabilization
+        ConfidenceModel = new ReflectionConfidenceModel();
+        StabilityEngine = new IdentityStabilityEngine(ContradictionHistoryStore, ConfidenceModel);
+        BalanceController = new NarrativeBalanceController(InterventionStore, ContradictionHistoryStore);
+        CounterEvidenceDetector = new CounterEvidenceDetector(NodeStore, ContradictionHistoryStore);
+        InterpretationEngine = new NarrativeInterpretationEngine();
+        HealthMonitor = new SemanticHealthMonitor(
+            ContradictionHistoryStore, InterventionStore,
+            StabilityEngine, BalanceController, CounterEvidenceDetector);
 
         // Background metabolism (the brain)
         MetabolismService = new BackgroundMetabolismService(
@@ -276,6 +294,14 @@ public class CognitiveReplayHarness : IDisposable
     public CognitiveDiagnosticsSnapshot GetDiagnostics()
     {
         return Telemetry.GetDiagnosticsSnapshot();
+    }
+
+    /// <summary>
+    /// Get the semantic health snapshot.
+    /// </summary>
+    public SemanticHealthSnapshot GetHealth()
+    {
+        return HealthMonitor.ComputeHealth();
     }
 
     public void Dispose()
