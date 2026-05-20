@@ -1,5 +1,6 @@
 using System.Text;
 using Engram.Store.Identity;
+using Engram.Store.Metabolism;
 using Engram.Store.Search;
 using Engram.Store.Wiki;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,7 @@ public class PromptAssembler
     private readonly IdentityStore _identityStore;
     private readonly WikiNodeStore _nodeStore;
     private readonly SearchEngine _searchEngine;
+    private readonly RetrievalBudgetManager _budgetManager;
     private readonly ILogger<PromptAssembler>? _logger;
 
     /// <summary>Maximum tokens for the system prompt (conservative for Phi-4-mini 4096 context).</summary>
@@ -37,11 +39,13 @@ public class PromptAssembler
         IdentityStore identityStore,
         WikiNodeStore nodeStore,
         SearchEngine searchEngine,
+        RetrievalBudgetManager? budgetManager = null,
         ILogger<PromptAssembler>? logger = null)
     {
         _identityStore = identityStore;
         _nodeStore = nodeStore;
         _searchEngine = searchEngine;
+        _budgetManager = budgetManager ?? new RetrievalBudgetManager();
         _logger = logger;
     }
 
