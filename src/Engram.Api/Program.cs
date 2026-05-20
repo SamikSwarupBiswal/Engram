@@ -130,6 +130,13 @@ var driftDetector = new Engram.Store.Salience.DriftDetector(nodeStore);
 var taskRouter = new Engram.Store.Orchestration.TaskRouter(
     intentClassifier, semanticSearchEngine, nodeStore, promptAssembler,
     identityStore, salienceScorer, driftDetector, eventBus);
+
+// ── Background Metabolism (the brain) ──
+var backgroundMetabolism = new Engram.Store.Metabolism.BackgroundMetabolismService(
+    nodeStore, wikiMetabolizer, salienceScorer, driftDetector,
+    archiveManager, conversationExtractor, eventBus);
+// Start as a background hosted service
+_ = backgroundMetabolism.StartAsync(CancellationToken.None);
 var ocrService = new OcrService();
 var stateDetector = new UiStateDetector();
 var perceptionPipeline = new VisualPerceptionPipeline(paths.Raw, screenCapture, ocrService, stateDetector);
