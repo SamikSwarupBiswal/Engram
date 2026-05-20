@@ -808,7 +808,7 @@ Phase7Metrics added to CognitiveDiagnosticsSnapshot:
 
 ---
 
-## Final Statistics (as of Sprint 7)
+## Final Statistics (as of Sprint 8)
 
 | Metric | Value |
 |--------|-------|
