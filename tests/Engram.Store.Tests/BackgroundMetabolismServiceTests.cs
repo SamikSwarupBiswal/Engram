@@ -12,6 +12,7 @@ public class BackgroundMetabolismServiceTests : IDisposable
     private readonly string _tempDir;
     private readonly WorkspacePaths _paths;
     private readonly WikiNodeStore _nodeStore;
+    private readonly Identity.IdentityStore _identityStore;
     private readonly WikiMetabolizer _metabolizer;
     private readonly SalienceScorer _salienceScorer;
     private readonly DriftDetector _driftDetector;
@@ -25,6 +26,7 @@ public class BackgroundMetabolismServiceTests : IDisposable
         _tempDir = Path.Combine(Path.GetTempPath(), "engram_metabolism_test_" + Guid.NewGuid().ToString("n")[..8]);
         _paths = new WorkspacePaths(_tempDir);
         _nodeStore = new WikiNodeStore(_paths);
+        _identityStore = new Identity.IdentityStore(_paths);
         _metabolizer = new WikiMetabolizer(_nodeStore);
         _salienceScorer = new SalienceScorer();
         _driftDetector = new DriftDetector(_nodeStore);
@@ -32,14 +34,16 @@ public class BackgroundMetabolismServiceTests : IDisposable
         _extractor = new ConversationMemoryExtractor();
         _eventBus = new InMemoryEventBus();
         var deduplicator = new SemanticDeduplicator(_nodeStore);
+        var contradictionDetector = new ContradictionDetector(_nodeStore, _identityStore);
         _service = new BackgroundMetabolismService(
             _nodeStore, _metabolizer, _salienceScorer, _driftDetector,
-            _archiveManager, _extractor, deduplicator, _eventBus);
+            _archiveManager, _extractor, deduplicator, contradictionDetector, _eventBus);
     }
 
     public void Dispose()
     {
         _eventBus.Dispose();
+        _identityStore.Dispose();
         _nodeStore.Dispose();
         try { Directory.Delete(_tempDir, true); } catch { }
     }

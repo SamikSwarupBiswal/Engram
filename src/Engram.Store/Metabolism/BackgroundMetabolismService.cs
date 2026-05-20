@@ -36,6 +36,7 @@ public class BackgroundMetabolismService : BackgroundService
     private readonly ArchiveManager _archiveManager;
     private readonly ConversationMemoryExtractor _extractor;
     private readonly SemanticDeduplicator _deduplicator;
+    private readonly ContradictionDetector _contradictionDetector;
     private readonly IEventBus? _eventBus;
     private readonly ILogger<BackgroundMetabolismService>? _logger;
 
@@ -68,6 +69,7 @@ public class BackgroundMetabolismService : BackgroundService
         ArchiveManager archiveManager,
         ConversationMemoryExtractor extractor,
         SemanticDeduplicator deduplicator,
+        ContradictionDetector contradictionDetector,
         IEventBus? eventBus = null,
         ILogger<BackgroundMetabolismService>? logger = null)
     {
@@ -78,6 +80,7 @@ public class BackgroundMetabolismService : BackgroundService
         _archiveManager = archiveManager;
         _extractor = extractor;
         _deduplicator = deduplicator;
+        _contradictionDetector = contradictionDetector;
         _eventBus = eventBus;
         _logger = logger;
     }
@@ -147,9 +150,13 @@ public class BackgroundMetabolismService : BackgroundService
             var salienceUpdated = RecomputeSalience(nodes);
             result.SalienceUpdated = salienceUpdated;
 
-            // Step 3: Detect contradictions across the graph
+            // Step 5: Detect contradictions across the graph
             var contradictions = DetectContradictions(nodes);
             result.ContradictionsDetected = contradictions.Count;
+
+            // Step 6: Detect behavioral contradictions (the moat)
+            var behavioralContradictions = _contradictionDetector.DetectAll();
+            result.BehavioralContradictionsDetected = behavioralContradictions.Count;
 
             // Step 4: Archive stale nodes
             var archived = ArchiveStaleNodes(nodes);
@@ -453,6 +460,7 @@ public class MetabolismCycleResult
     public int MergesPerformed { get; set; }
     public int SalienceUpdated { get; set; }
     public int ContradictionsDetected { get; set; }
+    public int BehavioralContradictionsDetected { get; set; }
     public int NodesArchived { get; set; }
     public int TensionsGenerated { get; set; }
     public TimeSpan Duration { get; set; }
