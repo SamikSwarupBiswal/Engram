@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using System.Runtime.Versioning;
 
 namespace Engram.Store.Perception;
 
@@ -11,6 +12,7 @@ namespace Engram.Store.Perception;
 /// Runs on Windows via the .NET sidecar.
 /// Captures at configurable intervals (default 1-2s).
 /// </summary>
+[SupportedOSPlatform("windows")]
 public class ScreenCaptureService : IDisposable
 {
     private readonly ILogger<ScreenCaptureService>? _logger;

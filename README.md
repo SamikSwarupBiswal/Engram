@@ -62,11 +62,12 @@ User opens Engram
 ```
 src/
   Engram.Store/     Core library (12 layers)
-  Engram.Api/       ASP.NET API sidecar (64 endpoints)
+  Engram.Api/       ASP.NET API sidecar (75 endpoints)
   Engram.App/       Tauri + React frontend (10 views)
   Engram.Cli/       Developer CLI
 tests/
-  Engram.Store.Tests/  747 tests
+  Engram.Store.Tests/  849 tests
+  Engram.Api.Tests/     84 tests
 ```
 
 ## Build
@@ -81,9 +82,30 @@ cd src\Engram.App
 ## Tests
 
 ```
-dotnet test tests/Engram.Store.Tests/
-# 747/747 passing
+dotnet test
+# 933/933 passing (849 Store + 84 API)
 ```
+
+### Soak Tests (runtime stability)
+
+```
+dotnet test --filter "Category=Soak"
+# Requires running API sidecar with model loaded
+```
+
+See [.planning/soak-validation.md](.planning/soak-validation.md) for results.
+
+## Runtime Status (Soak Validation)
+
+**Branch:** `soak-validation`
+
+Key findings from soak testing:
+- KV cache accumulates across requests (never clears) — deterministic collapse at ~2000 tokens
+- Health endpoint false positive after runtime death
+- Prompt template is model-specific (Phi-4-mini requires `<|system|>/<|user|>/<|assistant|>`)
+- Phase-transition failure pattern (healthy → dead, no gradual degradation)
+
+See [.planning/](.planning/) for detailed findings and next steps.
 
 ## License
 

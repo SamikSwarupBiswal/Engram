@@ -1,4 +1,5 @@
 using Engram.Store;
+using Engram.Store.Events;
 using Engram.Store.Search;
 using Engram.Store.Wiki;
 using Engram.Store.Salience;
@@ -12,7 +13,18 @@ using Engram.Store.Security;
 using Engram.Store.Perception;
 using System.Text.Json;
 
+
 var builder = WebApplication.CreateBuilder(args);
+
+// OpenAPI/Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new() { Title = "Engram API", Version = "1.0.0", Description = "Personal Semantic Operating Layer API" });
+});
+
+// Rate limiting (simple in-memory)
+builder.Services.AddSingleton<Engram.Store.ApiRateLimiter>();
 
 // CORS for Tauri frontend
 builder.Services.AddCors(options =>
@@ -28,6 +40,26 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors();
+
+// Swagger UI (development only)
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// Rate limiting middleware
+app.Use(async (context, next) =>
+{
+    var limiter = context.RequestServices.GetRequiredService<Engram.Store.ApiRateLimiter>();
+    if (!limiter.TryAcquire())
+    {
+        context.Response.StatusCode = 429;
+        await context.Response.WriteAsJsonAsync(new { error = "Rate limit exceeded. Try again later." });
+        return;
+    }
+    await next();
+});
 
 // Initialize workspace
 var workspacePath = Path.Combine(
@@ -50,10 +82,28 @@ var driftAlertStore = new DriftAlertStore(paths);
 var archiveManager = new ArchiveManager(nodeStore, salienceScorer, paths);
 var discoverySOP = new DiscoverySOP(identityStore);
 var interventionPolicy = new InterventionPolicy(identityStore);
+// ── Structured Logger ──
+var log = InferenceLogger.Instance;
+log.Boot("Engram.Api starting...");
+log.Boot($"Workspace: {paths.Root}");
+log.Boot($"Runtime: {System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier}");
+log.Boot($"Process ID: {Environment.ProcessId}");
+
+// ── Inference Components ──
 var gpuDetector = new GpuDetector();
 var modelManager = new ModelManager();
 var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
 var inferenceRouter = new InferenceRouter(localEngine);
+
+// ── Backend probe + verdict persistence ──
+var probe = new BackendProbe();
+var verdictStore = new VerdictStore(paths.Root);
+
+// ── Lifecycle Manager (single source of truth) ──
+var lifecycle = new InferenceLifecycleManager();
+lifecycle.Configure(gpuDetector, modelManager, localEngine, inferenceRouter,
+    downloadFunc: null, probe: probe, verdictStore: verdictStore);
+
 var tokenBudget = new TokenBudget(paths.Config);
 var gwsManager = new GoogleWorkspaceManager(paths.Config);
 var researchAgent = new ResearchAgent(paths.Config);
@@ -63,16 +113,40 @@ var keyManager = new KeyManager(paths.Config);
 var dataExport = new DataExport(paths.Root);
 var dataDelete = new DataDelete(paths.Root);
 var screenCapture = new ScreenCaptureService();
+
+// ── Memory Pipeline (semantic continuity) ──
+var conversationExtractor = new Engram.Store.Memory.ConversationMemoryExtractor();
+var eventBus = new Engram.Store.Events.InMemoryEventBus();
+var memoryPipeline = new Engram.Store.Memory.ConversationMemoryPipeline(conversationExtractor, new WikiMetabolizer(nodeStore), eventBus);
+var promptAssembler = new Engram.Store.Memory.PromptAssembler(identityStore, nodeStore, searchEngine);
+var wikiMetabolizer = new WikiMetabolizer(nodeStore);
+var timelineSubscriber = new TimelineSubscriber(eventBus, writer);
+timelineSubscriber.Start(); // Start listening to all events
+
+// ── Task Router (intent orchestration) ──
+var intentClassifier = new Engram.Store.Orchestration.IntentClassifier();
+var semanticSearchEngine = new Engram.Store.Search.SemanticSearchEngine(nodeStore, salienceScorer);
+var driftDetector = new Engram.Store.Salience.DriftDetector(nodeStore);
+var taskRouter = new Engram.Store.Orchestration.TaskRouter(
+    intentClassifier, semanticSearchEngine, nodeStore, promptAssembler,
+    identityStore, salienceScorer, driftDetector, eventBus);
+
+// ── Background Metabolism (the brain) ──
+var deduplicator = new Engram.Store.Metabolism.SemanticDeduplicator(nodeStore);
+var contradictionDetector = new Engram.Store.Metabolism.ContradictionDetector(nodeStore, identityStore);
+var backgroundMetabolism = new Engram.Store.Metabolism.BackgroundMetabolismService(
+    nodeStore, wikiMetabolizer, salienceScorer, driftDetector,
+    archiveManager, conversationExtractor, deduplicator, contradictionDetector, eventBus);
+// Start as a background hosted service
+_ = backgroundMetabolism.StartAsync(CancellationToken.None);
 var ocrService = new OcrService();
 var stateDetector = new UiStateDetector();
 var perceptionPipeline = new VisualPerceptionPipeline(paths.Raw, screenCapture, ocrService, stateDetector);
 var layoutSnap = new LayoutSnapService();
-var modelDownloadLock = new object();
-Task? modelDownloadTask = null;
-ModelDownloadProgress? modelDownloadProgress = null;
-string? modelDownloadError = null;
 
-// --- Health ---
+// ── Health: Single source of truth for all readiness state ──
+app.MapGet("/api/health", () => Results.Ok(lifecycle.GetHealth()));
+
 app.MapGet("/", () => Results.Ok(new
 {
     service = "Engram API",
@@ -289,22 +363,87 @@ app.MapPost("/api/intervention/check", (InterventionRequest request) =>
 });
 
 // --- Chat Completions (real inference) ---
+// This is NOT a generic chatbot — it's the intent interface into the semantic operating system.
 app.MapPost("/v1/chat/completions", async (HttpContext context) =>
 {
+    // ── Lifecycle guard: reject requests when not ready ──
+    var health = lifecycle.GetHealth();
+    if (!health.CanAcceptRequests)
+    {
+        var statusMessage = health.State switch
+        {
+            "Starting" => "Engram is starting up. Please wait a moment.",
+            "DetectingBackend" => "Detecting GPU backend...",
+            "BackendReady" => "Backend ready, preparing model...",
+            "DownloadingModel" => $"Model is downloading ({health.Progress:F0}%). Please wait.",
+            "LoadingModel" => "Model is loading into memory. This may take a moment.",
+            "Error" => $"Inference unavailable: {health.Error}",
+            "Offline" => "Engram is offline.",
+            _ => $"Engram is not ready (state: {health.State})"
+        };
+
+        log.Router($"Request rejected: state={health.State}");
+        return Results.Ok(new
+        {
+            id = "chatcmpl-" + Guid.NewGuid().ToString("n"),
+            @object = "chat.completion",
+            choices = new[]
+            {
+                new
+                {
+                    index = 0,
+                    message = new { role = "assistant", content = statusMessage },
+                    finish_reason = "not_ready"
+                }
+            },
+            usage = new { prompt_tokens = 0, completion_tokens = 0, total_tokens = 0 },
+            _lifecycle = new { state = health.State, progress = health.Progress }
+        });
+    }
+
     var body = await JsonSerializer.DeserializeAsync<ChatRequest>(
         context.Request.Body,
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
+    var userMessage = body?.Messages?.LastOrDefault()?.Content ?? "";
+
+    // ── Step 1: Classify intent ──
+    var intent = intentClassifier.Classify(userMessage);
+    log.Router($"Intent: {intent.Intent} ({intent.Confidence:F2}) from '{userMessage[..Math.Min(50, userMessage.Length)]}'");
+
+    // ── Step 2: Route through TaskRouter to get contextual system prompt ──
+    var taskResult = await taskRouter.RouteAsync(userMessage, context.RequestAborted);
+
+    // ── Step 3: Build message array with contextual system prompt ──
     var messages = body?.Messages?.Select(m => new Engram.Store.Inference.ChatMessage
     {
         Role = m.Role ?? "user",
         Content = m.Content ?? ""
-    }).ToArray() ?? Array.Empty<Engram.Store.Inference.ChatMessage>();
+    }).ToList() ?? new List<Engram.Store.Inference.ChatMessage>();
 
-    var result = await inferenceRouter.ChatCompletionAsync(messages, body?.MaxTokens ?? 1024, context.RequestAborted);
+    // Use the task router's contextual system prompt (not generic)
+    messages.Insert(0, new Engram.Store.Inference.ChatMessage
+    {
+        Role = "system",
+        Content = taskResult.SystemPrompt
+    });
+
+    // ── Step 4: Run inference ──
+    var result = await inferenceRouter.ChatCompletionAsync(messages.ToArray(), body?.MaxTokens ?? 1024, context.RequestAborted);
 
     if (result.Success)
     {
+        // ── Step 5: Memory Pipeline: extract memories from this conversation ──
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                memoryPipeline.ProcessConversation(userMessage, result.Content ?? "");
+                searchEngine.InvalidateIndex(); // Rebuild search index with new nodes
+            }
+            catch { /* Memory extraction is fire-and-forget */ }
+        });
+
         return Results.Ok(new
         {
             id = "chatcmpl-" + Guid.NewGuid().ToString("n"),
@@ -325,7 +464,26 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
                 total_tokens = result.InputTokens + result.OutputTokens
             },
             model = result.Model,
-            provider = result.Provider
+            provider = result.Provider,
+            _intent = new
+            {
+                type = intent.Intent.ToString(),
+                confidence = intent.Confidence,
+                routing_duration_ms = taskResult.Duration.TotalMilliseconds,
+                retrieved_nodes = taskResult.RetrievedNodes.Count
+            },
+            _kv = new
+            {
+                tokensBefore = result.KvTokensBefore,
+                tokensAfter = result.KvTokensAfter,
+                cellsBefore = result.KvCellsBefore,
+                cellsAfter = result.KvCellsAfter,
+                tokensAfterCleanup = result.KvTokensAfterCleanup,
+                cellsAfterCleanup = result.KvCellsAfterCleanup,
+                usedFreshContext = result.UsedFreshContext,
+                cleanupResult = result.CleanupResult.ToString(),
+                cleanupDurationMs = result.CleanupDurationMs
+            }
         });
     }
 
@@ -346,22 +504,12 @@ app.MapPost("/v1/chat/completions", async (HttpContext context) =>
     });
 });
 
-// --- Model Status ---
+// --- Model Status (delegates to lifecycle manager) ---
 app.MapGet("/api/model/status", () =>
 {
+    var health = lifecycle.GetHealth();
     var config = ModelManager.Phi4Mini;
     var status = modelManager.GetStatus(config);
-    var gpu = gpuDetector.Detect();
-    bool downloadInProgress;
-    ModelDownloadProgress? latestProgress;
-    string? latestError;
-
-    lock (modelDownloadLock)
-    {
-        downloadInProgress = modelDownloadTask is { IsCompleted: false };
-        latestProgress = modelDownloadProgress;
-        latestError = modelDownloadError;
-    }
 
     return Results.Ok(new
     {
@@ -369,13 +517,13 @@ app.MapGet("/api/model/status", () =>
         description = config.Description,
         state = status.State.ToString(),
         path = status.Path,
-        sizeBytes = latestProgress?.BytesDownloaded ?? status.SizeBytes,
-        progress = latestProgress?.Progress ?? status.Progress,
-        gpu = new { backend = gpu.Backend.ToString(), device = gpu.DeviceName, vramMb = gpu.VramMb, layers = gpu.LayerCount },
-        isReady = localEngine.IsReady,
-        isLoading = localEngine.IsLoading,
-        downloadInProgress,
-        downloadError = latestError
+        sizeBytes = status.SizeBytes,
+        progress = health.Progress,
+        gpu = new { backend = health.Backend ?? "unknown", device = health.Metadata.GetValueOrDefault("gpuDevice", "?"), vramMb = health.Metadata.GetValueOrDefault("gpuVramMb", "0"), layers = health.Metadata.GetValueOrDefault("gpuLayers", "0") },
+        isReady = health.IsReady,
+        isLoading = health.State == "LoadingModel",
+        downloadInProgress = health.State == "DownloadingModel",
+        downloadError = health.State == "Error" ? health.Error : null
     });
 });
 
@@ -383,62 +531,159 @@ app.MapGet("/api/model/status", () =>
 app.MapPost("/api/model/download", () =>
 {
     var config = ModelManager.Phi4Mini;
-
     if (modelManager.IsModelReady(config))
         return Results.Ok(new { status = "already_downloaded", path = ModelManager.GetModelPath(config) });
 
-    lock (modelDownloadLock)
+    // If lifecycle is already handling download (background init), just acknowledge
+    if (lifecycle.State == InferenceState.DownloadingModel)
+        return Results.Accepted("/api/model/status", new { status = "downloading" });
+
+    // Manual download trigger (user clicked download before background init reached this phase)
+    lifecycle.ReportDownloadProgress(0);
+    log.Model("Manual download triggered");
+
+    _ = Task.Run(async () =>
     {
-        if (modelDownloadTask is { IsCompleted: false })
-            return Results.Accepted("/api/model/status", new { status = "downloading" });
-
-        modelDownloadError = null;
-        modelDownloadProgress = null;
-
-        var progress = new Progress<ModelDownloadProgress>(p =>
+        try
         {
-            lock (modelDownloadLock)
+            var progress = new Progress<ModelDownloadProgress>(p =>
             {
-                modelDownloadProgress = p;
-            }
-        });
-
-        modelDownloadTask = Task.Run(async () =>
+                lifecycle.ReportDownloadProgress(p.Progress * 100);
+            });
+            await modelManager.DownloadModelAsync(config, progress, CancellationToken.None);
+            lifecycle.ReportDownloadComplete();
+            log.Model("Manual download complete, transitioning lifecycle");
+            // Lifecycle will pick up from here on next state check
+        }
+        catch (Exception ex)
         {
-            try
-            {
-                await modelManager.DownloadModelAsync(config, progress, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                lock (modelDownloadLock)
-                {
-                    modelDownloadError = ex.Message;
-                }
-            }
-        });
-    }
+            lifecycle.ReportDownloadError(ex.Message);
+            log.ModelError("Manual download failed", ex);
+        }
+    });
 
     return Results.Accepted("/api/model/status", new { status = "downloading" });
 });
 
-// --- Load Model ---
-app.MapPost("/api/model/load", () =>
+// --- Load Model (async via lifecycle manager) ---
+app.MapPost("/api/model/load", async () =>
 {
-    var loaded = localEngine.LoadModel();
+    log.Model("Model load requested via API");
+    var loaded = await lifecycle.LoadModelAsync();
+    var health = lifecycle.GetHealth();
     return Results.Ok(new
     {
         loaded,
-        isReady = localEngine.IsReady,
-        gpu = localEngine.GpuInfo?.Description
+        isReady = health.IsReady,
+        gpu = health.Backend
     });
 });
 
 // --- Unload Model ---
 app.MapPost("/api/model/unload", () =>
 {
-    localEngine.UnloadModel();
+    lifecycle.UnloadModel();
     return Results.Ok(new { unloaded = true });
+});
+
+// ══════════════════════════════════════
+//  EXPERIMENT CONTROL ENDPOINTS
+//  For soak validation — controlled KV cache experiments
+// ══════════════════════════════════════
+
+// --- Get inference experiment mode (now shows production lifecycle status) ---
+app.MapGet("/api/experiment/mode", () =>
+{
+    var telemetry = localEngine.GetTelemetry();
+    var cleanup = telemetry.Cleanup;
+    return Results.Ok(new
+    {
+        // Production lifecycle: KV clearing is now mandatory
+        kvClearingMandatory = true,
+        freshContextPerRequest = localEngine.FreshContextPerRequest,
+        kvTokensInCache = localEngine.GetKvTokenCount(),
+        kvUsedCells = localEngine.GetKvUsedCells(),
+        totalInferences = telemetry.TotalInferences,
+        totalTokensGenerated = telemetry.TotalTokensGenerated,
+        // Cleanup telemetry
+        cleanup = new
+        {
+            totalCleanups = cleanup?.TotalCleanups ?? 0,
+            successfulCleanups = cleanup?.SuccessfulCleanups ?? 0,
+            failedCleanups = cleanup?.FailedCleanups ?? 0,
+            verificationFailures = cleanup?.VerificationFailures ?? 0,
+            successRate = cleanup?.SuccessRate ?? 1.0,
+            averageDurationMs = cleanup?.AverageDurationMs ?? 0
+        },
+        // Survivability metrics
+        runtimeOperational = telemetry.RuntimeOperational,
+        runtimeDegraded = telemetry.RuntimeDegraded
+    });
+});
+
+// --- Set inference experiment mode (now only allows fresh context toggle) ---
+app.MapPost("/api/experiment/mode", (ExperimentModeRequest request) =>
+{
+    // KV clearing is now mandatory, only fresh context is configurable
+    if (request.FreshContext.HasValue)
+        localEngine.FreshContextPerRequest = request.FreshContext.Value;
+
+    log.Inference($"Experiment mode set: FreshCtx={localEngine.FreshContextPerRequest} (KV clearing is mandatory)");
+
+    return Results.Ok(new
+    {
+        kvClearingMandatory = true,
+        freshContextPerRequest = localEngine.FreshContextPerRequest
+    });
+});
+
+// --- Manually clear KV cache (now triggers full cleanup pipeline) ---
+app.MapPost("/api/experiment/clear-kv", () =>
+{
+    var tokensBefore = localEngine.GetKvTokenCount();
+    var cellsBefore = localEngine.GetKvUsedCells();
+    // Note: ClearKvCache() was removed — cleanup is now mandatory after each inference
+    // This endpoint now shows current KV state
+    var tokensAfter = localEngine.GetKvTokenCount();
+    var cellsAfter = localEngine.GetKvUsedCells();
+
+    return Results.Ok(new
+    {
+        note = "KV clearing is now mandatory after each inference. Use /api/experiment/mode for cleanup telemetry.",
+        kvTokensCurrent = tokensAfter,
+        kvCellsCurrent = cellsAfter,
+        cleanupTelemetry = localEngine.GetCleanupTelemetry()
+    });
+});
+
+// --- Get KV cache telemetry (now shows cleanup telemetry) ---
+app.MapGet("/api/experiment/kv-status", () =>
+{
+    var telemetry = localEngine.GetTelemetry();
+    var cleanup = telemetry.Cleanup;
+    return Results.Ok(new
+    {
+        kvTokensInCache = telemetry.KvTokensInCache,
+        kvUsedCells = telemetry.KvUsedCells,
+        totalInferences = telemetry.TotalInferences,
+        totalTokensGenerated = telemetry.TotalTokensGenerated,
+        // Production lifecycle
+        cleanup = new
+        {
+            totalCleanups = cleanup?.TotalCleanups ?? 0,
+            successfulCleanups = cleanup?.SuccessfulCleanups ?? 0,
+            failedCleanups = cleanup?.FailedCleanups ?? 0,
+            verificationFailures = cleanup?.VerificationFailures ?? 0,
+            successRate = cleanup?.SuccessRate ?? 1.0,
+            averageDurationMs = cleanup?.AverageDurationMs ?? 0,
+            maxDurationMs = cleanup?.MaxDurationMs ?? 0,
+            minDurationMs = cleanup?.MinDurationMs ?? 0
+        },
+        // Survivability
+        runtimeOperational = telemetry.RuntimeOperational,
+        runtimeDegraded = telemetry.RuntimeDegraded,
+        recentSuccessRate = telemetry.RecentSuccessRate
+    });
 });
 
 // --- Power Mode ---
@@ -961,14 +1206,132 @@ app.MapPost("/v1/copilotkit", async (HttpContext context) =>
     await context.Response.WriteAsync("data: [DONE]\n\n");
 });
 
-Console.WriteLine("Engram API starting...");
-Console.WriteLine("Workspace: " + paths.Root);
+// --- Lifecycle Logs (for debugging startup) ---
+app.MapGet("/api/health/logs", (int? count) =>
+{
+    return Results.Ok(new { entries = InferenceLogger.Instance.GetRecent(count ?? 50) });
+});
+
+// --- Lifecycle Retry ---
+app.MapPost("/api/health/retry", () =>
+{
+    lifecycle.Retry();
+    return Results.Ok(new { state = lifecycle.State.ToString() });
+});
+
+// --- Diagnostics Export (for support + validation) ---
+app.MapGet("/api/diagnostics/export", () =>
+{
+    var health = lifecycle.GetHealth();
+    var inferenceTelemetry = localEngine.GetTelemetry();
+    var cleanupTelemetry = localEngine.GetCleanupTelemetry();
+    var verdicts = verdictStore.GetAll();
+    var recentLogs = InferenceLogger.Instance.GetRecent(200);
+
+    var diagnostics = new
+    {
+        exportedAt = DateTime.UtcNow,
+        version = "1.0.0",
+        appVersion = "1.0.0",
+
+        // System info
+        system = new
+        {
+            os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            runtime = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
+            processorCount = Environment.ProcessorCount,
+            is64Bit = Environment.Is64BitOperatingSystem,
+            machineName = Environment.MachineName,
+            workingSetMb = Math.Round(Environment.WorkingSet / (1024.0 * 1024.0), 1)
+        },
+
+        // Lifecycle state (single source of truth)
+        lifecycle = new
+        {
+            state = health.State,
+            backend = health.Backend,
+            modelLoaded = health.ModelLoaded,
+            modelName = health.ModelName,
+            progress = health.Progress,
+            error = health.Error,
+            uptimeSeconds = health.UptimeSeconds,
+            retryCount = health.RetryCount,
+            isReady = health.IsReady,
+            canAcceptRequests = health.CanAcceptRequests,
+            stateHistory = health.StateHistory,
+            metadata = health.Metadata,
+            metrics = health.Metrics
+        },
+
+        // Survivability metrics
+        survivability = new
+        {
+            runtimeOperational = health.RuntimeOperational,
+            recentSuccessRate = health.RecentSuccessRate,
+            consecutiveFailures = health.ConsecutiveFailures,
+            generatedTokensSinceReset = health.GeneratedTokensSinceReset,
+            lastSuccessfulInferenceAt = health.LastSuccessfulInferenceAt,
+            runtimeDegraded = health.RuntimeDegraded
+        },
+
+        // Inference engine telemetry
+        inference = new
+        {
+            totalInferences = inferenceTelemetry.TotalInferences,
+            totalTokensGenerated = inferenceTelemetry.TotalTokensGenerated,
+            totalViolations = inferenceTelemetry.TotalViolations,
+            lastInferenceAt = inferenceTelemetry.LastInferenceAt,
+            kvTokensInCache = inferenceTelemetry.KvTokensInCache,
+            kvUsedCells = inferenceTelemetry.KvUsedCells,
+            freshContextPerRequest = inferenceTelemetry.FreshContextPerRequest
+        },
+
+        // Cleanup telemetry (survivability-critical)
+        cleanup = new
+        {
+            totalCleanups = cleanupTelemetry.TotalCleanups,
+            successfulCleanups = cleanupTelemetry.SuccessfulCleanups,
+            failedCleanups = cleanupTelemetry.FailedCleanups,
+            verificationFailures = cleanupTelemetry.VerificationFailures,
+            successRate = cleanupTelemetry.SuccessRate,
+            averageDurationMs = cleanupTelemetry.AverageDurationMs,
+            maxDurationMs = cleanupTelemetry.MaxDurationMs,
+            minDurationMs = cleanupTelemetry.MinDurationMs,
+            recentDurations = cleanupTelemetry.RecentDurations
+        },
+
+        // Backend verdicts
+        backendVerdicts = verdicts,
+
+        // Recent logs (last 200 entries)
+        logs = recentLogs.Select(l => new
+        {
+            timestamp = l.Timestamp.ToString("HH:mm:ss.fff"),
+            tag = l.Tag,
+            level = l.Level,
+            message = l.Message
+        })
+    };
+
+    return Results.Ok(diagnostics);
+});
+
+log.Api("All endpoints registered");
+log.Api($"Listening on: {string.Join(", ", app.Urls)}");
+
+// Start non-blocking background initialization
+log.Lifecycle("Starting background initialization...");
+lifecycle.StartInitialization();
+
+log.Api("=== ENGRAM API READY (accepting HTTP) ===");
+log.Api("Model initialization running in background — poll /api/health for state");
 
 app.Run();
 
 // Request models
 record ChatRequest(ChatMessage[]? Messages, int MaxTokens = 1024);
 record ChatMessage(string Role, string Content);
+record ExperimentModeRequest(bool? FreshContext); // KV clearing is now mandatory
 record PowerModeRequest(string Mode);
 record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, string? ProviderName);
 record TokenCheckRequest(string? Provider, int InputTokens, int OutputTokens);

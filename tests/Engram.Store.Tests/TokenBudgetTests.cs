@@ -445,7 +445,7 @@ public class TokenBudgetTests : IDisposable
     // ─── Concurrency ───
 
     [Fact]
-    public void ConcurrentUsage_ThreadSafe()
+    public async Task ConcurrentUsage_ThreadSafe()
     {
         var budget = new TokenBudget(_configDir);
         var tasks = new List<Task>();
@@ -462,7 +462,7 @@ public class TokenBudgetTests : IDisposable
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
 
         var status = budget.GetStatus();
         // 10 threads * 100 iterations * 10 tokens = 10,000
@@ -470,7 +470,7 @@ public class TokenBudgetTests : IDisposable
     }
 
     [Fact]
-    public void ConcurrentCheckAndRecord_NoRaceCondition()
+    public async Task ConcurrentCheckAndRecord_NoRaceCondition()
     {
         var budget = new TokenBudget(_configDir);
         var total = budget.GetStatus().TokensRemaining;
@@ -493,7 +493,7 @@ public class TokenBudgetTests : IDisposable
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
 
         var finalStatus = budget.GetStatus();
         // Total used + remaining should equal initial total (no double-spend)

@@ -23,6 +23,7 @@ public class IdentityStore : IDisposable
 
     public UserProfile? LoadProfile()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var path = Path.Combine(_wikiPath, "user_identity.md");
         if (!File.Exists(path)) return null;
 
@@ -40,6 +41,7 @@ public class IdentityStore : IDisposable
 
     public void SaveProfile(UserProfile profile)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         profile.LastUpdatedAt = DateTimeOffset.UtcNow;
         var content = SerializeProfile(profile);
         var path = Path.Combine(_wikiPath, "user_identity.md");
@@ -51,6 +53,7 @@ public class IdentityStore : IDisposable
 
     public List<Priority> LoadPriorities()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var path = Path.Combine(_wikiPath, "priorities.md");
         if (!File.Exists(path)) return new List<Priority>();
 
@@ -68,6 +71,7 @@ public class IdentityStore : IDisposable
 
     public void SavePriorities(List<Priority> priorities)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var content = SerializePriorities(priorities);
         var path = Path.Combine(_wikiPath, "priorities.md");
         WriteAtomic(path, content);
@@ -78,6 +82,7 @@ public class IdentityStore : IDisposable
 
     public List<AntiGoal> LoadAntiGoals()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var path = Path.Combine(_wikiPath, "anti_goals.md");
         if (!File.Exists(path)) return new List<AntiGoal>();
 
@@ -95,6 +100,7 @@ public class IdentityStore : IDisposable
 
     public void SaveAntiGoals(List<AntiGoal> antiGoals)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var content = SerializeAntiGoals(antiGoals);
         var path = Path.Combine(_wikiPath, "anti_goals.md");
         WriteAtomic(path, content);

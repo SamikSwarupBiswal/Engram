@@ -29,6 +29,7 @@ public class WriteAheadLog : IDisposable
     /// </summary>
     public void LogWrite(string eventId, string hash, string filePath)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var entry = new WalEntry
         {
             Operation = "write",
@@ -46,6 +47,7 @@ public class WriteAheadLog : IDisposable
     /// </summary>
     public void LogCommit(string eventId)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var entry = new WalEntry
         {
             Operation = "commit",
@@ -61,6 +63,7 @@ public class WriteAheadLog : IDisposable
     /// </summary>
     public IReadOnlyList<WalEntry> GetUncommittedWrites()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (!File.Exists(_walPath))
             return Array.Empty<WalEntry>();
 
@@ -97,6 +100,7 @@ public class WriteAheadLog : IDisposable
     /// </summary>
     public void Clear()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_writeLock)
         {
             if (File.Exists(_walPath))

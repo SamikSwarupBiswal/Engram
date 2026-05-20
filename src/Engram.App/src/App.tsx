@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Sidebar, type ChatSession } from "./components/sidebar/Sidebar";
 import { ChatPanel } from "./components/chat/ChatPanel";
 import { Titlebar } from "./components/layout/Titlebar";
-import { api, checkApiHealth } from "./lib/api";
+import { api, checkApiHealth, type HealthResponse } from "./lib/api";
 import { DiscoveryInterview } from "./components/discovery/DiscoveryInterview";
 import { ModelDownloadBar } from "./components/chat/ModelDownloadBar";
 import { GoogleWorkspacePanel } from "./components/settings/GoogleWorkspacePanel";
@@ -30,19 +30,26 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>(loadSessions);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
   const [discoveryDone, setDiscoveryDone] = useState<boolean | null>(null);
-  const [modelReady, setModelReady] = useState(false);
-  const handleModelReady = useCallback(() => setModelReady(true), []);
+
+  // Derive state from health — single source of truth
+  const apiOnline = health !== null;
+  const modelReady = health?.isReady ?? false;
 
   useEffect(() => {
-    checkApiHealth().then((online) => {
-      setApiOnline(online);
-      if (online) api.discoveryStatus().then(d => setDiscoveryDone(d.complete)).catch(() => setDiscoveryDone(false));
-    });
-    const interval = setInterval(() => checkApiHealth().then(setApiOnline), 15000);
+    // Unified health polling — replaces fragmented health/model checks
+    const pollHealth = async () => {
+      const h = await checkApiHealth();
+      setHealth(h);
+      if (h && discoveryDone === null) {
+        api.discoveryStatus().then(d => setDiscoveryDone(d.complete)).catch(() => setDiscoveryDone(false));
+      }
+    };
+    pollHealth();
+    const interval = setInterval(pollHealth, 3000); // Faster poll during startup
     return () => clearInterval(interval);
-  }, []);
+  }, [discoveryDone]);
 
   const handleNewChat = useCallback(() => {
     const newSession: ChatSession = {
@@ -97,7 +104,8 @@ export default function App() {
           {apiOnline && !modelReady && (
             <ModelDownloadBar
               visible={discoveryDone === true && activeView === "chat"}
-              onComplete={handleModelReady}
+              onComplete={() => {/* modelReady is derived from health, no manual state needed */}}
+              health={health}
             />
           )}
           {discoveryDone === false && (
@@ -940,6 +948,30 @@ function SettingsView({ onRedoDiscovery }: { onRedoDiscovery?: () => void }) {
             </div>
           </div>
         )}
+
+        {/* Runtime Diagnostics */}
+        <div>
+          <h3 className="mb-3 text-[13px] font-medium text-[#b4b4b4]">Runtime Diagnostics</h3>
+          <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+            <p className="text-[11px] text-[#888] mb-3">Export runtime diagnostics for support or validation. Includes lifecycle state, cleanup telemetry, backend verdicts, and recent logs.</p>
+            <button onClick={async () => {
+              try {
+                const data = await api.diagnosticsExport();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `engram-diagnostics-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (e) {
+                alert('Failed to export diagnostics: ' + (e instanceof Error ? e.message : 'unknown error'));
+              }
+            }} className="w-full rounded-lg bg-white/[0.06] px-3 py-2 text-[12px] text-[#b4b4b4] hover:bg-white/[0.1]">
+              Export Runtime Diagnostics
+            </button>
+          </div>
+        </div>
 
         {/* Data */}
         <div>

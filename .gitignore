@@ -19,3 +19,4 @@ src-tauri/sidecar/publish/
 *.msi
 package-lock.json
 installer-staging/
+engram-validation-*.json

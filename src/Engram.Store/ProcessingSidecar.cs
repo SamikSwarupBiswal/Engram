@@ -30,6 +30,7 @@ public class ProcessingSidecar : IDisposable
     /// </summary>
     public string Write(string eventFilePath, ProcessingState state)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var sidecarPath = GetSidecarPath(eventFilePath);
         state.Version = ProcessingState.CurrentVersion;
 
@@ -49,6 +50,7 @@ public class ProcessingSidecar : IDisposable
     /// </summary>
     public ProcessingState? Read(string eventFilePath)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         var sidecarPath = GetSidecarPath(eventFilePath);
 
         if (!File.Exists(sidecarPath))

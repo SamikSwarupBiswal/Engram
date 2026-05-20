@@ -81,7 +81,20 @@ public class WikiMetabolizer : IDisposable
                 }
                 break;
             default:
-                if (!string.IsNullOrEmpty(rawEvent.Text))
+                // Handle conversation events from ConversationMemoryPipeline
+                if (rawEvent.EventType.StartsWith("conversation_") && rawEvent.Metadata != null)
+                {
+                    var memType = rawEvent.Metadata.GetValueOrDefault("memory_type", "");
+                    var title = rawEvent.Metadata.GetValueOrDefault("title", "");
+                    var wikiNodeType = MapConversationType(memType);
+
+                    if (!string.IsNullOrEmpty(title) && !string.IsNullOrEmpty(rawEvent.Text))
+                    {
+                        var nodeId = MapConversationPrefix(wikiNodeType) + "_" + Slugify(title);
+                        entities.Add((nodeId, wikiNodeType, title, rawEvent.Text));
+                    }
+                }
+                else if (!string.IsNullOrEmpty(rawEvent.Text))
                 {
                     var title = rawEvent.Text.Length > 60 ? rawEvent.Text[..57] + "..." : rawEvent.Text;
                     entities.Add(("event_" + Slugify(title), WikiNodeType.Concept, title,
@@ -90,6 +103,33 @@ public class WikiMetabolizer : IDisposable
                 break;
         }
         return entities;
+    }
+
+    private static WikiNodeType MapConversationType(string memoryType)
+    {
+        return memoryType switch
+        {
+            "Person" => WikiNodeType.Person,
+            "Project" => WikiNodeType.Project,
+            "Goal" => WikiNodeType.Goal,
+            "Decision" => WikiNodeType.Decision,
+            "Preference" => WikiNodeType.Concept,
+            "Anxiety" => WikiNodeType.Concept,
+            "Task" => WikiNodeType.Concept,
+            _ => WikiNodeType.Concept
+        };
+    }
+
+    private static string MapConversationPrefix(WikiNodeType type)
+    {
+        return type switch
+        {
+            WikiNodeType.Person => "person",
+            WikiNodeType.Project => "project",
+            WikiNodeType.Goal => "goal",
+            WikiNodeType.Decision => "decision",
+            _ => "concept"
+        };
     }
 
     private WikiNode CreateNode(string nodeId, WikiNodeType type, string title, string fact, RawEvent source)
