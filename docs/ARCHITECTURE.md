@@ -11,6 +11,9 @@ High-level architecture overview for the Engram personal semantic operating laye
 5. **Consent-driven:** Sensitive capture sources are disabled by default. Excluded apps are never captured.
 6. **Continuously cognitive:** Background metabolism runs every 5 minutes. Engram is not reactive.
 7. **Intent-driven chat:** The chat is the intent interface into the semantic operating system, not a generic chatbot.
+8. **Epistemically restrained:** Confidence-weighted, counter-evidence-aware, narrative-diverse cognition.
+9. **Psychologically sustainable:** Tone regulation, positive evidence, curiosity, user agency protection.
+10. **Privacy-first perception:** Maximum semantic usefulness with minimum invasiveness.
 
 ## Layer Architecture
 
@@ -23,11 +26,26 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  IntentClassifier → TaskRouter → Subsystem Retrieval    │
 │  PromptAssembler (RetrievalBudgetManager)                │
 ├─────────────────────────────────────────────────────────┤
+│                    Cognitive Stabilization Layer          │
+│  ReflectionConfidenceModel │ IdentityStabilityEngine    │
+│  NarrativeBalanceController │ CounterEvidenceDetector   │
+│  NarrativeInterpretationEngine │ SemanticHealthMonitor   │
+├─────────────────────────────────────────────────────────┤
+│                    Human-Compatible Cognition Layer       │
+│  ToneBalanceEngine │ MomentumDetector │ CuriosityEngine │
+│  InterventionConsentModel │ ReflectionExpiryEngine      │
+├─────────────────────────────────────────────────────────┤
 │                    Intelligence Layer                     │
 │  BackgroundMetabolismService (IHostedService, 5min)      │
 │  SemanticDeduplicator │ ContradictionDetector            │
 │  SalienceScorer │ DriftDetector │ ArchiveManager         │
-│  InterventionGenerator                                   │
+│  InterventionGenerator │ InterventionStore              │
+│  ContradictionHistoryStore │ TensionEvolutionEngine      │
+├─────────────────────────────────────────────────────────┤
+│                    Perception Layer                       │
+│  ActiveWindowService │ FileWatcherService               │
+│  EnvironmentModel │ PerceptionDashboard                 │
+│  VisualPerceptionPipeline │ OcrService                  │
 ├─────────────────────────────────────────────────────────┤
 │                    Memory Layer                          │
 │  ConversationMemoryExtractor → WikiMetabolizer           │
@@ -46,6 +64,10 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  .engram/raw/ (immutable events)                         │
 │  .engram/wiki/ (metabolized memory)                      │
 │  .engram/config/ (identity, priorities, anti-goals)      │
+│  .engram/config/contradiction_history.json               │
+│  .engram/config/interventions.json                       │
+│  .engram/config/intervention_consent.json                │
+│  .engram/config/perception_config.json                   │
 │  .engram/archives/ (decayed nodes)                       │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -169,7 +191,9 @@ Cycle:
 | Engram.Store | Core library (all logic) | 1+ |
 | Engram.Store/Events/ | EventBus, TimelineSubscriber | 22 |
 | Engram.Store/Memory/ | ConversationMemoryExtractor, Pipeline, PromptAssembler | 22 |
-| Engram.Store/Metabolism/ | BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator | 23 |
+| Engram.Store/Metabolism/ | BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator, InterventionStore, ContradictionHistoryStore, TensionEvolutionEngine, ContradictionResolutionDetector | 23, Sprint 3 |
+| Engram.Store/Metabolism/ | ReflectionConfidenceModel, IdentityStabilityEngine, NarrativeBalanceController, CounterEvidenceDetector, NarrativeInterpretationEngine, SemanticHealthMonitor | Sprint 4 |
+| Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine | Sprint 5 |
 | Engram.Store/Orchestration/ | IntentClassifier, TaskRouter | 22 |
 | Engram.Store/Search/ | TF-IDF, SemanticSearchEngine, BriefGenerator | 5, 22 |
 | Engram.Store/Wiki/ | WikiNodeStore, Metabolizer, Serializer | 4 |
@@ -179,7 +203,7 @@ Cycle:
 | Engram.Store/Agent/ | Research agent, browser, citations | 14 |
 | Engram.Store/Automation/ | Action executor, permission gate | 15 |
 | Engram.Store/Security/ | Encryption, export, delete, sync | 16 |
-| Engram.Store/Perception/ | Screen capture, OCR, layout snap | 17 |
+| Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard | 17, Sprint 6 |
 | Engram.Store/Cloud/ | Cloud pipeline, providers, audit | 8 |
 | Engram.Store/Billing/ | Token budget, pricing | 9 |
 | Engram.Store/Google/ | Gmail, Calendar, Drive metadata | 13 |

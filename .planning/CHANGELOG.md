@@ -652,6 +652,120 @@ Example interventions:
 
 ---
 
+## Sprint 3: Closing the Cognitive Loop (May 20, 2026)
+
+**Commits:** `b67ef93`, `5a9a5f9` (merge to master)
+
+The cognitive loop is now closed — outputs of cognition become future inputs.
+
+### New Components
+
+**InterventionStore** — Persistent intervention storage. Interventions are first-class semantic entities, not ephemeral. Stored in `.engram/config/interventions.json`.
+
+**ContradictionHistoryStore** — Persistent contradiction timeline graph. Contradictions accumulate observations over time. Computes trends (Worsening/Improving/Stable/Recurring). Tracks resolution. Stored in `.engram/config/contradiction_history.json`.
+
+**ContradictionResolutionDetector** — Detects when contradictions resolve via 4 signals:
+- Goal salience recovered
+- Activity resumed
+- Stale decay (30+ days no observations)
+- Severity decayed to Low
+
+**TensionEvolutionEngine** — Importance scoring (frequency 0.3, persistence 0.25, severity 0.25, trend 0.2). Tension clustering: same-type contradictions → pattern alerts. Decay for unobserved tensions.
+
+### Modified Components
+
+- BackgroundMetabolismService: now persists contradictions, interventions, detects resolutions
+- PromptAssembler: injects escalating tensions + pending interventions into system prompts
+- 10 new API endpoints for interventions, contradictions, tensions
+
+**Tests:** 1191 passing
+
+---
+
+## Sprint 4: Recursive Cognition Stabilization (May 20, 2026)
+
+**Commit:** `b37c90f`
+
+The organism can now recursively influence itself. This creates new risks:
+- Recursive identity distortion (bad contradictions reinforce themselves)
+- Intervention overfitting (too many tensions dominate cognition)
+- Narrative lock-in (early mistaken interpretations persist)
+- Semantic emotional drift (negativity accumulation)
+
+### New Components
+
+**ReflectionConfidenceModel** — Confidence-weighted self-modeling. Every contradiction gets a confidence score based on observation count, temporal stability, counter-evidence, and source diversity.
+
+**IdentityStabilityEngine** — Prevents recursive identity distortion. Detects: type dominance, low confidence, cognitive overload, recursive negativity, no recovery. Enforces diversity in prompt injection.
+
+**NarrativeBalanceController** — Intervention rate limiting. Daily budgets (max 5/24h), pending limits (max 3), dismissal suppression (24h), tension cooldowns (12h). The organism must know when NOT to speak.
+
+**CounterEvidenceDetector** — Finds balancing evidence for contradictions. Looks for: salience recovery, recent activity, related activity, behavior matches, positive trends.
+
+**NarrativeInterpretationEngine** — Multiple competing interpretations. NOT single deterministic self-story. Low activity could mean: burnout, distraction, recovery, exploration, context switching.
+
+**SemanticHealthMonitor** — Psychological stability metrics. Measures: contradiction ratio, intervention density, narrative diversity, memory polarity, identity rigidity.
+
+**Tests:** 1223 passing (32 new)
+
+---
+
+## Sprint 5: Human-Compatible Cognition (May 20, 2026)
+
+**Commit:** `0b559d6`
+
+The danger is no longer technical — it's psychological. The organism must be sustainable.
+
+### New Components
+
+**ToneBalanceEngine** — Emotional tone regulation. Prevents constant seriousness, intervention harshness, recursive negativity. Softens interventions when tone is imbalanced.
+
+**MomentumDetector** — Positive evidence modeling. Detects: momentum (sustained activity), improvement (trend reversal), success (high salience goals), recovery (reactivated goals).
+
+**CuriosityEngine** — Curiosity layer. The organism explores, asks, wonders, hypothesizes. NOT only diagnose/intervene/correct. Suppresses when overwhelmed.
+
+**InterventionConsentModel** — User agency protection. Users control: intensity (max severity), sensitivity (pattern detection threshold), blocked domains.
+
+**ReflectionExpiryEngine** — Reflection expiry. Fading interpretations, expiring assumptions, reversible identity claims. Prevents stale interpretations from becoming identity.
+
+**Tests:** 1246 passing (23 new)
+
+---
+
+## Sprint 6: Semantic Perception & Environmental Ingestion (May 20, 2026)
+
+**Commit:** `c1d4f3b`
+
+Transforming chat-driven cognition into environment-aware cognition.
+
+### New Components
+
+**ActiveWindowService** — Semantic active window tracking. Emits: ActiveWindowChanged, FocusSessionEnded, ContextSwitchDetected, IdleTransitionDetected. Enables focus analysis, drift detection, workflow modeling WITHOUT invasive surveillance.
+
+**FileWatcherService** — Semantic file change events. Classifies into categories: source_code, project_config, version_control, document, download. NOT raw filesystem spam.
+
+**EnvironmentModel** — Engram's understanding of the machine state. Tracks: behavioral modes (deep_work, research, browsing, communication, terminal_work, exploration), active projects, app usage, mode transitions.
+
+**PerceptionDashboard** — Privacy controls. NON-NEGOTIABLE. Kill switches, app blacklists, path exclusions, pause/resume capture. Without this, Engram becomes psychologically creepy.
+
+**Tests:** 1268 passing (22 new)
+
+---
+
+## Final Statistics (as of Sprint 6)
+
+| Metric | Value |
+|--------|-------|
+| Total commits | 90+ |
+| Test count | 1268/1268 passing (1 pre-existing failure) |
+| C# source files | ~200+ |
+| Lines of code | ~35,000+ |
+| API endpoints | 83+ |
+| Cognitive sprints | 6 (Sprint 1-6) |
+| New components (Sprint 3-6) | 21 |
+
+---
+
 ## Architecture Decisions (68+)
 
 Key decisions documented in `.planning/architecture-decisions.md`:
