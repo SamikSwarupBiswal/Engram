@@ -1,4 +1,5 @@
 using Engram.Store.Events;
+using Engram.Store.Metabolism;
 using Microsoft.Extensions.Logging;
 
 namespace Engram.Store.Events;
@@ -15,6 +16,7 @@ public class TimelineSubscriber : IDisposable
 {
     private readonly IEventBus _eventBus;
     private readonly RawEventWriter _writer;
+    private readonly CognitiveTelemetry? _telemetry;
     private readonly ILogger<TimelineSubscriber>? _logger;
     private readonly List<IDisposable> _subscriptions = new();
     private bool _disposed;
@@ -22,10 +24,12 @@ public class TimelineSubscriber : IDisposable
     public TimelineSubscriber(
         IEventBus eventBus,
         RawEventWriter writer,
+        CognitiveTelemetry? telemetry = null,
         ILogger<TimelineSubscriber>? logger = null)
     {
         _eventBus = eventBus;
         _writer = writer;
+        _telemetry = telemetry;
         _logger = logger;
     }
 
@@ -52,12 +56,15 @@ public class TimelineSubscriber : IDisposable
         {
             var rawEvent = ConvertToRawEvent(envelope);
             _writer.Write(rawEvent);
+            _telemetry?.RecordTimelineEventWritten(envelope.EventType);
+            _telemetry?.RecordEventBusPublish();
 
             _logger?.LogDebug("Timeline event written: {EventType} ({EventId})",
                 envelope.EventType, envelope.EventId);
         }
         catch (Exception ex)
         {
+            _telemetry?.RecordTimelineWriteFailure();
             _logger?.LogWarning(ex, "Failed to write timeline event: {EventType}", envelope.EventType);
         }
     }
