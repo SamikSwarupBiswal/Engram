@@ -54,6 +54,13 @@ public class CognitiveReplayHarness : IDisposable
     public NarrativeInterpretationEngine InterpretationEngine { get; }
     public SemanticHealthMonitor HealthMonitor { get; }
 
+    // Phase 5: Human-Compatible Cognition
+    public ToneBalanceEngine ToneEngine { get; }
+    public MomentumDetector MomentumDetector { get; }
+    public CuriosityEngine CuriosityEngine { get; }
+    public InterventionConsentModel ConsentModel { get; }
+    public ReflectionExpiryEngine ExpiryEngine { get; }
+
     // Memory pipeline
     public ConversationMemoryExtractor Extractor { get; }
     public ConversationMemoryPipeline MemoryPipeline { get; }
@@ -120,6 +127,13 @@ public class CognitiveReplayHarness : IDisposable
         HealthMonitor = new SemanticHealthMonitor(
             ContradictionHistoryStore, InterventionStore,
             StabilityEngine, BalanceController, CounterEvidenceDetector);
+
+        // Phase 5: Human-Compatible Cognition
+        ToneEngine = new ToneBalanceEngine(InterventionStore, ContradictionHistoryStore);
+        MomentumDetector = new MomentumDetector(NodeStore, ContradictionHistoryStore);
+        CuriosityEngine = new CuriosityEngine(NodeStore, ContradictionHistoryStore, MomentumDetector);
+        ConsentModel = new InterventionConsentModel(Paths);
+        ExpiryEngine = new ReflectionExpiryEngine(ContradictionHistoryStore, InterventionStore);
 
         // Background metabolism (the brain)
         MetabolismService = new BackgroundMetabolismService(
@@ -310,6 +324,7 @@ public class CognitiveReplayHarness : IDisposable
         IdentityStore.Dispose();
         NodeStore.Dispose();
         SemanticSearchEngine.Dispose();
+        ConsentModel.Dispose();
         try { Directory.Delete(_tempDir, true); } catch { }
     }
 }
