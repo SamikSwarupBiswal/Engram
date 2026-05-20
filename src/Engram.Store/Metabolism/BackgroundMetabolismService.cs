@@ -38,6 +38,8 @@ public class BackgroundMetabolismService : BackgroundService
     private readonly SemanticDeduplicator _deduplicator;
     private readonly ContradictionDetector _contradictionDetector;
     private readonly IEventBus? _eventBus;
+    private readonly InterventionGenerator? _interventionGenerator;
+    private readonly CognitiveTelemetry? _telemetry;
     private readonly ILogger<BackgroundMetabolismService>? _logger;
 
     /// <summary>How often the metabolism cycle runs.</summary>
@@ -71,6 +73,8 @@ public class BackgroundMetabolismService : BackgroundService
         SemanticDeduplicator deduplicator,
         ContradictionDetector contradictionDetector,
         IEventBus? eventBus = null,
+        InterventionGenerator? interventionGenerator = null,
+        CognitiveTelemetry? telemetry = null,
         ILogger<BackgroundMetabolismService>? logger = null)
     {
         _nodeStore = nodeStore;
@@ -82,6 +86,8 @@ public class BackgroundMetabolismService : BackgroundService
         _deduplicator = deduplicator;
         _contradictionDetector = contradictionDetector;
         _eventBus = eventBus;
+        _interventionGenerator = interventionGenerator;
+        _telemetry = telemetry;
         _logger = logger;
     }
 
@@ -158,6 +164,13 @@ public class BackgroundMetabolismService : BackgroundService
             var behavioralContradictions = _contradictionDetector.DetectAll();
             result.BehavioralContradictionsDetected = behavioralContradictions.Count;
 
+            // Step 6b: Generate interventions from contradictions
+            if (_interventionGenerator != null && behavioralContradictions.Count > 0)
+            {
+                var interventions = _interventionGenerator.GenerateInterventions(behavioralContradictions);
+                result.InterventionsGenerated = interventions.Count;
+            }
+
             // Step 4: Archive stale nodes
             var archived = ArchiveStaleNodes(nodes);
             result.NodesArchived = archived;
@@ -166,8 +179,13 @@ public class BackgroundMetabolismService : BackgroundService
             var tensions = GenerateTensions(nodes, contradictions);
             result.TensionsGenerated = tensions.Count;
 
-            // Step 6: Emit events
+            // Step 7: Emit events
             EmitCycleEvents(result, contradictions, tensions);
+
+            // Step 8: Report telemetry
+            _telemetry?.RecordMetabolismCycle(result);
+            _telemetry?.RecordDeduplication(dedupResult);
+            _telemetry?.RecordContradictionDetection(contradictions.Count, behavioralContradictions.Count);
 
             result.Success = true;
             result.Duration = sw.Elapsed;
@@ -463,6 +481,7 @@ public class MetabolismCycleResult
     public int BehavioralContradictionsDetected { get; set; }
     public int NodesArchived { get; set; }
     public int TensionsGenerated { get; set; }
+    public int InterventionsGenerated { get; set; }
     public TimeSpan Duration { get; set; }
     public string? Error { get; set; }
 }

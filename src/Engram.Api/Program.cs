@@ -117,10 +117,11 @@ var screenCapture = new ScreenCaptureService();
 // ── Memory Pipeline (semantic continuity) ──
 var conversationExtractor = new Engram.Store.Memory.ConversationMemoryExtractor();
 var eventBus = new Engram.Store.Events.InMemoryEventBus();
-var memoryPipeline = new Engram.Store.Memory.ConversationMemoryPipeline(conversationExtractor, new WikiMetabolizer(nodeStore), eventBus);
+var cognitiveTelemetry = new Engram.Store.Metabolism.CognitiveTelemetry();
+var memoryPipeline = new Engram.Store.Memory.ConversationMemoryPipeline(conversationExtractor, new WikiMetabolizer(nodeStore), eventBus, cognitiveTelemetry);
 var promptAssembler = new Engram.Store.Memory.PromptAssembler(identityStore, nodeStore, searchEngine);
 var wikiMetabolizer = new WikiMetabolizer(nodeStore);
-var timelineSubscriber = new TimelineSubscriber(eventBus, writer);
+var timelineSubscriber = new TimelineSubscriber(eventBus, writer, cognitiveTelemetry);
 timelineSubscriber.Start(); // Start listening to all events
 
 // ── Task Router (intent orchestration) ──
@@ -134,9 +135,11 @@ var taskRouter = new Engram.Store.Orchestration.TaskRouter(
 // ── Background Metabolism (the brain) ──
 var deduplicator = new Engram.Store.Metabolism.SemanticDeduplicator(nodeStore);
 var contradictionDetector = new Engram.Store.Metabolism.ContradictionDetector(nodeStore, identityStore);
+var interventionGenerator = new Engram.Store.Metabolism.InterventionGenerator(identityStore, eventBus);
 var backgroundMetabolism = new Engram.Store.Metabolism.BackgroundMetabolismService(
     nodeStore, wikiMetabolizer, salienceScorer, driftDetector,
-    archiveManager, conversationExtractor, deduplicator, contradictionDetector, eventBus);
+    archiveManager, conversationExtractor, deduplicator, contradictionDetector,
+    eventBus, interventionGenerator, cognitiveTelemetry);
 // Start as a background hosted service
 _ = backgroundMetabolism.StartAsync(CancellationToken.None);
 var ocrService = new OcrService();
@@ -1315,6 +1318,41 @@ app.MapGet("/api/diagnostics/export", () =>
 
     return Results.Ok(diagnostics);
 });
+
+// ── Cognitive Diagnostics (the truth layer) ──
+app.MapGet("/api/cognitive/diagnostics", () =>
+{
+    var snapshot = cognitiveTelemetry.GetDiagnosticsSnapshot();
+    return Results.Ok(snapshot);
+});
+
+// ── Cognitive Diagnostics — subsystem specific ──
+app.MapGet("/api/cognitive/diagnostics/memory", () =>
+    Results.Ok(cognitiveTelemetry.GetMemoryPipelineMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/metabolism", () =>
+    Results.Ok(cognitiveTelemetry.GetMetabolismMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/deduplication", () =>
+    Results.Ok(cognitiveTelemetry.GetDeduplicationMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/contradictions", () =>
+    Results.Ok(cognitiveTelemetry.GetContradictionMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/interventions", () =>
+    Results.Ok(cognitiveTelemetry.GetInterventionMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/retrieval", () =>
+    Results.Ok(cognitiveTelemetry.GetRetrievalMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/timeline", () =>
+    Results.Ok(cognitiveTelemetry.GetTimelineMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/automation", () =>
+    Results.Ok(cognitiveTelemetry.GetAutomationMetrics()));
+
+app.MapGet("/api/cognitive/diagnostics/perception", () =>
+    Results.Ok(cognitiveTelemetry.GetPerceptionMetrics()));
 
 log.Api("All endpoints registered");
 log.Api($"Listening on: {string.Join(", ", app.Urls)}");

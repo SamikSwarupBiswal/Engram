@@ -1,5 +1,6 @@
 using Engram.Store.Events;
 using Engram.Store.Wiki;
+using Engram.Store.Metabolism;
 using Microsoft.Extensions.Logging;
 
 namespace Engram.Store.Memory;
@@ -18,17 +19,20 @@ public class ConversationMemoryPipeline
     private readonly ConversationMemoryExtractor _extractor;
     private readonly WikiMetabolizer _metabolizer;
     private readonly IEventBus? _eventBus;
+    private readonly CognitiveTelemetry? _telemetry;
     private readonly ILogger<ConversationMemoryPipeline>? _logger;
 
     public ConversationMemoryPipeline(
         ConversationMemoryExtractor extractor,
         WikiMetabolizer metabolizer,
         IEventBus? eventBus = null,
+        CognitiveTelemetry? telemetry = null,
         ILogger<ConversationMemoryPipeline>? logger = null)
     {
         _extractor = extractor;
         _metabolizer = metabolizer;
         _eventBus = eventBus;
+        _telemetry = telemetry;
         _logger = logger;
     }
 
@@ -94,6 +98,10 @@ public class ConversationMemoryPipeline
         }
 
         result.Duration = sw.Elapsed;
+
+        // Report telemetry
+        _telemetry?.RecordExtraction(result.CandidatesExtracted, result.NodesCreated, result.Success);
+
         return result;
     }
 
