@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Engram.Store.Capture;
 using Xunit;
 
@@ -14,13 +18,13 @@ public class CaptureOrchestratorTests : IDisposable
 
     public void Dispose() => _workspace.Dispose();
 
-    private CaptureOrchestrator CreateOrchestrator(EngramConfig? config = null)
+    private CaptureOrchestrator CreateOrchestrator(EngramConfig? config = null, RateLimiter? rateLimiter = null)
     {
         new WorkspaceInitializer().Initialize(_workspace.Paths);
         var writer = new RawEventWriter(_workspace.Paths, _hasher);
         config ??= new EngramConfig();
 
-        return new CaptureOrchestrator(writer, _hasher, config, _workspace.Paths);
+        return new CaptureOrchestrator(writer, _hasher, config, _workspace.Paths, rateLimiter: rateLimiter);
     }
 
     [Fact]
@@ -49,15 +53,85 @@ public class CaptureOrchestratorTests : IDisposable
     [Fact]
     public void ProcessEvent_RateLimitsFloods()
     {
-        var orch = CreateOrchestrator();
+        // Inject a rate limiter with 0 refill rate to isolate the test from timing issues.
+        var rateLimiter = new RateLimiter(maxTokens: 200, refillRatePerSecond: 0);
+        var orch = CreateOrchestrator(rateLimiter: rateLimiter);
 
-        // Flood 500 events rapidly — rate limiter has maxTokens=200
+        // Flood 500 events rapidly
         for (int i = 0; i < 500; i++)
             orch.ProcessEvent(TestEvents.Create(text: $"flood {i}"));
 
-        // PROVES rate limiting actually fired — not just that math works
-        Assert.True(orch.EventsDropped > 0, "Rate limiter must drop events under flood");
-        Assert.True(orch.EventsCaptured < 500, "Not all events should pass under flood");
+        // Assert mathematically exact dropped/captured counts
+        Assert.Equal(200, orch.EventsCaptured);
+        Assert.Equal(300, orch.EventsDropped);
+    }
+
+    [Fact]
+    public async Task RateLimiter_ConcurrentAccess_IsThreadSafe()
+    {
+        // 10 threads concurrently trying to consume 300 tokens from a bucket of 100 max tokens.
+        var rateLimiter = new RateLimiter(maxTokens: 100, refillRatePerSecond: 0);
+        var tasks = new List<Task<bool>>();
+
+        for (int i = 0; i < 300; i++)
+        {
+            tasks.Add(Task.Run(() => rateLimiter.TryAcquire()));
+        }
+
+        var results = await Task.WhenAll(tasks);
+        int passed = results.Count(r => r);
+        int dropped = results.Count(r => !r);
+
+        Assert.Equal(100, passed);
+        Assert.Equal(200, dropped);
+        Assert.Equal(100, rateLimiter.PassedCount);
+        Assert.Equal(200, rateLimiter.DroppedCount);
+    }
+
+    [Fact]
+    public async Task RateLimiter_Refill_WorksOverTime()
+    {
+        var rateLimiter = new RateLimiter(maxTokens: 10, refillRatePerSecond: 100);
+        
+        // Drain all tokens
+        for (int i = 0; i < 10; i++)
+        {
+            Assert.True(rateLimiter.TryAcquire());
+        }
+        Assert.False(rateLimiter.TryAcquire()); // Drained
+        
+        // Wait 50 milliseconds which should refill at least 5 tokens (0.05s * 100/s = 5 tokens)
+        await Task.Delay(60);
+        
+        // Try acquiring again
+        Assert.True(rateLimiter.TryAcquire());
+        Assert.True(rateLimiter.PassedCount > 10);
+    }
+
+    [Fact]
+    public void ExcludedApps_TrimmingAndCasing_IsRobust()
+    {
+        var config = new EngramConfig
+        {
+            ExcludedApps = new List<string> { "  MY_custom_App  ", "  " }
+        };
+        var orch = CreateOrchestrator(config);
+
+        Assert.True(orch.IsExcluded("my_custom_app"));
+        Assert.True(orch.IsExcluded("MY_CUSTOM_APP"));
+    }
+
+    [Fact]
+    public void ExcludedApps_NullConfigItems_DoesNotThrow()
+    {
+        var config = new EngramConfig
+        {
+            ExcludedApps = new List<string?> { null, "valid_app", "" }!
+        };
+        var orch = CreateOrchestrator(config);
+
+        Assert.True(orch.IsExcluded("valid_app"));
+        Assert.False(orch.IsExcluded(""));
     }
 
     [Fact]

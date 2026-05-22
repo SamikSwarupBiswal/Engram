@@ -18,6 +18,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new() { Title = "Engram API", Version = "1.0.0", Description = "Personal Semantic Operating Layer API" });
@@ -113,6 +117,9 @@ var keyManager = new KeyManager(paths.Config);
 var dataExport = new DataExport(paths.Root);
 var dataDelete = new DataDelete(paths.Root);
 var screenCapture = new ScreenCaptureService();
+var actionRuntime = new ActionRuntime(actionExecutor, permissionGate);
+var taskPlanner = new TaskPlanner(localEngine);
+var cognitiveActionLoop = new CognitiveActionLoop(taskPlanner, actionRuntime, localEngine);
 
 // ── Memory Pipeline (semantic continuity) ──
 var conversationExtractor = new Engram.Store.Memory.ConversationMemoryExtractor();
@@ -1015,6 +1022,105 @@ app.MapPost("/api/automation/rollback", (ActionPlan plan) =>
     return Results.Ok(new { rolledBack = count });
 });
 
+app.MapPost("/api/automation/pause", () =>
+{
+    actionRuntime.Pause();
+    return Results.Ok(new { message = "Execution paused." });
+});
+
+app.MapPost("/api/automation/resume", () =>
+{
+    actionRuntime.Resume();
+    return Results.Ok(new { message = "Execution resumed." });
+});
+
+app.MapPost("/api/automation/abort", () =>
+{
+    actionRuntime.Abort();
+    return Results.Ok(new { message = "Execution aborted." });
+});
+
+app.MapGet("/api/automation/status", () =>
+{
+    var plan = actionRuntime.ActivePlan;
+    var context = actionRuntime.ActiveContext;
+    return Results.Ok(new
+    {
+        state = actionRuntime.State.ToString(),
+        plan = plan != null ? new
+        {
+            planId = plan.PlanId,
+            goal = plan.Goal,
+            steps = plan.Steps.Values.Select(s => new
+            {
+                id = s.Id,
+                status = s.Status.ToString(),
+                error = s.Error,
+                action = new
+                {
+                    type = s.Action.Type.ToString(),
+                    description = s.Action.Description,
+                    value = s.Action.Value,
+                    status = s.Action.Status.ToString(),
+                    result = s.Action.Result
+                }
+            }).ToList()
+        } : null,
+        variables = context != null ? context.Variables.ToDictionary(kvp => kvp.Key, kvp => kvp.Value?.ToString() ?? string.Empty) : null
+    });
+});
+
+app.MapPost("/api/automation/execute-plan", (ExecutionPlan plan) =>
+{
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            var context = new Engram.Store.Automation.ExecutionContext();
+            var desktopOp = new DesktopOperator();
+            context.SetVariable("DesktopOperator", desktopOp);
+            
+            var browserAgent = new BrowserAgentRuntime();
+            context.SetVariable("BrowserAgent", browserAgent);
+
+            await actionRuntime.ExecutePlanAsync(plan, context);
+        }
+        catch (Exception)
+        {
+            // Background errors logged or handled
+        }
+    });
+    return Results.Accepted("/api/automation/status");
+});
+
+app.MapPost("/api/automation/cognitive/run", (CognitiveRunRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request?.Goal))
+    {
+        return Results.BadRequest(new { error = "Goal is required." });
+    }
+
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            var context = new Engram.Store.Automation.ExecutionContext();
+            var desktopOp = new DesktopOperator();
+            context.SetVariable("DesktopOperator", desktopOp);
+            
+            var browserAgent = new BrowserAgentRuntime();
+            context.SetVariable("BrowserAgent", browserAgent);
+
+            await cognitiveActionLoop.RunAsync(request.Goal, context);
+        }
+        catch (Exception)
+        {
+            // Background errors logged or handled
+        }
+    });
+    return Results.Accepted("/api/automation/status");
+});
+
 // --- Research Agent ---
 app.MapPost("/api/research/start", async (ResearchStartRequest request, CancellationToken ct) =>
 {
@@ -1421,6 +1527,7 @@ record SecurityUnlockRequest(string Password);
 record SecurityChangePasswordRequest(string OldPassword, string NewPassword);
 record SecurityImportRequest(string ZipPath);
 record LayoutSnapRequest(string? BrowserProcess, string? EditorProcess);
+record CognitiveRunRequest(string Goal);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }

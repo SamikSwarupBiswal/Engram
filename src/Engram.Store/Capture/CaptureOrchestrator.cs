@@ -40,7 +40,8 @@ public class CaptureOrchestrator : IDisposable
         ILogger<CaptureOrchestrator>? logger = null,
         IFileCaptureProvider? fileProvider = null,
         IClipboardProvider? clipboardProvider = null,
-        IActiveWindowProvider? windowProvider = null)
+        IActiveWindowProvider? windowProvider = null,
+        RateLimiter? rateLimiter = null)
     {
         _writer = writer;
         _hasher = hasher;
@@ -49,7 +50,7 @@ public class CaptureOrchestrator : IDisposable
         _exclusionList = new ExclusionList();
         _exclusionList.LoadFromConfig(config.ExcludedApps);
 
-        _rateLimiter = new RateLimiter(maxTokens: 200, refillRatePerSecond: 10);
+        _rateLimiter = rateLimiter ?? new RateLimiter(maxTokens: 200, refillRatePerSecond: 10);
         _circuitBreaker = new CircuitBreaker(failureThreshold: 10, openDuration: TimeSpan.FromSeconds(30));
     }
 

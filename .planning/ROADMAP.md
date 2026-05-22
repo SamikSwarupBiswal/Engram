@@ -1,6 +1,6 @@
 # Roadmap: Engram
 
-## Phases — ALL COMPLETE
+## Phases
 
 - [x] **Phase 1: Repository and Runtime Foundation** [FREE] — 2026-05-13
 - [x] **Phase 2: Immutable Raw Event Store** [FREE] — 2026-05-13
@@ -8,26 +8,37 @@
 - [x] **Phase 4: Markdown Wiki Memory** [FREE] — 2026-05-13
 - [x] **Phase 5: Desktop Shell + Search + Briefs** [FREE] — 2026-05-17
 - [x] **Phase 6: Identity Hardening + Discovery UI** [FREE] — 2026-05-17
-- [x] **Phase 7: Salience, Drift, Inference Engine** [FREE] — 2026-05-18
-- [x] **Phase 8: Cloud Reasoning + Token Billing** [PRO] — 2026-05-18
-- [x] **Phase 9: Google Workspace Metadata** [PRO] — 2026-05-18
-- [x] **Phase 10: Agentic Research Workflow** [PRO] — 2026-05-18
-- [x] **Phase 11: Computer-Use Automation** [PRO] — 2026-05-18
-- [x] **Phase 12: Encryption, Sync, Production Hardening** [PRO] — 2026-05-18
-- [x] **Phase 13: Visual Perception Pipeline** [PRO] — 2026-05-18
-- [x] **Phase 14: Quality Hardening** [PRO] — 2026-05-18
-- [x] **Phase 15: Runtime Survivability** [CRITICAL] — 2026-05-19
-- [x] **Phase 16: Packaged Product Validation** [CRITICAL] — 2026-05-19
-- [x] **Phase 17: Engram System Prompt** [CRITICAL] — 2026-05-19
-- [x] **Phase 18: Semantic Continuity** [CRITICAL] — 2026-05-20
-- [x] **Phase 19: Cognitive Stabilization** [CRITICAL] — 2026-05-20
-- [x] **Phase 20: Behavioral Reality Validation** [CRITICAL] — 2026-05-26
-- [x] **Phase 21: Longitudinal Human Reality Testing** [CRITICAL] — 2026-05-26
+- [/] **Phase 7: The Embodied Execution Megaphase** [CRITICAL] — 2026-05-22
+  - [ ] **Phase 7A: Action Graph Foundation** — make execution deterministic and inspectable
+  - [ ] **Phase 7B: Task Planner** — convert natural language into executable operational graphs
+  - [ ] **Phase 7C: Desktop Operator** — give Engram hands
+  - [ ] **Phase 7D: Browser Agent Runtime** — give Engram web navigation capability
+  - [ ] **Phase 7E: State Verification** — prevent hallucinated success
+  - [ ] **Phase 7F: Recovery & Rollback** — survive environmental chaos
+  - [ ] **Phase 7G: Execution Memory** — operational continuity
+  - [ ] **Phase 7H: Execution Safety** — prevent catastrophic autonomy
+  - [ ] **Phase 7I: Live Execution UX** — maintain user trust during operation
+  - [ ] **Phase 7J: Operational Cognition** — merge cognition with action
+- [ ] **Phase 8: Cloud Reasoning + Token Billing** [PRO]
+- [ ] **Phase 9: Google Workspace Metadata** [PRO]
+- [ ] **Phase 10: Agentic Research Workflow** [PRO]
+- [ ] **Phase 11: Computer-Use Automation** [PRO]
+- [ ] **Phase 12: Encryption, Sync, Production Hardening** [PRO]
+- [ ] **Phase 13: Visual Perception Pipeline** [PRO]
+- [ ] **Phase 14: Quality Hardening** [PRO]
+- [ ] **Phase 15: Runtime Survivability** [CRITICAL]
+- [ ] **Phase 16: Packaged Product Validation** [CRITICAL]
+- [ ] **Phase 17: Engram System Prompt** [CRITICAL]
+- [ ] **Phase 18: Semantic Continuity** [CRITICAL]
+- [ ] **Phase 19: Cognitive Stabilization** [CRITICAL]
+- [ ] **Phase 20: Behavioral Reality Validation** [CRITICAL]
+- [ ] **Phase 21: Longitudinal Human Reality Testing** [CRITICAL]
 
 ## Current State
 
-- All 21 phases implemented
-- 1362/1363 tests passing (1 pre-existing model file failure)
+- Phases 1-6 implemented and verified
+- Active development returned to the expanded Phase 7: The Embodied Execution Megaphase
+- 1367/1367 tests passing (C# test suite isolated and hardened)
 - 83 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)

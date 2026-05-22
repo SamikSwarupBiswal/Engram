@@ -13,11 +13,14 @@ public class InferenceEngineTests : IDisposable
 
     public InferenceEngineTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "engram-inference-" + Guid.NewGuid().ToString("N")[..8]);
+        _tempDir = Path.Combine(Path.GetTempPath(), "Engram", "models", "engram-inference-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(_tempDir);
+        Environment.SetEnvironmentVariable("ENGRAM_MODELS_DIR", _tempDir);
     }
 
     public void Dispose()
     {
+        Environment.SetEnvironmentVariable("ENGRAM_MODELS_DIR", null);
         try { Directory.Delete(_tempDir, true); } catch { }
     }
 

@@ -576,4 +576,104 @@ public class ApiEndpointFullTests : IClassFixture<WebApplicationFactory<Program>
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
     }
+
+    // ─── Automation Control and Execution Endpoints (Phase 7I/7J) ───
+
+    [Fact]
+    public async Task Automation_GetStatus_ReturnsCorrectStructure()
+    {
+        var response = await _client.GetAsync("/api/automation/status");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(json.TryGetProperty("state", out var stateProp));
+        Assert.Equal("Idle", stateProp.GetString());
+
+        Assert.True(json.TryGetProperty("plan", out var planProp));
+        Assert.Equal(JsonValueKind.Null, planProp.ValueKind);
+
+        Assert.True(json.TryGetProperty("variables", out var varsProp));
+        Assert.Equal(JsonValueKind.Null, varsProp.ValueKind);
+    }
+
+    [Fact]
+    public async Task Automation_PauseResumeAbort_ReturnsOk()
+    {
+        // Pause
+        var pauseResponse = await _client.PostAsync("/api/automation/pause", null);
+        Assert.Equal(HttpStatusCode.OK, pauseResponse.StatusCode);
+        var pauseJson = await pauseResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(pauseJson.TryGetProperty("message", out _));
+
+        // Resume
+        var resumeResponse = await _client.PostAsync("/api/automation/resume", null);
+        Assert.Equal(HttpStatusCode.OK, resumeResponse.StatusCode);
+        var resumeJson = await resumeResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(resumeJson.TryGetProperty("message", out _));
+
+        // Abort
+        var abortResponse = await _client.PostAsync("/api/automation/abort", null);
+        Assert.Equal(HttpStatusCode.OK, abortResponse.StatusCode);
+        var abortJson = await abortResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(abortJson.TryGetProperty("message", out _));
+    }
+
+    [Fact]
+    public async Task Automation_CognitiveRun_ValidatesGoal()
+    {
+        // Missing goal
+        var badRequest = new { goal = "" };
+        var badResponse = await _client.PostAsJsonAsync("/api/automation/cognitive/run", badRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, badResponse.StatusCode);
+
+        // Null goal
+        var badRequest2 = new { goal = (string?)null };
+        var badResponse2 = await _client.PostAsJsonAsync("/api/automation/cognitive/run", badRequest2);
+        Assert.Equal(HttpStatusCode.BadRequest, badResponse2.StatusCode);
+
+        // Valid goal
+        var request = new { goal = "Find weather in London" };
+        var response = await _client.PostAsJsonAsync("/api/automation/cognitive/run", request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal("/api/automation/status", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task Automation_ExecutePlan_ReturnsAccepted()
+    {
+        var planPayload = new
+        {
+            planId = "testPlan123",
+            goal = "Run simple click action",
+            steps = new Dictionary<string, object>
+            {
+                {
+                    "step1", new
+                    {
+                        id = "step1",
+                        action = new
+                        {
+                            actionId = "act1",
+                            type = "Click",
+                            description = "Click on elements",
+                            permission = "Approved",
+                            target = new
+                            {
+                                selector = "button#submit",
+                                text = "Submit",
+                                x = 100,
+                                y = 200
+                            }
+                        },
+                        dependsOn = new List<string>()
+                    }
+                }
+            }
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/automation/execute-plan", planPayload);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal("/api/automation/status", response.Headers.Location?.OriginalString);
+    }
 }
+

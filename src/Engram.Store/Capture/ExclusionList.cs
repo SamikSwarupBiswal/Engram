@@ -63,12 +63,13 @@ public class ExclusionList
         return _excluded.Keys.ToList().AsReadOnly();
     }
 
-    /// <summary>
-    /// Load exclusions from config, merging with defaults.
-    /// </summary>
-    public void LoadFromConfig(IEnumerable<string> configExclusions)
+    public void LoadFromConfig(IEnumerable<string>? configExclusions)
     {
+        if (configExclusions == null) return;
         foreach (var app in configExclusions)
-            _excluded.TryAdd(app.Trim(), 0);
+        {
+            if (!string.IsNullOrWhiteSpace(app))
+                _excluded.TryAdd(app.Trim(), 0);
+        }
     }
 }

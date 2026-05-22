@@ -57,7 +57,7 @@ public class LocalInferenceEngine : IDisposable
     // ── Events ──
     public event Action<CleanupOutcome, string>? OnCleanupResult;
 
-    public bool IsReady => _model != null && _context != null;
+    public virtual bool IsReady => _model != null && _context != null;
     public bool IsLoading => _isLoading;
     public GpuInfo? GpuInfo => _gpuInfo;
     public ModelConfig? LoadedModel => _loadedConfig;
@@ -306,7 +306,7 @@ public class LocalInferenceEngine : IDisposable
     /// Creates an InferenceSession with heartbeat tracking and watchdog.
     /// Respects ClearKvCacheAfterInference and FreshContextPerRequest modes.
     /// </summary>
-    public async Task<InferenceResult> ChatCompletionAsync(
+    public virtual async Task<InferenceResult> ChatCompletionAsync(
         ChatMessage[] messages,
         int maxTokens = 1024,
         CancellationToken cancellationToken = default)
