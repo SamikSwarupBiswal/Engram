@@ -21,18 +21,16 @@
   - [x] **Phase 7J: Operational Cognition** — merge cognition with action
 - [x] **Phase 8: Executional World Model & Autonomous Workflows** [CRITICAL] — 2026-05-22
 - [x] **Phase 9: Execution Reliability & Embodied Operation** [CRITICAL] — 2026-05-22
-- [ ] **Phase 10: Agentic Research Workflow** [PRO]
-- [ ] **Phase 11: Computer-Use Automation** [PRO]
-- [ ] **Phase 12: Encryption, Sync, Production Hardening** [PRO]
-- [ ] **Phase 13: Visual Perception Pipeline** [PRO]
-- [ ] **Phase 14: Quality Hardening** [PRO]
-- [ ] **Phase 15: Runtime Survivability** [CRITICAL]
-- [ ] **Phase 16: Packaged Product Validation** [CRITICAL]
-- [ ] **Phase 17: Engram System Prompt** [CRITICAL]
-- [ ] **Phase 18: Semantic Continuity** [CRITICAL]
-- [ ] **Phase 19: Cognitive Stabilization** [CRITICAL]
-- [ ] **Phase 20: Behavioral Reality Validation** [CRITICAL]
-- [ ] **Phase 21: Longitudinal Human Reality Testing** [CRITICAL]
+- [ ] **Phase 10: Unified Semantic World Model** [CRITICAL]
+  - [ ] **Phase 10A: Unified Entity Graph** — Merge wiki, operational, workflow, browser, and filesystem entities into one canonical semantic identity system
+  - [ ] **Phase 10B: Cross-Modal Identity Resolution** — Resolve references (PDFs, browser tabs, conversations, timelines) to their single project entities
+  - [ ] **Phase 10C: Temporal World Fusion** — Build a continuous lived timeline merging browsing, cognition, and workflows into a persistent semantic chronology
+  - [ ] **Phase 10D: Attention & Salience Unification** — Orchestrate global semantic focus, determining what is active, stale, or needs intervention across all domains
+  - [ ] **Phase 10E: Semantic Scene Construction** — Synthesize the user's active context into living semantic scenes (coding session, burnout spiral, etc.)
+  - [ ] **Phase 10F: Cross-System Memory Propagation** — Automate seamless memory and insight propagation between workflows, browser, cognition, and timelines
+  - [ ] **Phase 10G: Global Consistency Engine** — A coherence immune system that prevents duplicate entities, contradictions, and narrative drift
+- [ ] **Phase 11: Human Trust & Coexistence** [CRITICAL] — Explainability, privacy maps, memory editing, trust pacing, and ambient cognition restraint
+- [ ] **Phase 12: Longitudinal Endurance** [CRITICAL] — Month-scale runtime, semantic compaction, graph entropy control, memory pollution resistance, and operational fatigue defense
 
 ## Current State
 

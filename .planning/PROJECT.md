@@ -123,10 +123,9 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## What's Next
 
-1. **Production Deployment** — Code signing, auto-update, crash reporting
-2. **Semantic Coherence** — Make existing system coherent, persistent, stable
-3. **Intervention Refinement** — Track accuracy, timing, personalization
-4. **Memory Quality** — Fact verification, source confidence, consolidation
+1. **Phase 10: Unified Semantic World Model** — Build a single coherent entity graph and temporal chronology across workflows, browser sessions, filesystem, and user context.
+2. **Phase 11: Human Trust & Coexistence** — Introduce explainability, privacy maps, trust pacing, and ambient cognition restraint.
+3. **Phase 12: Longitudinal Endurance** — Hardening for month-scale execution, graph entropy control, and semantic compaction.
 
 ## Anti-Patterns (DO NOT BUILD)
 

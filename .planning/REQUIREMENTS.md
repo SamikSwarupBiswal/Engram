@@ -23,10 +23,10 @@
 - [ ] **REQ-019** Detect drift when new events contradict wiki facts or priorities, with source-linked alerts. Phase: 7.
 - [ ] **REQ-020** Add cloud model routing with local filtering, cost controls, provider audit logs, and no raw private upload by default. Phase: 8.
 - [ ] **REQ-021** Add Google Workspace metadata ingestion with OAuth, minimal scopes, revocation, and source-linked raw events. Phase: 9.
-- [ ] **REQ-022** Implement agentic research workflow with Playwright, multi-tab source collection, cited wiki summaries, and resumable run logs. Phase: 10.
-- [ ] **REQ-023** Implement computer-use automation under strict permission, preview, approval, and action logging rules. Phase: 11.
-- [ ] **REQ-024** Add AES-256 local encryption, key management, export/delete flows, encrypted sync, installer, and production performance checks. Phase: 12.
-- [ ] **REQ-025** Implement Windows installer (.exe/.msi) that bundles Engram application, local SLM models, and Windows Copilot Runtime integration. Phase: 12.
+- [ ] **REQ-022** Build a Unified Semantic World Model to fuse wiki, operational, workflow, browser, and filesystem entities into a single coherent identity system and living semantic scene. Phase: 10.
+- [ ] **REQ-023** Implement Human Trust & Coexistence boundaries, including explainability interfaces, user-configurable privacy maps, memory editing utilities, and ambient cognition restraint gates. Phase: 11.
+- [ ] **REQ-024** Establish Longitudinal Endurance capabilities, supporting month-scale runtime stability, automatic semantic compaction, graph entropy limits, and memory pollution filters. Phase: 12.
+- [ ] **REQ-025** Implement production-grade packaging, including Windows code-signing, automatic updater integration, crash diagnostics telemetry, and installation validation. Phase: 12.
 - [ ] **REQ-026** Implement Discovery Skill interview (15-minute AI-guided SOP) that captures anti-goals, comfort triggers, and recurring anxieties into `user.md`. Phase: 6.
 - [ ] **REQ-027** Integrate local SLM inference via tiered model strategy: embeddings (always on), task SLM (on demand), reasoning SLM (on demand). Must run on 4GB RAM minimum. Phase: 7.
 - [ ] **REQ-028** Implement conversational GUI with chat window, streaming responses, sidebar navigation, backed by API server over Engram.Store services. Phase: 5.
