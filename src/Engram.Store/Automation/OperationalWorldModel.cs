@@ -195,6 +195,36 @@ public class OperationalWorldModel
         PublishStateChanged("BatchUpdate", "Multiple changes applied");
     }
 
+    public void UpdateState(
+        string currentPhase,
+        string activeWorkflow,
+        string activeDocument,
+        int browserTabsCount,
+        IDictionary<string, string> environmentalConstraints)
+    {
+        Update(m =>
+        {
+            m.CurrentPhase = currentPhase;
+            m.ActiveWorkflow = activeWorkflow;
+            m.ActiveDocument = activeDocument;
+            m.BrowserTabsCount = browserTabsCount;
+            
+            // Safe clear and copy constraints
+            var keys = new List<string>(m.EnvironmentalConstraints.Keys);
+            foreach (var key in keys)
+            {
+                m.RemoveEnvironmentalConstraint(key);
+            }
+            if (environmentalConstraints != null)
+            {
+                foreach (var kvp in environmentalConstraints)
+                {
+                    m.SetEnvironmentalConstraint(kvp.Key, kvp.Value);
+                }
+            }
+        });
+    }
+
     public object GetSnapshot()
     {
         lock (_lock)

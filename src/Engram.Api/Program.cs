@@ -141,6 +141,19 @@ var sandboxManager = new SandboxManager();
 var agentOrchestrator = new AgentOrchestrator(worldModel, eventBus);
 var operationalTimeline = new OperationalTimeline(paths.Root);
 
+// ── Phase 8 Extension Services ──
+var intentMonitor = new WorkflowIntentMonitor(worldModel, eventBus);
+var confidenceEngine = new WorkflowConfidenceEngine(telemetryEngine, proceduralMemory, eventBus);
+var driftEngine = new OperationalDriftEngine(worldModel, telemetryEngine, operationalTimeline, eventBus, paths.Root);
+var interruptionClassifier = new InterruptionClassifier(worldModel, eventBus);
+var priorityGraph = new OperationalPriorityGraph(worldModel, confidenceEngine, identityStore);
+var replayEngine = new ExecutionReplayEngine(operationalTimeline, workflowStore);
+var workflowConsolidator = new WorkflowConsolidator(proceduralMemory, telemetryEngine, paths.Root);
+var envSyncEngine = new EnvironmentSynchronizationEngine(worldModel, eventBus);
+var escalationPolicy = new EscalationPolicyEngine(collaborationEngine, confidenceEngine, eventBus);
+var failureArchaeologyStore = new FailureArchaeologyStore(paths.Root);
+
+
 // ── Memory Pipeline (semantic continuity) ──
 var conversationExtractor = new Engram.Store.Memory.ConversationMemoryExtractor();
 var cognitiveTelemetry = new Engram.Store.Metabolism.CognitiveTelemetry();
@@ -1203,6 +1216,85 @@ app.MapPost("/api/automation/collaboration/respond", (CollaborationResponseReque
 });
 
 app.MapGet("/api/automation/telemetry", () => Results.Ok(telemetryEngine.GetSummary()));
+
+// ── Phase 8 Extension Endpoints ──
+app.MapGet("/api/automation/intent/{workflowId}", (string workflowId) =>
+{
+    var activePlan = workflowRuntime.ActivePlan ?? new ExecutionPlan { Goal = "Active Work" };
+    var activeContext = workflowRuntime.ActiveContext ?? new Engram.Store.Automation.ExecutionContext();
+    var status = intentMonitor.EvaluateIntent(workflowId, activePlan, activeContext);
+    return Results.Ok(status);
+});
+
+app.MapGet("/api/automation/confidence/{workflowId}", (string workflowId) =>
+{
+    var activePlan = workflowRuntime.ActivePlan ?? new ExecutionPlan { Goal = "Active Work" };
+    var activeContext = workflowRuntime.ActiveContext ?? new Engram.Store.Automation.ExecutionContext();
+    var intentStatus = intentMonitor.EvaluateIntent(workflowId, activePlan, activeContext);
+    var confidence = confidenceEngine.ComputeConfidence(workflowId, activePlan, activeContext, intentStatus);
+    var vitality = confidenceEngine.DetermineMultiFactorVitality(confidence, intentStatus, TimeSpan.Zero, false, 0);
+    return Results.Ok(new { Confidence = confidence, VitalityState = vitality.ToString() });
+});
+
+app.MapGet("/api/automation/drift/{workflowId}", (string workflowId) =>
+{
+    var alerts = driftEngine.DetectDrift(workflowId);
+    return Results.Ok(alerts);
+});
+
+app.MapGet("/api/automation/priorities", () =>
+{
+    var activeIds = new List<string>();
+    if (!string.IsNullOrEmpty(workflowRuntime.ActiveWorkflowId))
+    {
+        activeIds.Add(workflowRuntime.ActiveWorkflowId);
+    }
+    else
+    {
+        activeIds.Add("default_workflow");
+    }
+    var activeContext = workflowRuntime.ActiveContext ?? new Engram.Store.Automation.ExecutionContext();
+    var priorities = priorityGraph.ComputePriorities(activeIds, activeContext);
+    return Results.Ok(priorities);
+});
+
+app.MapGet("/api/automation/replay/{workflowId}", async (string workflowId) =>
+{
+    var replay = await replayEngine.LoadReplayAsync(workflowId);
+    return Results.Ok(replay);
+});
+
+app.MapGet("/api/automation/failures", async () =>
+{
+    var failures = await failureArchaeologyStore.GetFailuresAsync();
+    return Results.Ok(failures);
+});
+
+app.MapGet("/api/automation/failures/patterns", async () =>
+{
+    var patterns = await failureArchaeologyStore.DetectPatternsAsync();
+    return Results.Ok(patterns);
+});
+
+app.MapGet("/api/automation/environment/sync", () =>
+{
+    var activeContext = workflowRuntime.ActiveContext ?? new Engram.Store.Automation.ExecutionContext();
+    var report = envSyncEngine.CheckSynchronization(activeContext);
+    return Results.Ok(report);
+});
+
+app.MapPost("/api/automation/drift/{alertId}/dismiss", (string alertId) =>
+{
+    driftEngine.DismissAlert(alertId);
+    return Results.Ok(new { success = true });
+});
+
+app.MapPost("/api/automation/drift/{alertId}/accept", (string alertId) =>
+{
+    driftEngine.AcceptAlert(alertId);
+    return Results.Ok(new { success = true });
+});
+
 
 // --- Research Agent ---
 app.MapPost("/api/research/start", async (ResearchStartRequest request, CancellationToken ct) =>

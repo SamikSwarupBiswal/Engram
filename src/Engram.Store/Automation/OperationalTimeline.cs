@@ -38,7 +38,14 @@ public class OperationalTimeline
             Timestamp = DateTimeOffset.UtcNow
         };
 
-        var filePath = Path.Combine(_timelineDir, $"{workflowId}.jsonl");
+        RecordEvent(ev);
+    }
+
+    public void RecordEvent(TimelineEvent ev)
+    {
+        if (ev == null || string.IsNullOrEmpty(ev.WorkflowId)) return;
+
+        var filePath = Path.Combine(_timelineDir, $"{ev.WorkflowId}.jsonl");
 
         lock (_lock)
         {
