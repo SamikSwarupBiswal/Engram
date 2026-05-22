@@ -30,7 +30,7 @@ public class FileWatcherService : IDisposable
     private readonly List<FileSystemWatcher> _watchers = new();
     private readonly HashSet<string> _recentEvents = new();
     private readonly object _lock = new();
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>Minimum interval between duplicate events for the same file.</summary>
     public TimeSpan DeduplicationWindow { get; set; } = TimeSpan.FromSeconds(5);
@@ -120,17 +120,23 @@ public class FileWatcherService : IDisposable
 
     private void ProcessFileEvent(string filePath, string changeType)
     {
+        if (_disposed) return;
+
         // Deduplicate rapid events for the same file
         var dedupeKey = $"{filePath}:{changeType}";
         lock (_lock)
         {
+            if (_disposed) return;
             if (_recentEvents.Contains(dedupeKey)) return;
             _recentEvents.Add(dedupeKey);
 
             // Clean up old entries after deduplication window
             _ = Task.Delay(DeduplicationWindow).ContinueWith(_ =>
             {
-                lock (_lock) _recentEvents.Remove(dedupeKey);
+                lock (_lock)
+                {
+                    if (!_disposed) _recentEvents.Remove(dedupeKey);
+                }
             });
         }
 
@@ -138,15 +144,28 @@ public class FileWatcherService : IDisposable
         var semanticEvent = ClassifyFileEvent(filePath, changeType);
         if (semanticEvent != null)
         {
-            _eventBus.Publish(new EventEnvelope
+            try
             {
-                EventType = $"perception.file_{changeType}",
-                Source = "file_watcher_service",
-                Payload = semanticEvent
-            });
+                if (_disposed) return;
 
-            _logger?.LogDebug("File event: {Type} - {Path} ({Semantic})",
-                changeType, filePath, semanticEvent.Category);
+                _eventBus.Publish(new EventEnvelope
+                {
+                    EventType = $"perception.file_{changeType}",
+                    Source = "file_watcher_service",
+                    Payload = semanticEvent
+                });
+
+                _logger?.LogDebug("File event: {Type} - {Path} ({Semantic})",
+                    changeType, filePath, semanticEvent.Category);
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger?.LogWarning(ex, "Could not publish file event because event bus is disposed");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Unexpected error publishing file event");
+            }
         }
     }
 
@@ -256,8 +275,8 @@ public class FileWatcherService : IDisposable
     {
         if (!_disposed)
         {
-            StopAll();
             _disposed = true;
+            StopAll();
         }
     }
 }

@@ -12,10 +12,12 @@ namespace Engram.Store.Automation;
 public class SovereigntyMonitor
 {
     private readonly int _backoffThresholdMs;
+    private readonly Func<int>? _idleTimeProvider;
 
-    public SovereigntyMonitor(int backoffThresholdMs = 2000)
+    public SovereigntyMonitor(int backoffThresholdMs = 2000, Func<int>? idleTimeProvider = null)
     {
         _backoffThresholdMs = backoffThresholdMs;
+        _idleTimeProvider = idleTimeProvider;
     }
 
     /// <summary>
@@ -23,15 +25,14 @@ public class SovereigntyMonitor
     /// </summary>
     public bool DetectUserActivity()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (_idleTimeProvider == null && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             return false;
         }
 
         try
         {
-            var lastInput = GetLastInputTimeMs();
-            var idleTime = Environment.TickCount - lastInput;
+            var idleTime = _idleTimeProvider != null ? _idleTimeProvider() : (Environment.TickCount - (int)GetLastInputTimeMs());
             return idleTime >= 0 && idleTime < _backoffThresholdMs;
         }
         catch

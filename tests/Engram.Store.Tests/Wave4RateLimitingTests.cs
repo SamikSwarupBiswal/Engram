@@ -13,10 +13,19 @@ public class Wave4RateLimitingTests
     [Fact]
     public void SovereigntyMonitor_IdleByDefault()
     {
-        var monitor = new SovereigntyMonitor(2000);
-        // By default, in tests/CI it shouldn't detect activity
+        var monitor = new SovereigntyMonitor(2000, () => 5000);
+        // Under mock environment, it shouldn't detect activity when idle time is 5000ms
         Assert.False(monitor.DetectUserActivity());
         monitor.VerifySovereignty(); // Should not throw
+    }
+
+    [Fact]
+    public void SovereigntyMonitor_DetectsUserActivity()
+    {
+        var monitor = new SovereigntyMonitor(2000, () => 500);
+        // Under mock environment, it should detect activity when idle time is 500ms (less than 2000ms threshold)
+        Assert.True(monitor.DetectUserActivity());
+        Assert.Throws<InvalidOperationException>(() => monitor.VerifySovereignty());
     }
 
     [Fact]
