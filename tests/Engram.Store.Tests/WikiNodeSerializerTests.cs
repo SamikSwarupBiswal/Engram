@@ -199,7 +199,36 @@ public class WikiNodeSerializerTests
                 }
             },
             OpenQuestions = new List<string> { "Is this correct?" },
-            Links = new List<string> { "related_node" }
+            Links = new List<string> { "related_node" },
+            Edges = new List<WikiEdge>
+            {
+                new WikiEdge { TargetNodeId = "related_node", RelationType = "belongs_to", PropagationWeight = 0.8 }
+            },
+            Claims = new List<SemanticClaim>
+            {
+                new SemanticClaim { ClaimId = "claim-001", Property = "Status", Value = "active", Confidence = 0.9, Source = "workflow_activity" }
+            }
         };
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesEdgesAndClaims()
+    {
+        var original = CreateTestNode();
+        var md = _serializer.Serialize(original);
+        var deserialized = _serializer.Deserialize(md);
+
+        Assert.NotNull(deserialized);
+        Assert.Single(deserialized!.Edges);
+        Assert.Equal("related_node", deserialized.Edges[0].TargetNodeId);
+        Assert.Equal("belongs_to", deserialized.Edges[0].RelationType);
+        Assert.Equal(0.8, deserialized.Edges[0].PropagationWeight);
+
+        Assert.Single(deserialized.Claims);
+        Assert.Equal("claim-001", deserialized.Claims[0].ClaimId);
+        Assert.Equal("Status", deserialized.Claims[0].Property);
+        Assert.Equal("active", deserialized.Claims[0].Value);
+        Assert.Equal(0.9, deserialized.Claims[0].Confidence);
+        Assert.Equal("workflow_activity", deserialized.Claims[0].Source);
     }
 }

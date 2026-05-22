@@ -20,6 +20,10 @@ public class WikiNodeSerializer
         sb.AppendLine("version: " + node.Version);
         if (node.Links.Count > 0)
             sb.AppendLine("links: [" + string.Join(", ", node.Links) + "]");
+        if (node.Edges.Count > 0)
+            sb.AppendLine("edges: " + System.Text.Json.JsonSerializer.Serialize(node.Edges));
+        if (node.Claims.Count > 0)
+            sb.AppendLine("claims: " + System.Text.Json.JsonSerializer.Serialize(node.Claims));
         sb.AppendLine("---");
         sb.AppendLine();
         sb.AppendLine("# " + node.Title);
@@ -105,6 +109,16 @@ public class WikiNodeSerializer
                 case "created_at": if (DateTimeOffset.TryParse(val, out var a)) node.CreatedAt = a; break;
                 case "version": if (int.TryParse(val, out var v)) node.Version = v; break;
                 case "links": node.Links = val.Trim('[', ']').Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList(); break;
+                case "edges":
+                    try {
+                        node.Edges = System.Text.Json.JsonSerializer.Deserialize<List<WikiEdge>>(val) ?? new();
+                    } catch { }
+                    break;
+                case "claims":
+                    try {
+                        node.Claims = System.Text.Json.JsonSerializer.Deserialize<List<SemanticClaim>>(val) ?? new();
+                    } catch { }
+                    break;
             }
         }
         if (string.IsNullOrEmpty(node.NodeId) || string.IsNullOrEmpty(node.Title)) return null;

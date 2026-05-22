@@ -1,9 +1,9 @@
 # Engram State
 
-**Status:** Phase 9 (Execution Reliability & Embodied Operation) Completed & Verified
+**Status:** Phase 10 (Unified Semantic World Model) Completed & Verified
 **Last Activity:** 2026-05-22
 **Branch:** `master`
-**Tests:** 1544 store tests + 88 API tests passing (1632/1632 total tests green)
+**Tests:** 1579 store tests + 88 API tests passing (1667/1667 total tests green)
 **Latest Commit:** (pending — Phase 9 implementation)
 
 ## What Engram Is
@@ -210,11 +210,11 @@ PUT  /api/identity                  Update profile
 | ModelDownloadBar | /api/model/status, /api/model/download, /api/model/load | Connected |
 | DiscoveryInterview | /api/discovery/status, /api/discovery | Connected |
 
-- Phases 1-9 implemented and verified
-- Phase 9 (Execution Reliability & Embodied Operation) completed, featuring strict embodiment abstraction (IUiEmbodimentProvider), Execution Trust Tiers, Semantic Action Validation, Reversibility Scoring, Rate Limiting throttles, Attention Steal (foreground sovereignty) back-offs, Containment Sandbox Whitelists, Bounded Permission Memory, and Windows UI Automation COM interop.
-- 1544/1544 Store tests passing (20 new Phase 9 safety integration tests, full regression green) + 88/88 API integration tests passing (1632/1632 total tests green)
+- Phases 1-10 implemented and verified
+- Phase 10 (Unified Semantic World Model) completed, featuring a Unified Entity Graph, Cross-Modal Identity Resolution, Temporal World Fusion, Attention & Salience Unification, Semantic Scene Construction, Cross-System Memory Propagation, and Global Consistency Engine.
+- 1579/1579 Store tests passing (35 new Phase 10 tests, full regression green) + 88/88 API integration tests passing (1667/1667 total tests green)
 
-## Tests: 1544/1544 (Engram.Store.Tests)
+## Tests: 1579/1579 (Engram.Store.Tests)
 
 | Category | Count |
 |----------| ------|
@@ -253,7 +253,8 @@ PUT  /api/identity                  Update profile
 | **Phase 7: The Embodied Execution Megaphase** | **146** |
 | **Phase 8: Executional World Model** | **47** |
 | **Phase 9: Execution Reliability & Embodied Safety** | **20** |
-| **Total** | **1544** |
+| **Phase 10: Unified Semantic World Model** | **35** |
+| **Total** | **1579** |
 
 ## Billing (Token Budget)
 

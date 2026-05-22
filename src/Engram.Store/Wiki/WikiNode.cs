@@ -41,6 +41,42 @@ public class WikiNode
 
     /// <summary>Schema version for forward compatibility.</summary>
     public int Version { get; set; } = 1;
+
+    /// <summary>Edges to other nodes for salience propagation and relationship mapping.</summary>
+    public List<WikiEdge> Edges { get; set; } = new();
+
+    /// <summary>Claim ecology containing competing claims over time.</summary>
+    public List<SemanticClaim> Claims { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a directed edge to a target node with salience propagation parameters.
+/// </summary>
+public class WikiEdge
+{
+    public string TargetNodeId { get; set; } = string.Empty;
+    public string RelationType { get; set; } = string.Empty;
+    public double PropagationWeight { get; set; } = 0.5;
+    public double DecayRate { get; set; } = 0.9;
+    public double MaxInfluence { get; set; } = 1.0;
+    public double EvidenceThreshold { get; set; } = 0.1;
+    public string PropagationType { get; set; } = "operational"; // operational, identity, emotional
+    public DateTimeOffset LastPropagatedAt { get; set; } = DateTimeOffset.MinValue;
+}
+
+/// <summary>
+/// Represents a claim within the Claim Ecology.
+/// </summary>
+public class SemanticClaim
+{
+    public string ClaimId { get; set; } = string.Empty;
+    public string Property { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public double Confidence { get; set; } = 1.0;
+    public string Source { get; set; } = string.Empty;
+    public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? Expires { get; set; }
+    public string Context { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -81,5 +117,10 @@ public enum WikiNodeType
     Concept,
     Document,
     Receipt,
-    Decision
+    Decision,
+    Workflow,
+    BrowserTab,
+    ActiveWindow,
+    File,
+    TimelineSession
 }

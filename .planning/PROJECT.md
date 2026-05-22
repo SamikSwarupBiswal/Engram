@@ -42,7 +42,7 @@ Engram is a **desktop app**, not a web app. Tauri v2 (Rust) shell auto-spawns a 
 | UI | React 19 + TypeScript + Tailwind CSS |
 | Backend | .NET 8 ASP.NET Minimal API (sidecar) |
 | Local Store | .engram/ directory (JSON + Markdown) |
-| Tests | xUnit (1632 tests total: 1544 Store, 88 API) |
+| Tests | xUnit (1667 tests total: 1579 Store, 88 API) |
 | Build | Vite 6, cargo, dotnet publish |
 
 ## Onboarding Flow
@@ -103,9 +103,9 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## Current State
 
-- Phases 1-9 implemented and verified
-- Active development completed for Phase 9 (Execution Reliability & Embodied Operation)
-- 1544 store tests + 88 API tests passing (1632/1632 total tests green)
+- Phases 1-10 implemented and verified
+- Active development completed for Phase 10 (Unified Semantic World Model)
+- 1579 store tests + 88 API tests passing (1667/1667 total tests green)
 - 97 API endpoints (all connected to frontend)
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -123,9 +123,8 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## What's Next
 
-1. **Phase 10: Unified Semantic World Model** — Build a single coherent entity graph and temporal chronology across workflows, browser sessions, filesystem, and user context.
-2. **Phase 11: Human Trust & Coexistence** — Introduce explainability, privacy maps, trust pacing, and ambient cognition restraint.
-3. **Phase 12: Longitudinal Endurance** — Hardening for month-scale execution, graph entropy control, and semantic compaction.
+1. **Phase 11: Human Trust & Coexistence** — Introduce explainability, privacy maps, trust pacing, and ambient cognition restraint.
+2. **Phase 12: Longitudinal Endurance** — Hardening for month-scale execution, graph entropy control, and semantic compaction.
 
 ## Anti-Patterns (DO NOT BUILD)
 
