@@ -12,6 +12,8 @@ using Engram.Store.Automation;
 using Engram.Store.Security;
 using Engram.Store.Perception;
 using System.Text.Json;
+using Engram.Store.Governance;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -83,6 +85,8 @@ var briefGenerator = new BriefGenerator(nodeStore);
 var identityStore = new IdentityStore(paths);
 var salienceScorer = new SalienceScorer();
 var driftAlertStore = new DriftAlertStore(paths);
+var governance = new GovernanceCoordinator(nodeStore, paths, driftAlertStore);
+
 var archiveManager = new ArchiveManager(nodeStore, salienceScorer, paths);
 var discoverySOP = new DiscoverySOP(identityStore);
 var interventionPolicy = new InterventionPolicy(identityStore);
@@ -1671,6 +1675,59 @@ app.MapGet("/api/cognitive/tensions/clusters", () =>
     return Results.Ok(tensionEngine.ClusterTensions());
 });
 
+// ── Phase 11: Trust, Governance & Coexistence Endpoints ──
+app.MapGet("/api/governance/activity", () =>
+    Results.Ok(governance.Observability.GetActivityFeed()));
+
+app.MapGet("/api/governance/traces", (string? entityId) =>
+{
+    if (string.IsNullOrEmpty(entityId))
+    {
+        return Results.Ok(governance.Traces.GetAllTraces());
+    }
+    return Results.Ok(governance.Traces.GetTracesForEntity(entityId));
+});
+
+app.MapGet("/api/governance/trust", () =>
+    Results.Ok(new
+    {
+        scores = governance.Trust.GetAllScores(),
+        grants = governance.Trust.GetAllGrants(),
+        autonomyCeiling = governance.Trust.AutonomyCeiling,
+        interventionFrequencyMultiplier = governance.Trust.InterventionFrequencyMultiplier
+    }));
+
+app.MapPost("/api/governance/forget", (ForgetRequest request) =>
+{
+    governance.ForgetNode(request.NodeId);
+    return Results.Ok(new { forgotten = true });
+});
+
+app.MapPost("/api/governance/dispute", (DisputeRequest request) =>
+{
+    governance.DisputeClaim(request.NodeId, request.ClaimId, request.CorrectedValue);
+    return Results.Ok(new { disputed = true });
+});
+
+app.MapPost("/api/governance/settings", (GovernanceConfig request) =>
+{
+    governance.UpdateConfig(request);
+    return Results.Ok(new { updated = true });
+});
+
+app.MapPost("/api/governance/recover", (RecoveryRequest request) =>
+{
+    governance.SafetyStateMachine.Recover(request.ResolutionDetail);
+    return Results.Ok(new { state = governance.SafetyStateMachine.CurrentState.ToString() });
+});
+
+app.MapGet("/api/governance/audit", () =>
+    Results.Ok(new
+    {
+        entries = governance.SafetyAudit.GetEntries(),
+        integrityValid = governance.SafetyAudit.VerifyIntegrity()
+    }));
+
 log.Api("All endpoints registered");
 log.Api($"Listening on: {string.Join(", ", app.Urls)}");
 
@@ -1706,5 +1763,10 @@ record CognitiveRunRequest(string Goal);
 record RestoreWorkflowRequest(string WorkflowId);
 record CollaborationResponseRequest(string RequestId, string Response, bool Approved);
 
+record ForgetRequest(string NodeId);
+record DisputeRequest(string NodeId, string ClaimId, string CorrectedValue);
+record RecoveryRequest(string ResolutionDetail);
+
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }
+

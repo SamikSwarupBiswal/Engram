@@ -42,6 +42,13 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  ToneBalanceEngine │ MomentumDetector │ CuriosityEngine │
 │  InterventionConsentModel │ ReflectionExpiryEngine      │
 ├─────────────────────────────────────────────────────────┤
+│                    Governance & Trust Layer             │
+│  GovernanceCoordinator │ SafetyConstitution             │
+│  ConstitutionalStateMachine │ ConstitutionalAuditLog    │
+│  GovernanceIsolationBoundary │ MemorySovereigntySystem  │
+│  TrustCalibrationEngine │ CognitiveBoundarySystem       │
+│  AmbientCognitionRestraint │ RealityCorrectionLayer     │
+├─────────────────────────────────────────────────────────┤
 │                    Intelligence Layer                     │
 │  BackgroundMetabolismService (IHostedService, 5min)      │
 │  SemanticDeduplicator │ ContradictionDetector            │
@@ -215,6 +222,7 @@ Cycle:
 | Engram.Store/Metabolism/ | BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator, InterventionStore, ContradictionHistoryStore, TensionEvolutionEngine, ContradictionResolutionDetector | 23, Sprint 3 |
 | Engram.Store/Metabolism/ | ReflectionConfidenceModel, IdentityStabilityEngine, NarrativeBalanceController, CounterEvidenceDetector, NarrativeInterpretationEngine, SemanticHealthMonitor | Sprint 4 |
 | Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine, CognitiveRestraintEngine, NarrativeDriftAuditor, InterventionFatigueTracker, MemoryPollutionDetector, SemanticCompressor | Sprint 5, Sprint 7, Sprint 8 |
+| Engram.Store/Governance/ | GovernanceCoordinator, ReasonTraceEngine, DecisionNarrator, MemorySovereigntySystem, HistoricalDeletionEnvelope, SemanticForgetEngine, MemoryRetentionPolicies, TrustCalibrationEngine, ReversibilityWeightedTrust, ComfortAdaptationEngine, PermissionDecaySystem, CognitiveBoundarySystem, SensitiveDomainManager, NarrativeIntrusionGuard, AmbientCognitionRestraint, LongitudinalTrustModel, TransparencyObservabilityService, RealityCorrectionLayer, SafetyConstitution, ConstitutionalStateMachine, ConstitutionalAuditLog, GovernanceIsolationBoundary | Phase 11 |
 | Engram.Store/Orchestration/ | IntentClassifier, TaskRouter | 22 |
 | Engram.Store/Search/ | TF-IDF, SemanticSearchEngine, BriefGenerator | 5, 22 |
 | Engram.Store/Wiki/ | WikiNodeStore, Metabolizer, Serializer | 4 |
