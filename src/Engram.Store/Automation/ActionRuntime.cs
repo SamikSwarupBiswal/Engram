@@ -50,6 +50,7 @@ public class ActionRuntime : IDisposable
         {
             _state = RuntimeState.Paused;
             _pauseEvent.Reset();
+            _runCts?.Cancel();
             _logger?.LogInformation("Execution plan paused.");
         }
     }
@@ -100,11 +101,18 @@ public class ActionRuntime : IDisposable
             {
                 var step = order[i];
 
+                if (step.Status == StepStatus.Completed)
+                {
+                    _logger?.LogInformation("Step '{StepId}' is already completed. Skipping.", step.Id);
+                    completedSteps.Add(step);
+                    continue;
+                }
+
                 // Check Pause state
                 if (_state == RuntimeState.Paused)
                 {
-                    _logger?.LogInformation("Execution is paused. Waiting to resume...");
-                    await Task.Run(() => _pauseEvent.Wait(linkedToken), linkedToken);
+                    _logger?.LogInformation("Execution is paused. Exiting execution loop.");
+                    throw new OperationCanceledException("Execution paused.");
                 }
 
                 if (linkedToken.IsCancellationRequested || _state == RuntimeState.Aborted)
@@ -240,6 +248,12 @@ public class ActionRuntime : IDisposable
                 }
                 catch (Exception ex)
                 {
+                    if (ex is OperationCanceledException && _state == RuntimeState.Paused)
+                    {
+                        step.Status = StepStatus.Pending;
+                        throw;
+                    }
+
                     bool recovered = false;
                     Exception? lastError = ex;
 

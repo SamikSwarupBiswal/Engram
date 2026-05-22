@@ -915,3 +915,76 @@ Key decisions documented in `.planning/architecture-decisions.md` and `.planning
 1. **Windows Defender** — May quarantine unsigned binaries. Need code signing for production.
 2. **Vulkan on clean machines** — BackendProbe + VerdictStore handle graceful CPU fallback.
 3. **Frontend system prompt awareness** — The frontend doesn't show what context the model has about the user.
+
+---
+
+## Phase 8: Executional World Model & Autonomous Workflows (May 22, 2026)
+
+The transition from reactive task execution to adaptive operational cognition. Engram now maintains a live model of its own execution state, checkpoints long-running workflows, learns from past executions, and safely delegates work to specialized agents.
+
+### New Components (13 files)
+
+**OperationalWorldModel** (`Automation/OperationalWorldModel.cs`) — Central live execution state. Tracks `ActiveWorkflow`, `CurrentPhase`, `BrowserTabsCount`, `ActiveDocument`, `ExecutionConfidence`, `InterruptionCount`, `EstimatedCompletion`, `EnvironmentalConstraints`, and `ExecutionTrajectory`. Every property setter publishes an `automation.worldmodel.changed` event to the `IEventBus`. Supports batch `Update()` with a single `BatchUpdate` event. `GetSnapshot()` returns a serializable anonymous object for the API.
+
+**WorkflowCheckpoint** (`Automation/WorkflowCheckpoint.cs`) — Serializable execution snapshot. Fields: `WorkflowId`, `Goal`, `CurrentPhase`, `CurrentStepIndex`, `ActiveStepId`, `Variables`, `ExecutedStepIds`, `PlanJson`, `CheckpointTime`.
+
+**WorkflowPersistenceStore** (`Automation/WorkflowPersistenceStore.cs`) — Saves and loads `WorkflowCheckpoint` files as JSON under `.engram/automation/workflows/{workflowId}.json`. Supports `SaveCheckpointAsync`, `LoadCheckpointAsync`, `ListCheckpointsAsync`, and `DeleteCheckpoint`.
+
+**WorkflowRuntime** (`Automation/WorkflowRuntime.cs`) — Coordinates long-running workflows. `StartWorkflowAsync` saves initial checkpoint, delegates to `ActionRuntime.ExecutePlanAsync`, cleans checkpoint on success, or saves a failure checkpoint. `PauseWorkflowAsync` calls `ActionRuntime.Pause()` and saves a `"Paused"` checkpoint. `RestoreWorkflowAsync` deserializes checkpoint, reconstructs plan and context, then resumes. On cancellation/pause, the `"Paused"` phase is not overwritten as `"Failed"`.
+
+**ExecutionTelemetryEngine** (`Automation/ExecutionTelemetryEngine.cs`) — Tracks runtime metrics: `SuccessRate`, `RetryFrequency`, `FailureCount`, `RecoverySuccessRate`, `AverageLatency`, `HumanInterventions`, `WorkflowAbandonmentRate`. Persists to `.engram/automation/telemetry/`.
+
+**OperationalTimeline** (`Automation/OperationalTimeline.cs`) — Logs execution continuity events: workflow starts, phase changes, user interruptions, rollbacks, and recovery attempts. Persists timeline logs under `.engram/automation/timeline/`.
+
+**ProceduralMemoryEngine** (`Automation/ProceduralMemoryEngine.cs`) — Stores procedural knowledge: successful execution sequences, error-recovery strategies per application/website, user operational habits (file saving dirs, format choices). Persisted to `.engram/automation/procedural_memory.json`.
+
+**ExecutionReasoningEngine** (`Automation/ExecutionReasoningEngine.cs`) — Operates a continuous `observe → reason → adapt → continue` loop. Interacts with `LocalInferenceEngine` to evaluate results, predict branching paths, optimize steps, and repair plans dynamically based on unexpected environment outcomes.
+
+**CollaborationEngine** (`Automation/CollaborationEngine.cs`) — Human-in-the-loop execution gates. Pauses execution and creates pending query entries when clarification is needed. Requests approvals for sensitive operations. Handles external response injection to resume execution once clarified.
+
+**OperationalAttentionOrchestrator** (`Automation/OperationalAttentionOrchestrator.cs`) — Manages cognitive attention boundaries: tracks focused applications and relevant browser tabs, dynamically weights event relevance (context salience) to prune noise, feeds pruned retrieval context to prompt assembly.
+
+**ToolAbstractionLayer** (`Automation/ToolAbstractionLayer.cs`) — Exposes high-level semantic capabilities as named commands: `SearchWeb`, `CreateDocument`, `CompareProducts`, `OpenApplication`, `SaveFile`, `ExtractPageData`. Decouples planner reasoning from raw Win32 coordinates or Playwright selectors.
+
+**EnvironmentalResilienceEngine** (`Automation/EnvironmentalResilienceEngine.cs`) — Handles environmental disturbances: detects and closes unexpected popup dialogs, detects offline status (pauses + retries), resumes execution after system sleep/wake transitions.
+
+**SandboxManager** (`Automation/SandboxManager.cs`) — Enforces safety policies: restricts filesystem writes to whitelisted directories, validates command safety against an executable blacklist, provides virtual simulation mode mapping for dry-run plan validation.
+
+**AgentOrchestrator** (`Automation/AgentOrchestrator.cs`) — Coordinates specialized agents (Research, Browser, Filesystem, Report, Email, Scheduler). Uses a per-agent mutex to prevent overlapping task dispatch. Updates `OperationalWorldModel.CurrentPhase` and trajectory milestones. Publishes `automation.agent.dispatched` and `automation.agent.completed` events.
+
+### Bug Fix: WorkflowRuntime Pause Deadlock
+
+**Root Cause:** `ActionRuntime.Pause()` only set `_pauseEvent.Reset()` but left the active step token running. The execution loop used `await Task.Run(() => _pauseEvent.Wait(linkedToken), linkedToken)` which blocked the thread waiting for `Resume()` that could never be called from outside (deadlock in test).
+
+**Fix:** `Pause()` now calls `_runCts?.Cancel()` immediately, terminating the in-progress step. The execution loop's pause check throws `OperationCanceledException` to exit cleanly instead of waiting. The inner `catch` block detects `OperationCanceledException` during a `Paused` state and resets the step to `Pending` (no rollback). `WorkflowRuntime` catch blocks detect `CurrentPhase == "Paused"` and propagate without overwriting as `"Failed"`.
+
+### New API Endpoints (8)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/automation/world-model` | Serialized `OperationalWorldModel` snapshot |
+| POST | `/api/automation/workflow/pause` | Pause active workflow |
+| POST | `/api/automation/workflow/resume` | Resume active workflow |
+| GET | `/api/automation/workflow/checkpoints` | List saved checkpoints |
+| POST | `/api/automation/workflow/restore` | Restore checkpoint by workflowId |
+| GET | `/api/automation/collaboration/pending` | Pending clarification/approval requests |
+| POST | `/api/automation/collaboration/respond` | Submit response to pending request |
+| GET | `/api/automation/telemetry` | Telemetry summary |
+
+### New Test Suites (8 files, 47 tests)
+
+| Suite | Tests | Coverage |
+|-------|-------|----------|
+| `OperationalWorldModelTests.cs` | 11 | Property tracking, event publishing, batch update, snapshot |
+| `WorkflowRuntimeTests.cs` | 4 | Checkpoint save/load, happy path, failure checkpoint, pause/restore |
+| `ProceduralMemoryTests.cs` | 3 | Habit persistence, recovery strategy lookup |
+| `ExecutionReasoningTests.cs` | 5 | Observe/reason/adapt loop with simulated outcomes |
+| `CollaborationEngineTests.cs` | 5 | Pause gates, clarification pending, approval resumption |
+| `AttentionAndResilienceTests.cs` | 5 | Attention context filtering, popup handling, network resilience |
+| `ToolAbstractionAndSandboxTests.cs` | 5 | High-level command translation, sandbox directory restrictions |
+| `AgentOrchestratorTests.cs` | 4 | Task dispatch, world model updates, concurrency lock enforcement |
+
+**Tests:** 47 new tests. Total 1470/1470 passing.
+
+---
+

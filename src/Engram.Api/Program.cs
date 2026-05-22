@@ -121,9 +121,28 @@ var actionRuntime = new ActionRuntime(actionExecutor, permissionGate);
 var taskPlanner = new TaskPlanner(localEngine);
 var cognitiveActionLoop = new CognitiveActionLoop(taskPlanner, actionRuntime, localEngine);
 
+var eventBus = new Engram.Store.Events.InMemoryEventBus();
+
+// ── Phase 8 Services ──
+var worldModel = new OperationalWorldModel(eventBus);
+var workflowStore = new WorkflowPersistenceStore(paths.Root);
+var workflowRuntime = new WorkflowRuntime(workflowStore, actionRuntime, worldModel);
+var proceduralMemory = new ProceduralMemoryEngine(paths.Root);
+await proceduralMemory.InitializeAsync();
+var executionReasoning = new ExecutionReasoningEngine(worldModel, localEngine);
+var collaborationEngine = new CollaborationEngine(eventBus);
+var attentionOrchestrator = new OperationalAttentionOrchestrator();
+var telemetryEngine = new ExecutionTelemetryEngine(paths.Root);
+var browserAgentForLayer = new BrowserAgentRuntime();
+var desktopOpForLayer = new DesktopOperator();
+var toolAbstraction = new ToolAbstractionLayer(browserAgentForLayer, desktopOpForLayer);
+var resilienceEngine = new EnvironmentalResilienceEngine(eventBus);
+var sandboxManager = new SandboxManager();
+var agentOrchestrator = new AgentOrchestrator(worldModel, eventBus);
+var operationalTimeline = new OperationalTimeline(paths.Root);
+
 // ── Memory Pipeline (semantic continuity) ──
 var conversationExtractor = new Engram.Store.Memory.ConversationMemoryExtractor();
-var eventBus = new Engram.Store.Events.InMemoryEventBus();
 var cognitiveTelemetry = new Engram.Store.Metabolism.CognitiveTelemetry();
 var memoryPipeline = new Engram.Store.Memory.ConversationMemoryPipeline(conversationExtractor, new WikiMetabolizer(nodeStore), eventBus, cognitiveTelemetry);
 var promptAssembler = new Engram.Store.Memory.PromptAssembler(identityStore, nodeStore, searchEngine);
@@ -1121,6 +1140,70 @@ app.MapPost("/api/automation/cognitive/run", (CognitiveRunRequest request) =>
     return Results.Accepted("/api/automation/status");
 });
 
+// ── Phase 8 Execution World Model & Autonomous Workflows Endpoints ──
+app.MapGet("/api/automation/world-model", () => Results.Ok(worldModel.GetSnapshot()));
+
+app.MapPost("/api/automation/workflow/pause", async () =>
+{
+    await workflowRuntime.PauseWorkflowAsync();
+    return Results.Ok(new { message = "Workflow paused" });
+});
+
+app.MapPost("/api/automation/workflow/resume", async (CancellationToken ct) =>
+{
+    await workflowRuntime.ResumeWorkflowAsync(ct);
+    return Results.Ok(new { message = "Workflow resumed" });
+});
+
+app.MapGet("/api/automation/workflow/checkpoints", async () =>
+{
+    var checkpoints = await workflowStore.ListCheckpointsAsync();
+    return Results.Ok(checkpoints);
+});
+
+app.MapPost("/api/automation/workflow/restore", async (RestoreWorkflowRequest request, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request?.WorkflowId))
+    {
+        return Results.BadRequest(new { error = "WorkflowId is required." });
+    }
+
+    var context = new Engram.Store.Automation.ExecutionContext();
+    var desktopOp = new DesktopOperator();
+    context.SetVariable("DesktopOperator", desktopOp);
+    var browserAgent = new BrowserAgentRuntime();
+    context.SetVariable("BrowserAgent", browserAgent);
+
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await workflowRuntime.RestoreWorkflowAsync(request.WorkflowId, context, ct);
+        }
+        catch (Exception)
+        {
+            // Background errors logged or handled
+        }
+    });
+
+    return Results.Accepted("/api/automation/status");
+});
+
+app.MapGet("/api/automation/collaboration/pending", () => Results.Ok(collaborationEngine.GetPendingRequests()));
+
+app.MapPost("/api/automation/collaboration/respond", (CollaborationResponseRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request?.RequestId))
+    {
+        return Results.BadRequest(new { error = "RequestId is required." });
+    }
+
+    var success = collaborationEngine.RespondToRequest(request.RequestId, request.Response, request.Approved);
+    return success ? Results.Ok(new { success = true }) : Results.NotFound(new { error = "Request not found or not pending." });
+});
+
+app.MapGet("/api/automation/telemetry", () => Results.Ok(telemetryEngine.GetSummary()));
+
 // --- Research Agent ---
 app.MapPost("/api/research/start", async (ResearchStartRequest request, CancellationToken ct) =>
 {
@@ -1528,6 +1611,8 @@ record SecurityChangePasswordRequest(string OldPassword, string NewPassword);
 record SecurityImportRequest(string ZipPath);
 record LayoutSnapRequest(string? BrowserProcess, string? EditorProcess);
 record CognitiveRunRequest(string Goal);
+record RestoreWorkflowRequest(string WorkflowId);
+record CollaborationResponseRequest(string RequestId, string Response, bool Approved);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }

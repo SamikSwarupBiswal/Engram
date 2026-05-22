@@ -42,7 +42,7 @@ Engram is a **desktop app**, not a web app. Tauri v2 (Rust) shell auto-spawns a 
 | UI | React 19 + TypeScript + Tailwind CSS |
 | Backend | .NET 8 ASP.NET Minimal API (sidecar) |
 | Local Store | .engram/ directory (JSON + Markdown) |
-| Tests | xUnit (1110 tests) |
+| Tests | xUnit (1470 tests) |
 | Build | Vite 6, cargo, dotnet publish |
 
 ## Onboarding Flow
@@ -91,13 +91,19 @@ BackgroundMetabolismService (every 5 minutes)
 8. **Behavioral Intelligence** — Detects contradictions between goals and behavior
 9. **Intervention Engine** — Proactive guidance when contradictions detected
 10. **Retrieval Hygiene** — Prevents prompt entropy explosion with budget management
+11. **Operational World Model** — Live execution state tracking with event-driven updates
+12. **Workflow Checkpointing** — Pause, save, and resume long-running workflows across restarts
+13. **Procedural Memory** — Persistent learned patterns for reliable task re-execution
+14. **Multi-Agent Orchestration** — Specialized agents coordinated via shared world model
+15. **Execution Sandboxing** — Filesystem safety and dry-run simulation mode
+16. **Human Collaboration Gates** — Pause execution and surface clarification requests via API
 
 ## Current State
 
-- Phases 1-7 implemented and verified
-- Active development completed for Phase 7 (The Embodied Execution Megaphase)
-- 1509/1509 tests passing (C# test suite isolated, hardened, and expanded for automation)
-- 83 API endpoints
+- Phases 1-8 implemented and verified
+- Active development completed for Phase 8 (Executional World Model & Autonomous Workflows)
+- 1470/1470 tests passing (47 new Phase 8 engine tests, full regression green)
+- 97 API endpoints (Phase 8 adds 8 new workflow/collaboration/telemetry endpoints)
 - 10 frontend views
 - Desktop app built (Tauri + React)
 - NSIS installer (~77MB)
@@ -105,6 +111,10 @@ BackgroundMetabolismService (every 5 minutes)
 - Chat is the intent interface into the semantic operating system
 - Background metabolism runs every 5 minutes
 - Behavioral intelligence detects contradictions
+- **Operational world model tracks live execution context with event-driven state updates**
+- **Long-running workflows can be paused, checkpointed, and restored across process restarts**
+- **Procedural memory persists and replays learned execution patterns**
+- **Multi-agent orchestration safely routes tasks to specialized agents**
 
 ## What's Next
 

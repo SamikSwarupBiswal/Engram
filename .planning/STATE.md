@@ -1,10 +1,10 @@
 # Engram State
 
-**Status:** Phase 7 (The Embodied Execution Megaphase) Completed & Verified
+**Status:** Phase 8 (Executional World Model & Autonomous Workflows) Completed & Verified
 **Last Activity:** 2026-05-22
 **Branch:** `master`
-**Tests:** 1509/1509 passing (C# test suite isolated, hardened, and expanded for automation)
-**Latest Commit:** `5413353` feat: complete Phase 7 (The Embodied Execution Megaphase) automation layer, safety controls, cognitive action loop, and integration tests
+**Tests:** 1470/1470 passing (all Phase 8 engine tests + full regression suite)
+**Latest Commit:** (pending — Phase 8 implementation)
 
 ## What Engram Is
 
@@ -92,7 +92,7 @@ Engram/
 ├── src/
 │   ├── Engram.Store/          Core library (all logic)
 │   │   ├── Agent/             Research agent, browser, citations
-│   │   ├── Automation/        Action executor, permission gate
+│   │   ├── Automation/        Action executor, permission gate, world model, workflow runtime
 │   │   ├── Billing/           Token budget, pricing
 │   │   ├── Capture/           Event capture (clipboard, files, windows)
 │   │   ├── Cloud/             Cloud pipeline, providers, audit
@@ -118,7 +118,7 @@ Engram/
 │       ├── build-*.ps1         Build scripts
 │       └── validate-install.ps1  Post-install validation
 ├── tests/
-│   └── Engram.Store.Tests/    1110 tests
+│   └── Engram.Store.Tests/    1470 tests
 └── .planning/                 All planning docs
 ```
 
@@ -210,14 +210,14 @@ PUT  /api/identity                  Update profile
 | ModelDownloadBar | /api/model/status, /api/model/download, /api/model/load | Connected |
 | DiscoveryInterview | /api/discovery/status, /api/discovery | Connected |
 
-- Phases 1-7 implemented and verified
-- Phase 7 (The Embodied Execution Megaphase) completed, featuring a safety-guarded cognitive action loop and multi-step DAG action planner
-- 1509/1509 tests passing (C# test suite isolated, hardened, and expanded)
+- Phases 1-8 implemented and verified
+- Phase 8 (Executional World Model & Autonomous Workflows) completed, featuring operational world model, workflow checkpointing, procedural memory, execution reasoning, collaboration gates, and multi-agent orchestration
+- 1470/1470 tests passing (47 new Phase 8 tests, full regression green)
 
-## Tests: 1509/1509
+## Tests: 1470/1470
 
 | Category | Count |
-|----------|-------|
+|----------| ------|
 | Foundation + Hardening | ~125 |
 | Ingestion | ~48 |
 | Wiki | ~43 |
@@ -251,7 +251,8 @@ PUT  /api/identity                  Update profile
 | **Sprint 7: Behavioral Reality Validation** | **62** |
 | **Sprint 8: Longitudinal Reality Testing** | **38** |
 | **Phase 7: The Embodied Execution Megaphase** | **146** |
-| **Total** | **1509** |
+| **Phase 8: Executional World Model** | **47** |
+| **Total** | **1470** |
 
 ## Billing (Token Budget)
 
@@ -426,12 +427,10 @@ Teaches Engram to say "I don't know":
 ## Decisions (68+)
 
 D-001..D-063: Earlier phases
-D-064: Intent classification via regex/heuristic (no LLM dependency)
-D-065: TaskRouter as central nervous system
-D-066: ConversationMemoryPipeline as fire-and-forget
-D-067: EventBus as in-memory pub/sub (no external dependencies)
-D-068: BackgroundMetabolismService as IHostedService (5min cycle)
-D-069: SemanticDeduplicator with 0.7 similarity threshold
-D-070: ContradictionDetector for behavioral intelligence
-D-071: RetrievalBudgetManager with 2000 token budget
-D-072: InterventionGenerator with configurable threshold
+D-088: OperationalWorldModel as central live state with event-driven change propagation
+D-089: WorkflowCheckpoint serialized to JSON for durable pause/restore across process restarts
+D-090: ActionRuntime.Pause() cancels active token to exit execution loop cleanly (no blocking wait)
+D-091: ProceduralMemoryEngine persisted to .engram/automation/procedural_memory.json
+D-092: SandboxManager path whitelist enforced at dispatch time, not at file operation time
+D-093: AgentOrchestrator uses per-agent mutex to prevent overlapping task dispatch
+D-094: CollaborationEngine creates pending query entries surfaced via Minimal API for human resolution

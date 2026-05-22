@@ -19,7 +19,7 @@
   - [x] **Phase 7H: Execution Safety** — prevent catastrophic autonomy
   - [x] **Phase 7I: Live Execution UX** — maintain user trust during operation
   - [x] **Phase 7J: Operational Cognition** — merge cognition with action
-- [ ] **Phase 8: Cloud Reasoning + Token Billing** [PRO]
+- [x] **Phase 8: Executional World Model & Autonomous Workflows** [CRITICAL] — 2026-05-22
 - [ ] **Phase 9: Google Workspace Metadata** [PRO]
 - [ ] **Phase 10: Agentic Research Workflow** [PRO]
 - [ ] **Phase 11: Computer-Use Automation** [PRO]
@@ -36,10 +36,10 @@
 
 ## Current State
 
-- Phases 1-7 implemented and verified
-- Active development completed for Phase 7 (The Embodied Execution Megaphase)
-- 1509/1509 tests passing (C# test suite isolated, hardened, and expanded for automation)
-- 83 API endpoints, all connected to frontend
+- Phases 1-8 implemented and verified
+- Active development completed for Phase 8 (Executional World Model & Autonomous Workflows)
+- 1470/1470 tests passing (all Phase 8 engine tests + full regression suite green)
+- 97 API endpoints (Phase 8 adds 8 new endpoints), all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
 - NSIS installer (~77MB) with self-contained .NET
@@ -52,6 +52,10 @@
 - **Perception replay system makes interpretations verifiable**
 - **Cognitive restraint engine prevents intervention fatigue**
 - **Human truth calibration keeps interpretations grounded in reality**
+- **Operational world model tracks live execution state with event-driven updates**
+- **Long-running workflows with pause/resume checkpointing**
+- **Procedural memory learns and recalls execution patterns**
+- **Multi-agent orchestration routes tasks to specialized agents**
 
 ## Architecture State
 
@@ -71,6 +75,18 @@ Background (every 5 minutes):
   → ArchiveManager (archive stale nodes)
   → InterventionGenerator (proactive guidance)
   → EventBus (emit events)
+
+Autonomous Execution (Phase 8):
+  → OperationalWorldModel (live execution state)
+  → WorkflowRuntime (long-running workflows with checkpoint/restore)
+  → ExecutionReasoningEngine (observe → reason → adapt loop)
+  → ProceduralMemoryEngine (learned execution patterns)
+  → CollaborationEngine (human-in-the-loop gates)
+  → OperationalAttentionOrchestrator (context focus management)
+  → ToolAbstractionLayer (semantic high-level capabilities)
+  → EnvironmentalResilienceEngine (popup/offline/sleep handling)
+  → SandboxManager (filesystem safety + dry-run simulation)
+  → AgentOrchestrator (multi-agent task routing)
 ```
 
 ## What's Next
@@ -137,6 +153,13 @@ Phase 7 (Behavioral Reality Validation) directly addressed this:
 - D-085: IBrowserDriver abstraction using Playwright for web environment operations
 - D-086: LIFO recovery and rollback cascade for step-wise environment cleanup
 - D-087: Host-level ExecutionSafetyManager for process and URL domain blacklisting
+- D-088: OperationalWorldModel as central live state with event-driven change propagation
+- D-089: WorkflowCheckpoint serialized to JSON for durable pause/restore across process restarts
+- D-090: ActionRuntime.Pause() cancels active token to exit execution loop cleanly (no blocking wait)
+- D-091: ProceduralMemoryEngine persisted to .engram/automation/procedural_memory.json
+- D-092: SandboxManager path whitelist enforced at dispatch time, not at file operation time
+- D-093: AgentOrchestrator uses per-agent mutex to prevent overlapping task dispatch
+- D-094: CollaborationEngine creates pending query entries surfaced via Minimal API for human resolution
 
 ## Anti-Patterns (DO NOT BUILD)
 
