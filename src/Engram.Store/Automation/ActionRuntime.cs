@@ -20,6 +20,9 @@ public class ActionRuntime : IDisposable
     private readonly ActionExecutor _executor;
     private readonly PermissionGate _permissionGate;
     private readonly ExecutionSafetyManager _safetyManager;
+    private readonly TrustTierManager _trustTierManager;
+    private readonly ReversibilityEvaluator _reversibilityEvaluator;
+    private readonly SemanticSummarizer _semanticSummarizer;
     private readonly ILogger<ActionRuntime>? _logger;
 
     private RuntimeState _state = RuntimeState.Idle;
@@ -31,16 +34,25 @@ public class ActionRuntime : IDisposable
     public RuntimeState State => _state;
     public ExecutionPlan? ActivePlan => _activePlan;
     public ExecutionContext? ActiveContext => _activeContext;
+    public TrustTierManager TrustTierManager => _trustTierManager;
+    public ReversibilityEvaluator ReversibilityEvaluator => _reversibilityEvaluator;
+    public SemanticSummarizer SemanticSummarizer => _semanticSummarizer;
 
     public ActionRuntime(
         ActionExecutor executor, 
         PermissionGate permissionGate, 
         ExecutionSafetyManager? safetyManager = null,
+        TrustTierManager? trustTierManager = null,
+        ReversibilityEvaluator? reversibilityEvaluator = null,
+        SemanticSummarizer? semanticSummarizer = null,
         ILogger<ActionRuntime>? logger = null)
     {
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _permissionGate = permissionGate ?? throw new ArgumentNullException(nameof(permissionGate));
         _safetyManager = safetyManager ?? new ExecutionSafetyManager();
+        _trustTierManager = trustTierManager ?? new TrustTierManager(TrustTier.Privileged);
+        _reversibilityEvaluator = reversibilityEvaluator ?? new ReversibilityEvaluator();
+        _semanticSummarizer = semanticSummarizer ?? new SemanticSummarizer();
         _logger = logger;
     }
 
@@ -124,29 +136,6 @@ public class ActionRuntime : IDisposable
                     linkedToken.ThrowIfCancellationRequested();
                 }
 
-                // ── SAFETY CHECKS ──
-                _safetyManager.VerifyRateLimit();
-                _safetyManager.VerifyMouseFailsafe();
-
-                var desktopOp = context.GetVariable<IDesktopOperator>("DesktopOperator");
-                if (desktopOp != null)
-                {
-                    var (proc, title) = await desktopOp.GetActiveWindowAsync(linkedToken);
-                    _safetyManager.VerifyProcessSafety(proc, title);
-                }
-
-                if (step.Action.Type == ActionType.Navigate && !string.IsNullOrEmpty(step.Action.Value))
-                {
-                    _safetyManager.VerifyUrlSafety(step.Action.Value);
-                }
-
-                var browserAgent = context.GetVariable<BrowserAgentRuntime>("BrowserAgent");
-                if (browserAgent != null)
-                {
-                    var url = await browserAgent.GetUrlAsync(linkedToken);
-                    _safetyManager.VerifyUrlSafety(url);
-                }
-
                 // Variable substitution for action values and selectors
                 var resolvedValue = SubstituteVariables(step.Action.Value, context);
                 var resolvedSelector = step.Action.Target != null ? SubstituteVariables(step.Action.Target.Selector, context) : null;
@@ -169,6 +158,54 @@ public class ActionRuntime : IDisposable
                     } : null
                 };
 
+                // Generate and log semantic summary
+                var semanticSummary = _semanticSummarizer.Summarize(resolvedAction);
+                _logger?.LogInformation("Semantic Intent: {Summary}", semanticSummary);
+
+                // Get embodiment provider
+                var embodimentProvider = context.GetVariable<IUiEmbodimentProvider>("UiEmbodimentProvider")
+                                         ?? new DefaultUiEmbodimentProvider(context, _executor);
+                embodimentProvider.IsSimulationMode = _safetyManager.IsSimulationMode;
+
+                // Register StateVerificationEngine in context so verifiers can use it
+                var verificationEngine = new StateVerificationEngine(embodimentProvider);
+                context.SetVariable("StateVerificationEngine", verificationEngine);
+
+                try
+                {
+                    // Validate the action against the active trust tier
+                    _trustTierManager.ValidateAction(resolvedAction);
+
+                    // ── SAFETY CHECKS ──
+                    _safetyManager.VerifyRateLimit();
+                    _safetyManager.VerifyMouseFailsafe();
+
+                    var (proc, title) = await embodimentProvider.GetActiveWindowAsync(linkedToken);
+                    _safetyManager.VerifyProcessSafety(proc, title);
+
+                    if (resolvedAction.Type == ActionType.Navigate && !string.IsNullOrEmpty(resolvedAction.Value))
+                    {
+                        _safetyManager.VerifyUrlSafety(resolvedAction.Value);
+                    }
+
+                    var url = await embodimentProvider.GetUrlAsync(linkedToken);
+                    if (!string.IsNullOrEmpty(url))
+                    {
+                        _safetyManager.VerifyUrlSafety(url);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    step.Status = StepStatus.Failed;
+                    step.Error = ex.Message;
+                    for (int j = i + 1; j < order.Count; j++)
+                    {
+                        order[j].Status = StepStatus.Skipped;
+                    }
+                    await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+                    throw;
+                }
+
                 // Track expected mouse coordinates if performing coordinate-based click
                 if (resolvedAction.Type == ActionType.Click && resolvedAction.Target != null && resolvedAction.Target.X.HasValue && resolvedAction.Target.Y.HasValue)
                 {
@@ -179,7 +216,9 @@ public class ActionRuntime : IDisposable
                 if (resolvedAction.Permission != ActionPermission.Approved && resolvedAction.Permission != ActionPermission.AutoApproved)
                 {
                     var gatePermission = _permissionGate.CheckPermission(resolvedAction);
-                    if (gatePermission == ActionPermission.AutoApproved)
+                    var isIrreversible = _reversibilityEvaluator.IsIrreversible(resolvedAction);
+
+                    if (gatePermission == ActionPermission.AutoApproved && !isIrreversible)
                     {
                         resolvedAction.Permission = ActionPermission.AutoApproved;
                         step.Action.Permission = ActionPermission.AutoApproved;
@@ -187,7 +226,10 @@ public class ActionRuntime : IDisposable
                     else
                     {
                         step.Status = StepStatus.Failed;
-                        step.Error = $"Step action is not approved (status: {gatePermission})";
+                        var errorMsg = isIrreversible 
+                            ? "Action blocked: action is irreversible and requires explicit human approval." 
+                            : $"Step action is not approved (status: {gatePermission})";
+                        step.Error = errorMsg;
                         
                         // Mark remaining steps as Skipped
                         for (int j = i + 1; j < order.Count; j++)
@@ -196,8 +238,22 @@ public class ActionRuntime : IDisposable
                         }
 
                         await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
-                        throw new InvalidOperationException($"Step '{step.Id}' action is not approved (status: {gatePermission})");
+                        throw new InvalidOperationException(errorMsg);
                     }
+                }
+                else if (resolvedAction.Permission == ActionPermission.AutoApproved && _reversibilityEvaluator.IsIrreversible(resolvedAction))
+                {
+                    step.Status = StepStatus.Failed;
+                    var errorMsg = "Action blocked: action is irreversible and requires explicit human approval.";
+                    step.Error = errorMsg;
+                    
+                    for (int j = i + 1; j < order.Count; j++)
+                    {
+                        order[j].Status = StepStatus.Skipped;
+                    }
+
+                    await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+                    throw new InvalidOperationException(errorMsg);
                 }
 
                 step.Status = StepStatus.Executing;
@@ -207,19 +263,7 @@ public class ActionRuntime : IDisposable
                 {
                     _logger?.LogInformation("Executing step '{StepId}': {Description}", step.Id, step.Action.Description);
                     
-                    string result;
-                    if (browserAgent != null && IsBrowserAction(resolvedAction.Type))
-                    {
-                        result = await ExecuteBrowserActionAsync(browserAgent, resolvedAction, linkedToken);
-                    }
-                    else if (desktopOp != null && IsDesktopAction(resolvedAction.Type))
-                    {
-                        result = await ExecuteDesktopActionAsync(desktopOp, resolvedAction, linkedToken);
-                    }
-                    else
-                    {
-                        result = await _executor.ExecuteAsync(resolvedAction, linkedToken);
-                    }
+                    string result = await embodimentProvider.ExecuteActionAsync(resolvedAction, linkedToken);
 
                     step.Action.Status = resolvedAction.Status;
                     step.Action.Result = result;
@@ -289,19 +333,7 @@ public class ActionRuntime : IDisposable
                                     } : null
                                 };
 
-                                string retryResult;
-                                if (browserAgent != null && IsBrowserAction(resolvedAction.Type))
-                                {
-                                    retryResult = await ExecuteBrowserActionAsync(browserAgent, resolvedAction, linkedToken);
-                                }
-                                else if (desktopOp != null && IsDesktopAction(resolvedAction.Type))
-                                {
-                                    retryResult = await ExecuteDesktopActionAsync(desktopOp, resolvedAction, linkedToken);
-                                }
-                                else
-                                {
-                                    retryResult = await _executor.ExecuteAsync(resolvedAction, linkedToken);
-                                }
+                                string retryResult = await embodimentProvider.ExecuteActionAsync(resolvedAction, linkedToken);
 
                                 step.Action.Status = resolvedAction.Status;
                                 step.Action.Result = retryResult;
@@ -420,71 +452,7 @@ public class ActionRuntime : IDisposable
         }
     }
 
-    private static bool IsBrowserAction(ActionType type)
-    {
-        return type == ActionType.Navigate || type == ActionType.Click || type == ActionType.Type || type == ActionType.Screenshot || type == ActionType.Scroll;
-    }
 
-    private static bool IsDesktopAction(ActionType type)
-    {
-        return type == ActionType.Click || type == ActionType.Type || type == ActionType.KeyPress;
-    }
-
-    private static async Task<string> ExecuteBrowserActionAsync(BrowserAgentRuntime browser, AutomationAction action, CancellationToken ct)
-    {
-        action.Status = ActionStatus.Running;
-        switch (action.Type)
-        {
-            case ActionType.Navigate:
-                var url = action.Value ?? throw new ArgumentException("Navigate requires URL");
-                await browser.NavigateAsync(url, ct);
-                action.Status = ActionStatus.Completed;
-                return $"Navigated to {url}";
-            case ActionType.Click:
-                var selector = action.Target?.Selector ?? throw new ArgumentException("Click selector is required");
-                await browser.ClickAsync(selector, ct);
-                action.Status = ActionStatus.Completed;
-                return $"Clicked selector {selector}";
-            case ActionType.Type:
-                var typeSelector = action.Target?.Selector ?? throw new ArgumentException("Type selector is required");
-                var text = action.Value ?? throw new ArgumentException("Type value is required");
-                await browser.TypeAsync(typeSelector, text, ct);
-                action.Status = ActionStatus.Completed;
-                return $"Typed '{text}' into {typeSelector}";
-            case ActionType.Screenshot:
-                var bytes = await browser.TakeScreenshotAsync(ct);
-                action.Status = ActionStatus.Completed;
-                return $"Screenshot captured ({bytes.Length} bytes)";
-            default:
-                throw new NotSupportedException($"Browser action {action.Type} is not supported in this runtime.");
-        }
-    }
-
-    private static async Task<string> ExecuteDesktopActionAsync(IDesktopOperator desktop, AutomationAction action, CancellationToken ct)
-    {
-        action.Status = ActionStatus.Running;
-        switch (action.Type)
-        {
-            case ActionType.Click:
-                if (!action.Target?.X.HasValue ?? true || !action.Target.Y.HasValue)
-                    throw new ArgumentException("Desktop Click requires X and Y coordinates");
-                await desktop.ClickAsync(action.Target.X.Value, action.Target.Y.Value, ct);
-                action.Status = ActionStatus.Completed;
-                return $"Clicked desktop at ({action.Target.X.Value}, {action.Target.Y.Value})";
-            case ActionType.Type:
-                var text = action.Value ?? throw new ArgumentException("Desktop Type requires value");
-                await desktop.TypeAsync(text, ct);
-                action.Status = ActionStatus.Completed;
-                return $"Typed desktop text '{text}'";
-            case ActionType.KeyPress:
-                var key = action.Value ?? throw new ArgumentException("Desktop KeyPress requires key name");
-                await desktop.KeyPressAsync(key, ct);
-                action.Status = ActionStatus.Completed;
-                return $"Pressed desktop key '{key}'";
-            default:
-                throw new NotSupportedException($"Desktop action {action.Type} is not supported.");
-        }
-    }
 
     private static string SubstituteVariables(string? template, ExecutionContext context)
     {

@@ -133,3 +133,29 @@ public class UrlPatternVerifier : IStepVerifier
         }
     }
 }
+
+/// <summary>
+/// Verifies that a file exists on the local filesystem using StateVerificationEngine or standard I/O.
+/// </summary>
+public class FileExistsVerifier : IStepVerifier
+{
+    public string FilePath { get; }
+
+    public FileExistsVerifier(string filePath)
+    {
+        FilePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
+    }
+
+    public async Task<bool> VerifyAsync(ExecutionContext context, CancellationToken ct)
+    {
+        if (context == null) throw new ArgumentNullException(nameof(context));
+
+        var verificationEngine = context.GetVariable<StateVerificationEngine>("StateVerificationEngine");
+        if (verificationEngine != null)
+        {
+            return await verificationEngine.VerifyFileExistsAsync(FilePath, ct);
+        }
+
+        return await Task.Run(() => System.IO.File.Exists(FilePath), ct);
+    }
+}

@@ -51,6 +51,12 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  NarrativeDriftAuditor │ InterventionFatigueTracker     │
 │  MemoryPollutionDetector │ SemanticCompressor            │
 ├─────────────────────────────────────────────────────────┤
+│                    Automation & Execution Layer         │
+│  ActionRuntime │ OperationalWorldModel │ WorkflowRuntime │
+│  IUiEmbodimentProvider │ TrustTierManager │ RateLimiter   │
+│  WindowsUiAutomationProvider │ ContainmentGuard │         │
+│  ReversibilityEvaluator │ BoundedPermissionStore │        │
+├─────────────────────────────────────────────────────────┤
 │                    Perception Layer                       │
 │  ActiveWindowService │ FileWatcherService               │
 │  EnvironmentModel (IBehavioralModeStrategy) │ PerceptionDashboard │
@@ -108,7 +114,7 @@ High-level architecture overview for the Engram personal semantic operating laye
       ↓
 [SemanticDeduplicator] → merge duplicates
       ↓
-[SalienceScorer] → time decay
+[SalienceScorer] → recompute salience
       ↓
 [ContradictionDetector] → behavioral intelligence
       ↓
@@ -192,6 +198,10 @@ Cycle:
 │       └── state.json
 ├── config/           # Local configuration
 ├── logs/             # Service and diagnostic logs
+│   └── contradiction_history.json
+│   └── interventions.json
+│   └── intervention_consent.json
+│   └── perception_config.json
 └── archives/         # Decayed/stale wiki nodes
 ```
 
@@ -212,7 +222,7 @@ Cycle:
 | Engram.Store/Salience/ | Decay scoring, drift detection | 7 |
 | Engram.Store/Inference/ | LLamaSharp, GPU detection, model mgmt, KV lifecycle | 11 |
 | Engram.Store/Agent/ | Research agent, browser, citations | 14 |
-| Engram.Store/Automation/ | ActionRuntime, BrowserAgentRuntime, CognitiveActionLoop, DesktopOperator, ExecutionContext, ExecutionPlan, ExecutionSafetyManager, PlaywrightBrowserDriver, Recovery & Rollback, TaskPlanner, Verifiers | Phase 7, Phase 15 |
+| Engram.Store/Automation/ | ActionRuntime, OperationalWorldModel, WorkflowRuntime, TrustTierManager, IUiEmbodimentProvider, WindowsUiAutomationProvider (COM), BoundedPermissionStore, ContainmentGuard, RateLimiter, SovereigntyMonitor, ReversibilityEvaluator | Phase 7, Phase 8, Phase 9 |
 | Engram.Store/Security/ | Encryption, export, delete, sync | 16 |
 | Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard, BehavioralModeStrategy, PerceptionEventRecorder, PerceptionReplayEngine, InterpretationComparator, InterpretationAccuracyTracker, FalsePatternDetector, TruthCalibrationStore, TimelineSemanticsEngine, AmbiguityToleranceEngine | 17, Sprint 6, Sprint 7, Sprint 8 |
 | Engram.Store/Cloud/ | Cloud pipeline, providers, audit | 8 |

@@ -988,3 +988,34 @@ The transition from reactive task execution to adaptive operational cognition. E
 
 ---
 
+## Phase 9: Execution Reliability & Embodied Safety (May 22, 2026)
+
+This phase shifted Engram from cognitive workflow planning to robust, production-grade embodied execution. It decoupled the cognitive action loop from underlying OS automation mechanisms, instituted detailed execution safety grids/controls, and added native Windows UI Automation using COM interop to keep the codebase clean of platform-lock-in references.
+
+### New Components (13 files)
+
+- **Embodiment Abstraction Layer** (`IUiEmbodimentProvider.cs`, `MockUiProvider.cs`, `DefaultUiEmbodimentProvider.cs`, `WindowsUiAutomationProvider.cs`): Defines a strict clean boundary isolating cognitive plan logic from native Windows and Playwright viewport drivers. Uses native CLSID instantiation (`CUIAutomation` at `ff48dba4-bf32-4e5c-a6b4-d7d5b38590c8`) for dynamic Windows UI Automation COM interop, allowing cross-platform builds (macOS/Linux) to compile cleanly.
+- **Execution Trust Tiers** (`TrustTierManager.cs`): Enforces granular execution scopes (`Observe`, `Suggest`, `Assist`, `Operate`, `Restricted`, `Privileged`). Blocks executions exceeding active user-configured trust level.
+- **Bounded Permission Memory** (`BoundedPermissionStore.cs`): Stores transient user approvals restricted strictly by permission category (`Read`, `Navigation`, `Interaction`, `FileTransfer`, `Destructive`). Approvals do not auto-authorize higher-tier actions.
+- **Coexistence Controls & Yield Safety** (`SovereigntyMonitor.cs`): Uses Win32 user input ticks to detect active human mouse/keyboard operation. Instantly yields and backs off automation runtime upon human intervention.
+- **Action Rate Limiting** (`RateLimiter.cs`): Throttles mouse actions (500ms min delay) and keystrokes (150ms min delay), restricting maximum operational budget (30 actions/min) to mimic natural human speed. Halts when re-plan/retry oscillation is detected (hysteresis damping).
+- **Zone Containment & File Safety** (`ContainmentGuard.cs`): Restricts filesystem operations to whitelisted directories (e.g. `Documents/Engram`, `Downloads`, `%TEMP%`) and blocks operations targeting files containing safety keywords (e.g. `hosts`, `credential`).
+- **Semantic Action Summarizer** (`SemanticSummarizer.cs`): Translates mechanical action properties and click coordinates into high-level, human-readable semantic summaries for approval prompting.
+- **Reversibility Scoring** (`ReversibilityEvaluator.cs`): Classifies actions by their degree of reversibility (`Reversible`, `Mostly`, `Maybe`, `Partially`, `No`). Flags all destructive commands (`delete`, `purge`, `remove`) as non-reversible, forcing human confirmation and bypassing auto-approval.
+- **Environment Verification** (`StateVerificationEngine.cs`, `Verifiers.cs`): Integrates state verification checks (like path/file existence validation inside sandboxed directories) to confirm successful action outcome.
+- **UI Semantic Targeting** (`SemanticElementResolver.cs`): Translates semantic UI targeting elements to exact screen coordinate targets dynamically using COM-based UI Automation tree searches.
+
+### New Test Suites (5 files, 20 tests)
+
+| Suite | Tests | Coverage |
+|-------|-------|----------|
+| `MockEmbodimentTests.cs` | 4 | Abstraction transitions, mock viewport clicks, restrictive trust tier blocking |
+| `TrustTierManagerTests.cs` | 4 | Trust level transitions, auto-approval thresholds, permission gates |
+| `Wave2SafetyTests.cs` | 4 | State verifiers (FileExistsVerifier), reversibility evaluation, action summary strings |
+| `Wave3SemanticTargetingTests.cs` | 4 | Dynamic COM element queries, coordination resolution, element target matching |
+| `Wave4RateLimitingTests.cs` | 4 | Keyboard/mouse action damping, foreground sovereignty back-offs, directory whitelisting, category-bounded permission stores |
+
+**Tests:** 20 new tests. Total 1544/1544 store tests passing, 88/88 API integration tests passing (1632/1632 total tests green).
+
+---
+

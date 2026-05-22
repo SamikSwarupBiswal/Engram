@@ -42,7 +42,7 @@ Engram is a **desktop app**, not a web app. Tauri v2 (Rust) shell auto-spawns a 
 | UI | React 19 + TypeScript + Tailwind CSS |
 | Backend | .NET 8 ASP.NET Minimal API (sidecar) |
 | Local Store | .engram/ directory (JSON + Markdown) |
-| Tests | xUnit (1470 tests) |
+| Tests | xUnit (1632 tests total: 1544 Store, 88 API) |
 | Build | Vite 6, cargo, dotnet publish |
 
 ## Onboarding Flow
@@ -97,13 +97,16 @@ BackgroundMetabolismService (every 5 minutes)
 14. **Multi-Agent Orchestration** — Specialized agents coordinated via shared world model
 15. **Execution Sandboxing** — Filesystem safety and dry-run simulation mode
 16. **Human Collaboration Gates** — Pause execution and surface clarification requests via API
+17. **UI Embodiment Abstraction** — Decouples cognitive planning from execution drivers via IUiEmbodimentProvider
+18. **Execution Trust Tiers** — Restricts action scope using a multi-level safety grid
+19. **Coexistence Safety Controls** — Limits rates, prevents directory violations, and respects foreground sovereignty
 
 ## Current State
 
-- Phases 1-8 implemented and verified
-- Active development completed for Phase 8 (Executional World Model & Autonomous Workflows)
-- 1470/1470 tests passing (47 new Phase 8 engine tests, full regression green)
-- 97 API endpoints (Phase 8 adds 8 new workflow/collaboration/telemetry endpoints)
+- Phases 1-9 implemented and verified
+- Active development completed for Phase 9 (Execution Reliability & Embodied Operation)
+- 1544 store tests + 88 API tests passing (1632/1632 total tests green)
+- 97 API endpoints (all connected to frontend)
 - 10 frontend views
 - Desktop app built (Tauri + React)
 - NSIS installer (~77MB)
@@ -115,6 +118,8 @@ BackgroundMetabolismService (every 5 minutes)
 - **Long-running workflows can be paused, checkpointed, and restored across process restarts**
 - **Procedural memory persists and replays learned execution patterns**
 - **Multi-agent orchestration safely routes tasks to specialized agents**
+- **Safety controls enforce rate limiting, containment zone whitelisting, and foreground sovereignty yields**
+- **Windows dynamic COM UI Automation dynamically operates without platform compilation lock-in**
 
 ## What's Next
 

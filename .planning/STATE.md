@@ -1,10 +1,10 @@
 # Engram State
 
-**Status:** Phase 8 (Executional World Model & Autonomous Workflows) Completed & Verified
+**Status:** Phase 9 (Execution Reliability & Embodied Operation) Completed & Verified
 **Last Activity:** 2026-05-22
 **Branch:** `master`
-**Tests:** 1470/1470 passing (all Phase 8 engine tests + full regression suite)
-**Latest Commit:** (pending — Phase 8 implementation)
+**Tests:** 1544 store tests + 88 API tests passing (1632/1632 total tests green)
+**Latest Commit:** (pending — Phase 9 implementation)
 
 ## What Engram Is
 
@@ -92,7 +92,7 @@ Engram/
 ├── src/
 │   ├── Engram.Store/          Core library (all logic)
 │   │   ├── Agent/             Research agent, browser, citations
-│   │   ├── Automation/        Action executor, permission gate, world model, workflow runtime
+│   │   ├── Automation/        Action executor, permission gate, safety systems, trust tiers, rate limits, Windows dynamic COM
 │   │   ├── Billing/           Token budget, pricing
 │   │   ├── Capture/           Event capture (clipboard, files, windows)
 │   │   ├── Cloud/             Cloud pipeline, providers, audit
@@ -118,7 +118,7 @@ Engram/
 │       ├── build-*.ps1         Build scripts
 │       └── validate-install.ps1  Post-install validation
 ├── tests/
-│   └── Engram.Store.Tests/    1470 tests
+│   └── Engram.Store.Tests/    1544 tests
 └── .planning/                 All planning docs
 ```
 
@@ -210,11 +210,11 @@ PUT  /api/identity                  Update profile
 | ModelDownloadBar | /api/model/status, /api/model/download, /api/model/load | Connected |
 | DiscoveryInterview | /api/discovery/status, /api/discovery | Connected |
 
-- Phases 1-8 implemented and verified
-- Phase 8 (Executional World Model & Autonomous Workflows) completed, featuring operational world model, workflow checkpointing, procedural memory, execution reasoning, collaboration gates, and multi-agent orchestration
-- 1470/1470 tests passing (47 new Phase 8 tests, full regression green)
+- Phases 1-9 implemented and verified
+- Phase 9 (Execution Reliability & Embodied Operation) completed, featuring strict embodiment abstraction (IUiEmbodimentProvider), Execution Trust Tiers, Semantic Action Validation, Reversibility Scoring, Rate Limiting throttles, Attention Steal (foreground sovereignty) back-offs, Containment Sandbox Whitelists, Bounded Permission Memory, and Windows UI Automation COM interop.
+- 1544/1544 Store tests passing (20 new Phase 9 safety integration tests, full regression green) + 88/88 API integration tests passing (1632/1632 total tests green)
 
-## Tests: 1470/1470
+## Tests: 1544/1544 (Engram.Store.Tests)
 
 | Category | Count |
 |----------| ------|
@@ -252,7 +252,8 @@ PUT  /api/identity                  Update profile
 | **Sprint 8: Longitudinal Reality Testing** | **38** |
 | **Phase 7: The Embodied Execution Megaphase** | **146** |
 | **Phase 8: Executional World Model** | **47** |
-| **Total** | **1470** |
+| **Phase 9: Execution Reliability & Embodied Safety** | **20** |
+| **Total** | **1544** |
 
 ## Billing (Token Budget)
 

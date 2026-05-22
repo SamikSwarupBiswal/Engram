@@ -20,7 +20,7 @@
   - [x] **Phase 7I: Live Execution UX** — maintain user trust during operation
   - [x] **Phase 7J: Operational Cognition** — merge cognition with action
 - [x] **Phase 8: Executional World Model & Autonomous Workflows** [CRITICAL] — 2026-05-22
-- [ ] **Phase 9: Google Workspace Metadata** [PRO]
+- [x] **Phase 9: Execution Reliability & Embodied Operation** [CRITICAL] — 2026-05-22
 - [ ] **Phase 10: Agentic Research Workflow** [PRO]
 - [ ] **Phase 11: Computer-Use Automation** [PRO]
 - [ ] **Phase 12: Encryption, Sync, Production Hardening** [PRO]
@@ -36,10 +36,10 @@
 
 ## Current State
 
-- Phases 1-8 implemented and verified
-- Active development completed for Phase 8 (Executional World Model & Autonomous Workflows)
-- 1470/1470 tests passing (all Phase 8 engine tests + full regression suite green)
-- 97 API endpoints (Phase 8 adds 8 new endpoints), all connected to frontend
+- Phases 1-9 implemented and verified
+- Active development completed for Phase 9 (Execution Reliability & Embodied Operation)
+- 1544 store tests + 88 API tests passing (1632/1632 total tests green)
+- 97 API endpoints (Phase 8 added 8 endpoints), all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
 - NSIS installer (~77MB) with self-contained .NET
@@ -56,6 +56,9 @@
 - **Long-running workflows with pause/resume checkpointing**
 - **Procedural memory learns and recalls execution patterns**
 - **Multi-agent orchestration routes tasks to specialized agents**
+- **Strict UI embodiment abstraction (IUiEmbodimentProvider) and Windows dynamic COM UI automation**
+- **Execution trust tiers and category-bounded permissions to prevent unauthorized/destructive actions**
+- **Coexistence safety controls (rate limiting, foreground sovereignty yielding, directory containment zones)**
 
 ## Architecture State
 
