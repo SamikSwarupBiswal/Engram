@@ -808,19 +808,19 @@ Phase7Metrics added to CognitiveDiagnosticsSnapshot:
 
 ---
 
-## Final Statistics (as of Sprint 8)
+## Final Statistics (as of Phase 7 Completion)
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 94+ |
-| Test count | 1362/1363 passing (1 pre-existing model file failure) |
-| C# source files | ~215+ |
-| Lines of code | ~40,500+ |
-| API endpoints | 83+ |
-| Cognitive sprints | 8 (Sprint 1-8) |
-| New components (Sprint 3-8) | 34 |
-| Phase 7 components | 8 |
-| Phase 7 tests | 62 |
+| Total commits | 95+ |
+| Test count | 1509/1509 passing |
+| C# source files | ~230+ |
+| Lines of code | ~44,000+ |
+| API endpoints | 89 |
+| Cognitive sprints | 9 (Sprint 1-8 + Phase 7 Automation) |
+| New components (Sprint 3-8 + Phase 7) | 49 |
+| Phase 7 components | 23 |
+| Phase 7 tests | 146 |
 | Phase 8 components | 5 |
 | Phase 8 tests | 38 |
 
@@ -848,9 +848,32 @@ The proving ground. Infrastructure for real-world validation over weeks of actua
 
 ---
 
-## Architecture Decisions (68+)
+## Phase 7: The Embodied Execution Megaphase (May 22, 2026)
 
-Key decisions documented in `.planning/architecture-decisions.md`:
+**Commit:** `5413353`
+
+Implemented the full cognitive-action automation pipeline, giving Engram deterministic, safe, and recoverable OS and browser execution capabilities.
+
+### New Components
+
+- **Action Graph Foundation** (`ExecutionPlan`, `ExecutionStep`, `ExecutionContext`): Implements a class-based Action DAG representation ensuring deterministic, cycle-free topological step resolution.
+- **Task Planner** (`TaskPlanner`): Generates natural language intents and parses them into executable multi-step operational graphs.
+- **Desktop Operator** (`DesktopOperator`, `IDesktopOperator`): Win32-based `SendInput` operator simulating clicks, mouse moves, keystrokes, active window focus, with strict safety margins and simulation toggles.
+- **Browser Agent Runtime** (`BrowserAgentRuntime`, `IBrowserDriver`, `PlaywrightBrowserDriver`, `StubBrowserDriver`): Web navigation agent utilizing Playwright to extract DOM elements, click targets, and type input.
+- **State Verification** (`Verifiers`, `IStepVerifier`): Ensures post-action environment validation (such as DOM selector verification) to guarantee execution success and prevent hallucinations.
+- **Recovery & Rollback** (`RecoveryAndRollback`, `IStepRollback`, `IStepRecovery`): Enforces a LIFO execution stack rollback logic to clean up file/browser state when automation steps fail.
+- **Execution Memory** (`ExecutionPlanHistoryStore`): Persists local execution outcomes and states under `~/.engram/automation/runs/`.
+- **Execution Safety** (`ExecutionSafetyManager`): Guards execution with process blacklists, URL domain checks, and mouse/hotkey failsafes.
+- **Live Execution Endpoints** (`Program.cs`): Wired up 6 control API endpoints (`/api/automation/pause`, `/api/automation/resume`, `/api/automation/abort`, `/api/automation/status`, `/api/automation/execute-plan`, `/api/automation/cognitive/run`).
+- **Operational Cognition** (`CognitiveActionLoop`): Coordinated pipeline linking intent parsing, safety checks, execution steps, post-validation, and rollback recovery.
+
+**Tests:** 142 new tests covering DAG validation, simulation mode, safety violations, LIFO rollback cascading, and full endpoint integration tests. Total 1509/1509 passing.
+
+---
+
+## Architecture Decisions (87+)
+
+Key decisions documented in `.planning/architecture-decisions.md` and `.planning/ROADMAP.md`:
 
 - D-037: .NET sidecar as inference router
 - D-040: Vulkan fallback chain (Vulkan → CPU)
@@ -869,6 +892,21 @@ Key decisions documented in `.planning/architecture-decisions.md`:
 - D-070: ContradictionDetector for behavioral intelligence
 - D-071: RetrievalBudgetManager with 2000 token budget
 - D-072: InterventionGenerator with configurable threshold
+- D-073: IBehavioralModeStrategy for injectable mode detection
+- D-074: PerceptionSnapshot as immutable record (input + interpretation + sequence)
+- D-075: CognitiveRestraintEngine with 9 restraint gates
+- D-076: TruthCalibrationStore for persistent human corrections
+- D-077: FalsePatternDetector for anti-overinterpretation
+- D-078: TimelineSemanticsEngine for sessions/arcs/momentum/regressions
+- D-079: NarrativeDriftAuditor for weekly self-model reality check
+- D-080: InterventionFatigueTracker for user response measurement
+- D-081: AmbiguityToleranceEngine for 'I don't know' infrastructure
+- D-082: SemanticCompressor analyze-only mode (report, don't modify)
+- D-083: Action Graph DAG representation for deterministic, cycle-free task steps
+- D-084: Win32 SendInput simulator with strict bounds and failsafe mechanisms
+- D-085: IBrowserDriver abstraction using Playwright for web environment operations
+- D-086: LIFO recovery and rollback cascade for step-wise environment cleanup
+- D-087: Host-level ExecutionSafetyManager for process and URL domain blacklisting
 
 ---
 

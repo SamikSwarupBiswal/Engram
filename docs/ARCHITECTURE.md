@@ -212,7 +212,7 @@ Cycle:
 | Engram.Store/Salience/ | Decay scoring, drift detection | 7 |
 | Engram.Store/Inference/ | LLamaSharp, GPU detection, model mgmt, KV lifecycle | 11 |
 | Engram.Store/Agent/ | Research agent, browser, citations | 14 |
-| Engram.Store/Automation/ | Action executor, permission gate | 15 |
+| Engram.Store/Automation/ | ActionRuntime, BrowserAgentRuntime, CognitiveActionLoop, DesktopOperator, ExecutionContext, ExecutionPlan, ExecutionSafetyManager, PlaywrightBrowserDriver, Recovery & Rollback, TaskPlanner, Verifiers | Phase 7, Phase 15 |
 | Engram.Store/Security/ | Encryption, export, delete, sync | 16 |
 | Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard, BehavioralModeStrategy, PerceptionEventRecorder, PerceptionReplayEngine, InterpretationComparator, InterpretationAccuracyTracker, FalsePatternDetector, TruthCalibrationStore, TimelineSemanticsEngine, AmbiguityToleranceEngine | 17, Sprint 6, Sprint 7, Sprint 8 |
 | Engram.Store/Cloud/ | Cloud pipeline, providers, audit | 8 |
