@@ -8,9 +8,10 @@ import { ModelDownloadBar } from "./components/chat/ModelDownloadBar";
 import { GoogleWorkspacePanel } from "./components/settings/GoogleWorkspacePanel";
 import { ResearchPanel } from "./components/research/ResearchPanel";
 import { AutomationPanel } from "./components/automation/AutomationPanel";
+import { GovernancePanel } from "./components/settings/GovernancePanel";
 import type { SearchResult, WikiNodeSummary, RawEvent, StatusResponse, IdentityResponse, DriftAlert } from "./lib/api";
 
-export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive" | "research" | "automation";
+export type View = "chat" | "search" | "wiki" | "timeline" | "settings" | "archive" | "research" | "automation" | "governance";
 
 const SESSIONS_KEY = "engram-chat-sessions";
 
@@ -129,6 +130,7 @@ export default function App() {
           {discoveryDone && activeView === "archive" && <ArchiveView />}
           {discoveryDone && activeView === "research" && <ResearchPanel />}
           {discoveryDone && activeView === "automation" && <AutomationPanel />}
+          {discoveryDone && activeView === "governance" && <GovernancePanel />}
         </main>
       </div>
     </div>

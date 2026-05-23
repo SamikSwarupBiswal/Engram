@@ -135,6 +135,7 @@ export function Sidebar({
               { id: "archive" as View, label: "Archive", icon: "🗄️" },
               { id: "research" as View, label: "Research", icon: "🔬" },
               { id: "automation" as View, label: "Automation", icon: "🤖" },
+              { id: "governance" as View, label: "Governance & Safety", icon: "🛡️" },
             ].map((item) => (
               <button
                 key={item.id}

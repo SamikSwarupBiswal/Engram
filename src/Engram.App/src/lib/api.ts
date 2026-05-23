@@ -107,6 +107,90 @@ export interface DiscoveryAnswers {
   antiGoals: { description: string; severity: string; context?: string }[];
 }
 
+export interface GovernanceActivity {
+  entryId: string;
+  timestamp: string;
+  action: string;
+  description: string;
+  relatedNodeId: string;
+  impactLevel: string;
+}
+
+export interface ReasonTrace {
+  traceId: string;
+  timestamp: string;
+  triggerType: number; // 0=Intervention, 1=SalienceShift, 2=Pause, 3=Escalation, 4=ExecutionDecision
+  targetEntityId: string;
+  description: string;
+  causalFactors: string[];
+  systemComponent: string;
+}
+
+export interface TrustScore {
+  domain: string;
+  score: number;
+  lastUpdatedAt: string;
+  successStreak: number;
+  overrideCount: number;
+}
+
+export interface TrustStatus {
+  scores: Record<string, TrustScore>;
+  grants: Record<string, string>;
+  autonomyCeiling: number;
+  interventionFrequencyMultiplier: number;
+}
+
+export interface ConstitutionalViolation {
+  severity: number; // 0=C1, 1=C2, 2=C3, 3=C4, 4=C5
+  violatingSubsystem: string;
+  details: string;
+  triggerAction: string;
+  causalChain: string[];
+  userResolution: string;
+}
+
+export interface AuditEntry {
+  entryId: string;
+  timestamp: string;
+  data: string; // Serialized ConstitutionalViolation
+  previousHash: string;
+  hash: string;
+}
+
+export interface AuditResponse {
+  state: string;
+  entries: AuditEntry[];
+  integrityValid: boolean;
+}
+
+export interface PrivacyZoneRule {
+  ruleName: string;
+  excludedPathPattern: string;
+  excludedAppProcess: string;
+}
+
+export interface SensitiveDomainRule {
+  domainName: string;
+  suppressInterventions: boolean;
+  suppressPropagation: boolean;
+}
+
+export interface RetentionPolicyRule {
+  domain: string;
+  retentionWindow: string; // serialized TimeSpan
+  autoExpire?: boolean;
+}
+
+export interface GovernanceConfig {
+  retentionPolicies: RetentionPolicyRule[];
+  sensitiveDomains: SensitiveDomainRule[];
+  privacyZones: PrivacyZoneRule[];
+  maxDailyInterventions: number;
+  minConfidenceToEscalate: number;
+  defaultTrustCeiling: number;
+}
+
 export const api = {
   search: (query: string, limit = 20) =>
     apiFetch<SearchResponse>(`/api/search?q=${encodeURIComponent(query)}&limit=${limit}`),
@@ -344,6 +428,45 @@ export const api = {
   // Diagnostics Export
   diagnosticsExport: () =>
     apiFetch<Record<string, unknown>>("/api/diagnostics/export"),
+
+  // Governance & Trust
+  governanceActivity: () =>
+    apiFetch<GovernanceActivity[]>("/api/governance/activity"),
+
+  governanceTraces: (entityId?: string) => {
+    const path = entityId ? `/api/governance/traces?entityId=${encodeURIComponent(entityId)}` : "/api/governance/traces";
+    return apiFetch<ReasonTrace[]>(path);
+  },
+
+  governanceTrust: () =>
+    apiFetch<TrustStatus>("/api/governance/trust"),
+
+  governanceForget: (nodeId: string) =>
+    apiFetch<{ forgotten: boolean }>("/api/governance/forget", {
+      method: "POST",
+      body: JSON.stringify({ nodeId }),
+    }),
+
+  governanceDispute: (nodeId: string, claimId: string, correctedValue: string) =>
+    apiFetch<{ disputed: boolean }>("/api/governance/dispute", {
+      method: "POST",
+      body: JSON.stringify({ nodeId, claimId, correctedValue }),
+    }),
+
+  governanceUpdateSettings: (config: any) =>
+    apiFetch<{ updated: boolean }>("/api/governance/settings", {
+      method: "POST",
+      body: JSON.stringify(config),
+    }),
+
+  governanceRecover: (resolutionDetail: string) =>
+    apiFetch<{ state: string }>("/api/governance/recover", {
+      method: "POST",
+      body: JSON.stringify({ resolutionDetail }),
+    }),
+
+  governanceAudit: () =>
+    apiFetch<AuditResponse>("/api/governance/audit"),
 };
 
 export interface StartupMetrics {

@@ -1724,6 +1724,7 @@ app.MapPost("/api/governance/recover", (RecoveryRequest request) =>
 app.MapGet("/api/governance/audit", () =>
     Results.Ok(new
     {
+        state = governance.SafetyStateMachine.CurrentState.ToString(),
         entries = governance.SafetyAudit.GetEntries(),
         integrityValid = governance.SafetyAudit.VerifyIntegrity()
     }));
