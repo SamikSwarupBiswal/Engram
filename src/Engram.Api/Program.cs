@@ -1736,7 +1736,15 @@ app.MapGet("/api/governance/trust", () =>
         scores = governance.Trust.GetAllScores(),
         grants = governance.Trust.GetAllGrants(),
         autonomyCeiling = governance.Trust.AutonomyCeiling,
-        interventionFrequencyMultiplier = governance.Trust.InterventionFrequencyMultiplier
+        interventionFrequencyMultiplier = governance.Trust.InterventionFrequencyMultiplier,
+        homeostasisIndex = governance.Homeostasis.RecoveryFactor,
+        homeostasisState = governance.Homeostasis.CurrentState.ToString(),
+        semanticState = governance.Homeostasis.GetSemanticStateMessage(),
+        annoyanceScore = governance.LongitudinalTrust.AnnoyanceScore,
+        consecutiveFriction = governance.Friction.ConsecutiveFrictionCount,
+        availablePacingTokens = governance.Pacing.GetAvailableTokens(),
+        cognitiveDebtCount = governance.Homeostasis.CognitiveDebtCount,
+        floorDetected = governance.Homeostasis.FloorDetected
     }));
 
 app.MapPost("/api/governance/forget", (ForgetRequest request) =>

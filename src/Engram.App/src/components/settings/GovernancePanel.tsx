@@ -9,6 +9,16 @@ export function GovernancePanel() {
   const [autonomyCeiling, setAutonomyCeiling] = useState<number>(1.0);
   const [interventionFreq, setInterventionFreq] = useState<number>(1.0);
   
+  // Homeostasis & Pacing indicators
+  const [homeostasisIndex, setHomeostasisIndex] = useState<number>(1.0);
+  const [homeostasisState, setHomeostasisState] = useState<string>("Optimal");
+  const [semanticState, setSemanticState] = useState<string>("System running at full cognitive fidelity.");
+  const [annoyanceScore, setAnnoyanceScore] = useState<number>(0.0);
+  const [consecutiveFriction, setConsecutiveFriction] = useState<number>(0);
+  const [availablePacingTokens, setAvailablePacingTokens] = useState<number>(5);
+  const [cognitiveDebtCount, setCognitiveDebtCount] = useState<number>(0);
+  const [floorDetected, setFloorDetected] = useState<boolean>(false);
+  
   const [traces, setTraces] = useState<ReasonTrace[]>([]);
   const [activity, setActivity] = useState<GovernanceActivity[]>([]);
   
@@ -31,7 +41,20 @@ export function GovernancePanel() {
     try {
       const [auditData, trustData, tracesData, activityData] = await Promise.all([
         api.governanceAudit().catch(() => ({ state: "Operational", entries: [], integrityValid: true })),
-        api.governanceTrust().catch(() => ({ scores: {}, grants: {}, autonomyCeiling: 1.0, interventionFrequencyMultiplier: 1.0 })),
+        api.governanceTrust().catch(() => ({
+          scores: {},
+          grants: {},
+          autonomyCeiling: 1.0,
+          interventionFrequencyMultiplier: 1.0,
+          homeostasisIndex: 1.0,
+          homeostasisState: "Optimal",
+          semanticState: "System running at full cognitive fidelity.",
+          annoyanceScore: 0.0,
+          consecutiveFriction: 0,
+          availablePacingTokens: 5,
+          cognitiveDebtCount: 0,
+          floorDetected: false
+        })),
         api.governanceTraces().catch(() => []),
         api.governanceActivity().catch(() => [])
       ]);
@@ -43,6 +66,16 @@ export function GovernancePanel() {
       setTrustScores(trustData.scores || {});
       setAutonomyCeiling(trustData.autonomyCeiling);
       setInterventionFreq(trustData.interventionFrequencyMultiplier);
+
+      // Homeostasis & fatigue
+      setHomeostasisIndex(trustData.homeostasisIndex ?? 1.0);
+      setHomeostasisState(trustData.homeostasisState ?? "Optimal");
+      setSemanticState(trustData.semanticState ?? "System running at full cognitive fidelity.");
+      setAnnoyanceScore(trustData.annoyanceScore ?? 0.0);
+      setConsecutiveFriction(trustData.consecutiveFriction ?? 0);
+      setAvailablePacingTokens(trustData.availablePacingTokens ?? 5);
+      setCognitiveDebtCount(trustData.cognitiveDebtCount ?? 0);
+      setFloorDetected(trustData.floorDetected ?? false);
       
       setTraces(tracesData);
       setActivity(activityData);
@@ -278,6 +311,70 @@ export function GovernancePanel() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Metabolic Homeostasis & Pacing */}
+          <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Metabolic Homeostasis & Pacing</h3>
+              {floorDetected && (
+                <span className="rounded-full bg-red-950/60 border border-red-500/30 px-2.5 py-0.5 text-[9px] font-semibold text-red-400 animate-pulse">
+                  FLOOR DETECTED
+                </span>
+              )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02] sm:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-[#888]">Metabolic State</span>
+                  <span className={`text-xs font-mono font-medium ${
+                    homeostasisState === "Optimal" ? "text-emerald-400" : homeostasisState === "Congested" ? "text-yellow-400" : "text-red-400 animate-pulse"
+                  }`}>
+                    {homeostasisState}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-[#b4b4b4] leading-relaxed">
+                  {semanticState}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-[#888]">Homeostasis Index</span>
+                  <span className="text-xs font-mono text-emerald-400">{(homeostasisIndex * 100).toFixed(0)}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden mt-1.5">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      homeostasisIndex > 0.8 ? "bg-emerald-500" : homeostasisIndex > 0.4 ? "bg-yellow-500" : "bg-red-500"
+                    }`}
+                    style={{ width: `${homeostasisIndex * 100}%` }}
+                  />
+                </div>
+                <span className="mt-1.5 block text-[10px] text-[#666]">Recovery/capacity scaling factor under local resource load.</span>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-[#888]">Pacing & Friction</span>
+                  <span className="text-xs font-mono text-blue-400">{availablePacingTokens} / 5 tokens</span>
+                </div>
+                <div className="text-[10px] text-[#666] leading-relaxed mt-1">
+                  Annoyance Score: <span className="font-mono text-[#ececec]">{annoyanceScore.toFixed(1)}/10.0</span> <br />
+                  Consecutive Friction: <span className="font-mono text-[#ececec]">{consecutiveFriction}</span>
+                </div>
+                <span className="mt-1.5 block text-[10px] text-[#666]">Friction decays trust / increases alert silence thresholds.</span>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02] sm:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-[#888]">Cognitive Debt Queue</span>
+                  <span className="text-xs font-mono text-yellow-400">{cognitiveDebtCount} tasks</span>
+                </div>
+                <span className="mt-1.5 block text-[10px] text-[#666]">Deferred background reflections and narrative synthesis waiting for system idle state.</span>
+              </div>
             </div>
           </div>
 

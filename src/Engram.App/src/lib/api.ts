@@ -139,6 +139,14 @@ export interface TrustStatus {
   grants: Record<string, string>;
   autonomyCeiling: number;
   interventionFrequencyMultiplier: number;
+  homeostasisIndex?: number;
+  homeostasisState?: string;
+  semanticState?: string;
+  annoyanceScore?: number;
+  consecutiveFriction?: number;
+  availablePacingTokens?: number;
+  cognitiveDebtCount?: number;
+  floorDetected?: boolean;
 }
 
 export interface ConstitutionalViolation {
