@@ -24,6 +24,10 @@ public class GovernanceCoordinator
     public ConstitutionalStateMachine SafetyStateMachine { get; }
     public ConstitutionalAuditLog SafetyAudit { get; }
     public GovernanceIsolationBoundary SafetyBoundary { get; }
+    public PacingController Pacing { get; }
+    public FrictionTracker Friction { get; }
+    public OverrideExpiryManager Expiry { get; }
+    public Metabolism.HomeostasisController Homeostasis { get; }
 
     public GovernanceCoordinator(WikiNodeStore nodeStore, WorkspacePaths paths, DriftAlertStore? driftStore = null)
     {
@@ -40,6 +44,11 @@ public class GovernanceCoordinator
         SafetyAudit = new ConstitutionalAuditLog(paths);
         SafetyStateMachine = new ConstitutionalStateMachine(paths, SafetyAudit);
         SafetyBoundary = new GovernanceIsolationBoundary(SafetyStateMachine);
+
+        Pacing = new PacingController(Config.MaxDailyInterventions);
+        Friction = new FrictionTracker(Config, LongitudinalTrust);
+        Expiry = new OverrideExpiryManager(Trust, SafetyStateMachine);
+        Homeostasis = new Metabolism.HomeostasisController();
 
         Observability.LogActivity("System Boot", "Governance Coordinator initialized and running.", impact: "Medium");
     }

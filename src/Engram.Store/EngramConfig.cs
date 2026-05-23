@@ -30,6 +30,17 @@ public class EngramConfig
     /// <summary>Maximum cost per single cloud call in USD.</summary>
     public decimal PerCallLimitUsd { get; set; } = 0.50m;
 
+    // --- Longitudinal Endurance & Homeostasis Settings ---
+    /// <summary>Maximum Entity Graph size limit.</summary>
+    public int MaxGraphNodes { get; set; } = 10000;
+
+    /// <summary>Half-life for salience decay in days.</summary>
+    public double SalienceDecayHalfLifeDays { get; set; } = 30.0;
+
+    /// <summary>Threshold similarity for merging entities.</summary>
+    public double CompactionThreshold { get; set; } = 0.7;
+
+
     // --- Custom Provider Settings ---
     /// <summary>Custom provider API key (OpenAI, Groq, Together, etc.)</summary>
     public string? CustomProviderApiKey { get; set; }

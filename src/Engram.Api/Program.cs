@@ -195,7 +195,41 @@ var perceptionPipeline = new VisualPerceptionPipeline(paths.Raw, screenCapture, 
 var layoutSnap = new LayoutSnapService();
 
 // ── Health: Single source of truth for all readiness state ──
-app.MapGet("/api/health", () => Results.Ok(lifecycle.GetHealth()));
+app.MapGet("/api/health", () =>
+{
+    var health = lifecycle.GetHealth();
+    return Results.Ok(new
+    {
+        health.State,
+        health.Backend,
+        health.ModelLoaded,
+        health.ModelName,
+        health.Progress,
+        health.Error,
+        health.UptimeSeconds,
+        health.RetryCount,
+        health.IsReady,
+        health.CanAcceptRequests,
+        health.StateHistory,
+        health.Metadata,
+        health.Metrics,
+        health.Inference,
+        health.RuntimeOperational,
+        health.RecentSuccessRate,
+        health.ConsecutiveFailures,
+        health.GeneratedTokensSinceReset,
+        health.LastSuccessfulInferenceAt,
+        health.RuntimeDegraded,
+        
+        // New Metabolic Homeostasis & Fatigue Telemetry
+        homeostasisIndex = governance.Homeostasis.RecoveryFactor,
+        homeostasisState = governance.Homeostasis.CurrentState.ToString(),
+        semanticState = governance.Homeostasis.GetSemanticStateMessage(),
+        annoyanceScore = governance.LongitudinalTrust.AnnoyanceScore,
+        consecutiveFriction = governance.Friction.ConsecutiveFrictionCount,
+        availablePacingTokens = governance.Pacing.GetAvailableTokens()
+    });
+});
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -316,7 +350,15 @@ app.MapGet("/api/status", () =>
         cloudEnabled = config.CloudEnabled,
         rawEvents = rawCount,
         wikiNodes = wikiCount,
-        isCapturing = true
+        isCapturing = true,
+        
+        // New Metabolic Homeostasis & Fatigue Telemetry
+        homeostasisIndex = governance.Homeostasis.RecoveryFactor,
+        homeostasisState = governance.Homeostasis.CurrentState.ToString(),
+        semanticState = governance.Homeostasis.GetSemanticStateMessage(),
+        annoyanceScore = governance.LongitudinalTrust.AnnoyanceScore,
+        consecutiveFriction = governance.Friction.ConsecutiveFrictionCount,
+        availablePacingTokens = governance.Pacing.GetAvailableTokens()
     });
 });
 
