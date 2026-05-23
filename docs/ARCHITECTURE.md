@@ -48,6 +48,8 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  GovernanceIsolationBoundary │ MemorySovereigntySystem  │
 │  TrustCalibrationEngine │ CognitiveBoundarySystem       │
 │  AmbientCognitionRestraint │ RealityCorrectionLayer     │
+│  PacingController │ FrictionTracker                     │
+│  OverrideExpiryManager                                  │
 ├─────────────────────────────────────────────────────────┤
 │                    Intelligence Layer                     │
 │  BackgroundMetabolismService (IHostedService, 5min)      │
@@ -57,6 +59,7 @@ High-level architecture overview for the Engram personal semantic operating laye
 │  ContradictionHistoryStore │ TensionEvolutionEngine      │
 │  NarrativeDriftAuditor │ InterventionFatigueTracker     │
 │  MemoryPollutionDetector │ SemanticCompressor            │
+│  HomeostasisController                                  │
 ├─────────────────────────────────────────────────────────┤
 │                    Automation & Execution Layer         │
 │  ActionRuntime │ OperationalWorldModel │ WorkflowRuntime │
@@ -79,6 +82,7 @@ High-level architecture overview for the Engram personal semantic operating laye
 │                    Ingestion Layer                        │
 │  ClipboardWatcher │ ActiveWindowTracker │ FileWatcher    │
 │  OcrService │ GoogleWorkspaceManager                     │
+│  CausalReconciler                                       │
 ├─────────────────────────────────────────────────────────┤
 │                    Inference Layer                        │
 │  InferenceRouter │ LocalInferenceEngine │ CloudPipeline  │
@@ -221,17 +225,18 @@ Cycle:
 | Engram.Store/Memory/ | ConversationMemoryExtractor, Pipeline, PromptAssembler | 22 |
 | Engram.Store/Metabolism/ | BackgroundMetabolismService, Deduplicator, ContradictionDetector, RetrievalBudgetManager, InterventionGenerator, InterventionStore, ContradictionHistoryStore, TensionEvolutionEngine, ContradictionResolutionDetector | 23, Sprint 3 |
 | Engram.Store/Metabolism/ | ReflectionConfidenceModel, IdentityStabilityEngine, NarrativeBalanceController, CounterEvidenceDetector, NarrativeInterpretationEngine, SemanticHealthMonitor | Sprint 4 |
-| Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine, CognitiveRestraintEngine, NarrativeDriftAuditor, InterventionFatigueTracker, MemoryPollutionDetector, SemanticCompressor | Sprint 5, Sprint 7, Sprint 8 |
-| Engram.Store/Governance/ | GovernanceCoordinator, ReasonTraceEngine, DecisionNarrator, MemorySovereigntySystem, HistoricalDeletionEnvelope, SemanticForgetEngine, MemoryRetentionPolicies, TrustCalibrationEngine, ReversibilityWeightedTrust, ComfortAdaptationEngine, PermissionDecaySystem, CognitiveBoundarySystem, SensitiveDomainManager, NarrativeIntrusionGuard, AmbientCognitionRestraint, LongitudinalTrustModel, TransparencyObservabilityService, RealityCorrectionLayer, SafetyConstitution, ConstitutionalStateMachine, ConstitutionalAuditLog, GovernanceIsolationBoundary | Phase 11 |
+| Engram.Store/Metabolism/ | ToneBalanceEngine, MomentumDetector, CuriosityEngine, InterventionConsentModel, ReflectionExpiryEngine, CognitiveRestraintEngine, NarrativeDriftAuditor, InterventionFatigueTracker, MemoryPollutionDetector, SemanticCompressor, HomeostasisController | Sprint 5, Sprint 7, Sprint 8, Phase 12 |
+| Engram.Store/Governance/ | GovernanceCoordinator, ReasonTraceEngine, DecisionNarrator, MemorySovereigntySystem, HistoricalDeletionEnvelope, SemanticForgetEngine, MemoryRetentionPolicies, TrustCalibrationEngine, ReversibilityWeightedTrust, ComfortAdaptationEngine, PermissionDecaySystem, CognitiveBoundarySystem, SensitiveDomainManager, NarrativeIntrusionGuard, AmbientCognitionRestraint, LongitudinalTrustModel, TransparencyObservabilityService, RealityCorrectionLayer, SafetyConstitution, ConstitutionalStateMachine, ConstitutionalAuditLog, GovernanceIsolationBoundary, PacingController, FrictionTracker, OverrideExpiryManager | Phase 11, Phase 12 |
 | Engram.Store/Orchestration/ | IntentClassifier, TaskRouter | 22 |
 | Engram.Store/Search/ | TF-IDF, SemanticSearchEngine, BriefGenerator | 5, 22 |
 | Engram.Store/Wiki/ | WikiNodeStore, Metabolizer, Serializer | 4 |
 | Engram.Store/Identity/ | User profile, discovery, intervention | 6 |
 | Engram.Store/Salience/ | Decay scoring, drift detection | 7 |
 | Engram.Store/Inference/ | LLamaSharp, GPU detection, model mgmt, KV lifecycle | 11 |
+| Engram.Store/Ingestion/ | CausalReconciler | Phase 12 |
 | Engram.Store/Agent/ | Research agent, browser, citations | 14 |
 | Engram.Store/Automation/ | ActionRuntime, OperationalWorldModel, WorkflowRuntime, TrustTierManager, IUiEmbodimentProvider, WindowsUiAutomationProvider (COM), BoundedPermissionStore, ContainmentGuard, RateLimiter, SovereigntyMonitor, ReversibilityEvaluator | Phase 7, Phase 8, Phase 9 |
-| Engram.Store/Security/ | Encryption, export, delete, sync | 16 |
+| Engram.Store/Security/ | Encryption, export, delete, sync, BackupManager | 16, Phase 12 |
 | Engram.Store/Perception/ | Screen capture, OCR, ActiveWindowService, FileWatcherService, EnvironmentModel, PerceptionDashboard, BehavioralModeStrategy, PerceptionEventRecorder, PerceptionReplayEngine, InterpretationComparator, InterpretationAccuracyTracker, FalsePatternDetector, TruthCalibrationStore, TimelineSemanticsEngine, AmbiguityToleranceEngine | 17, Sprint 6, Sprint 7, Sprint 8 |
 | Engram.Store/Cloud/ | Cloud pipeline, providers, audit | 8 |
 | Engram.Store/Billing/ | Token budget, pricing | 9 |

@@ -1,10 +1,10 @@
 # Engram State
 
-**Status:** Phase 11 (Human Trust & Coexistence) Completed & Verified
-**Last Activity:** 2026-05-22
+**Status:** Existential Validation Era (D1-D5) — Active Phase: D1 (Reality Hardening)
+**Last Activity:** 2026-05-23
 **Branch:** `master`
-**Tests:** 1587 store tests + 88 API tests passing (1675/1675 total tests green)
-**Latest Commit:** (completed — Phase 11 implementation)
+**Tests:** 1597 store tests + 88 API tests passing (1685/1685 total tests green)
+**Latest Commit:** (completed — Phase 12 implementation)
 
 ## What Engram Is
 
@@ -218,12 +218,14 @@ GET  /api/governance/audit           Get safety constitution audit log
 | ModelDownloadBar | /api/model/status, /api/model/download, /api/model/load | Connected |
 | DiscoveryInterview | /api/discovery/status, /api/discovery | Connected |
 
-- Phases 1-11 implemented and verified
+- Phases 1-12 implemented and verified (Cognitive Architecture Era complete)
 - Phase 10 (Unified Semantic World Model) completed, featuring a Unified Entity Graph, Cross-Modal Identity Resolution, Temporal World Fusion, Attention & Salience Unification, Semantic Scene Construction, Cross-System Memory Propagation, and Global Consistency Engine.
 - Phase 11 (Human Trust & Coexistence) completed, featuring an Explainability narrative layer, Memory Sovereignty with deletion envelopes and propagation reconciliation, trust calibration, cognitive boundaries, ambient restraint, transparency/dispute resolution, and a safety constitution with an isolated state machine and immutable audit log.
-- 1587/1587 Store tests passing (8 new Phase 11 tests, full regression green) + 88/88 API integration tests passing (1675/1675 total tests green)
+- Phase 12 (Cognitive Homeostasis & Longitudinal Endurance) completed, featuring metabolic resource-awareness, dynamic cognitive priority stack triage, startup WAL causal reconciler self-healing, metadata daily ZIP backups, token-bucket pacing, and friction-scaled alert silence thresholds.
+- Active development started for Phase D1 (Reality Hardening) of the Existential Validation Era (D1-D5).
+- 1597/1597 Store tests passing (10 new Phase 12 tests, full regression green) + 88/88 API integration tests passing (1685/1685 total tests green)
 
-## Tests: 1587/1587 (Engram.Store.Tests)
+## Tests: 1597/1597 (Engram.Store.Tests)
 
 | Category | Count |
 |----------| ------|
@@ -264,7 +266,8 @@ GET  /api/governance/audit           Get safety constitution audit log
 | **Phase 9: Execution Reliability & Embodied Safety** | **20** |
 | **Phase 10: Unified Semantic World Model** | **35** |
 | **Phase 11: Human Trust & Coexistence** | **8** |
-| **Total** | **1587** |
+| **Phase 12: Cognitive Homeostasis & Longitudinal Endurance** | **10** |
+| **Total** | **1597** |
 
 ## Billing (Token Budget)
 

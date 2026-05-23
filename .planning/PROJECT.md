@@ -42,7 +42,7 @@ Engram is a **desktop app**, not a web app. Tauri v2 (Rust) shell auto-spawns a 
 | UI | React 19 + TypeScript + Tailwind CSS |
 | Backend | .NET 8 ASP.NET Minimal API (sidecar) |
 | Local Store | .engram/ directory (JSON + Markdown) |
-| Tests | xUnit (1667 tests total: 1579 Store, 88 API) |
+| Tests | xUnit (1685 tests total: 1597 Store, 88 API) |
 | Build | Vite 6, cargo, dotnet publish |
 
 ## Onboarding Flow
@@ -103,9 +103,9 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## Current State
 
-- Phases 1-10 implemented and verified
-- Active development completed for Phase 10 (Unified Semantic World Model)
-- 1579 store tests + 88 API tests passing (1667/1667 total tests green)
+- Phases 1-12 implemented and verified
+- Active development completed for Phase 12 (Cognitive Homeostasis & Longitudinal Endurance)
+- 1597 store tests + 88 API tests passing (1685/1685 total tests green)
 - 97 API endpoints (all connected to frontend)
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -120,11 +120,16 @@ BackgroundMetabolismService (every 5 minutes)
 - **Multi-agent orchestration safely routes tasks to specialized agents**
 - **Safety controls enforce rate limiting, containment zone whitelisting, and foreground sovereignty yields**
 - **Windows dynamic COM UI Automation dynamically operates without platform compilation lock-in**
+- **Safety constitution state machine enforces boundaries based on violation levels and writes SHA-256 tamper-evident logs**
+- **Explainability narration turns causal reasoning traces into plain-text user explanations**
+- **Memory sovereignty enforces deletion envelopes and handles user reality corrections**
+- **Metabolic priority stack manages triage under load and runs deferred tasks (cognitive debt) when idle**
+- **Token-bucket pacing controls intervention rates, scaling silence limits as user friction increases**
+- **Causal startup reconciler repairs WAL sequence fractures to recover uncommitted writes**
 
 ## What's Next
 
-1. **Phase 11: Human Trust & Coexistence** — Introduce explainability, privacy maps, trust pacing, and ambient cognition restraint.
-2. **Phase 12: Longitudinal Endurance** — Hardening for month-scale execution, graph entropy control, and semantic compaction.
+1. **Existential Validation Era (D1-D5)** — Shift focus entirely from capability expansion to operational consolidation, hardening, coexistence validation, soak operations, task execution validation, and productization. Active phase: **D1 (Reality Hardening)**.
 
 ## Anti-Patterns (DO NOT BUILD)
 

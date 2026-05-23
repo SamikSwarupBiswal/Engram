@@ -30,22 +30,28 @@
   - [x] **Phase 10F: Cross-System Memory Propagation** — Automate seamless memory and insight propagation between workflows, browser, cognition, and timelines
   - [x] **Phase 10G: Global Consistency Engine** — A coherence immune system that prevents duplicate entities, contradictions, and narrative drift
 - [x] **Phase 11: Human Trust & Coexistence** [CRITICAL] — Explainability, privacy maps, memory editing, trust pacing, and ambient cognition restraint
-- [ ] **Phase 12: Longitudinal Endurance & Entropy Resistance** [CRITICAL]
-  - [ ] **Phase 12A: Semantic Entropy Resistance** — Prevent graph inflation, salience sludge, contradiction accumulation, stale narratives, and attention saturation.
-  - [ ] **Phase 12B: Longitudinal Trust Stability** — Prevent autonomy creep, permission inflation, intervention fatigue, and governance erosion.
-  - [ ] **Phase 12C: Memory Ecology Management** — Implement automatic compaction, archival, salience pruning, dormant entity compression, and contradiction expiration.
-  - [ ] **Phase 12D: Operational Fatigue Systems** — Prevent retry obsession, intervention persistence, narrative fixation, and workflow haunting.
-  - [ ] **Phase 12E: Multi-Month Runtime Survival** — Implement corruption recovery, graph reconciliation, replay validation, causal continuity repair, and operational archaeology integrity.
-  - [ ] **Phase 12F: Cognitive Homeostasis** — Implement dynamic stabilization, equilibrium enforcement, semantic load balancing, emotional neutrality preservation, and activation damping.
-  - [ ] **Phase 12G: Longitudinal Human Adaptation** — Enable calmer, non-intrusive operations and learning restraint patterns without accumulating overconfidence.
+- [x] **Phase 12: Longitudinal Endurance & Entropy Resistance** [CRITICAL] — 2026-05-23
+  - [x] **Phase 12A: Semantic Entropy Resistance** — Prevent graph inflation, salience sludge, contradiction accumulation, stale narratives, and attention saturation.
+  - [x] **Phase 12B: Longitudinal Trust Stability** — Prevent autonomy creep, permission inflation, intervention fatigue, and governance erosion.
+  - [x] **Phase 12C: Memory Ecology Management** — Implement automatic compaction, archival, salience pruning, dormant entity compression, and contradiction expiration.
+  - [x] **Phase 12D: Operational Fatigue Systems** — Prevent retry obsession, intervention persistence, narrative fixation, and workflow haunting.
+  - [x] **Phase 12E: Multi-Month Runtime Survival** — Implement corruption recovery, graph reconciliation, replay validation, causal continuity repair, and operational archaeology integrity.
+  - [x] **Phase 12F: Cognitive Homeostasis** — Implement dynamic stabilization, equilibrium enforcement, semantic load balancing, emotional neutrality preservation, and activation damping.
+  - [x] **Phase 12G: Longitudinal Human Adaptation** — Enable calmer, non-intrusive operations and learning restraint patterns without accumulating overconfidence.
+- [ ] **Deployment Era (D1-D5)** [CRITICAL]
+  - [ ] **Phase D1: Reality Hardening** — Installer resilience, Windows dynamic environments, sleep/wake, driver fallbacks, anti-virus.
+  - [ ] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
+  - [ ] **Phase D3: Long-Horizon Soak Operation** — Weeks-long run, graph growth, semantic entropy, propagation sludge, cognitive debt accumulation, trust drift.
+  - [ ] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
+  - [ ] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
 
 
 ## Current State
 
-- Phases 1-11 implemented and verified
-- Active development completed for Phase 11 (Human Trust & Coexistence)
-- 1587 store tests + 88 API tests passing (1675/1675 total tests green)
-- 97 API endpoints (Phase 8 added 8 endpoints), all connected to frontend
+- Phases 1-12 implemented and verified
+- Active development completed for Phase 12 (Cognitive Homeostasis & Longitudinal Endurance)
+- 1597 store tests + 88 API tests passing (1685/1685 total tests green)
+- 97 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
 - NSIS installer (~77MB) with self-contained .NET
@@ -65,6 +71,10 @@
 - **Strict UI embodiment abstraction (IUiEmbodimentProvider) and Windows dynamic COM UI automation**
 - **Execution trust tiers and category-bounded permissions to prevent unauthorized/destructive actions**
 - **Coexistence safety controls (rate limiting, foreground sovereignty yielding, directory containment zones)**
+- **Metabolic homeostasis and cognitive debt priority stacks balance resource loads**
+- **Causal reconciler heals uncommitted startup WAL fractures**
+- **Automatic daily compressed metadata backups preserve history**
+- **Governance pacing token-bucket limits and friction-scaled intervention thresholds preserve focus**
 
 ## Architecture State
 
@@ -83,6 +93,7 @@ Background (every 5 minutes):
   → ContradictionDetector (behavioral intelligence)
   → ArchiveManager (archive stale nodes)
   → InterventionGenerator (proactive guidance)
+  → HomeostasisController (metabolic resource triage, cognitive debt resolution)
   → EventBus (emit events)
 
 Autonomous Execution (Phase 8):
@@ -98,43 +109,33 @@ Autonomous Execution (Phase 8):
   → AgentOrchestrator (multi-agent task routing)
 ```
 
-## What's Next
+## What's Next: Existential Validation Era (D1-D5)
 
-### Priority 1: Production Deployment
+All remaining roadmap work is focused on robustness, coexistence, endurance, execution validation, and productization to ensure Engram survives real-world Windows environments and users.
 
-1. **Code signing** — Sign the installer to prevent Windows Defender quarantine
-2. **Auto-update mechanism** — Tauri has built-in updater support
-3. **Crash reporting** — Capture and report sidecar crashes
-4. **Telemetry opt-in** — Anonymous usage stats for debugging
+### Phase D1: Reality Hardening (Active)
+1. **Installer Resilience** — Handle Windows path variables, administrator/standard privileges, and user profile variations.
+2. **Windows Edge Cases** — Multi-monitor configurations, DPI scaling, registry access errors.
+3. **OS State Transitions** — Handle system sleep, hibernation, wake cycles, and unexpected power loss.
+4. **Environment Divergence** — Browser profiling, anti-virus interference, permissions chaos, and fallback execution strategies.
 
-### Priority 2: Semantic Coherence — ADDRESSED
+### Phase D2: Human Coexistence Validation
+1. **Intervention Fatigue** — Gauge frequency of passive/active intervention dispatches and refine the friction-scaled restraint thresholds.
+2. **Annoyance Archaeology** — Monitor Swift cancels and UI dismissals to track user annoyance and trust drift.
+3. **Autonomy Discomfort** — Verify pacing constraints to ensure Engram does not context-switch or alert the user aggressively.
 
-Phase 7 (Behavioral Reality Validation) directly addressed this:
-- Perception replay makes interpretations verifiable
-- False pattern detection prevents over-interpretation
-- Human truth calibration grounds interpretations in reality
-- Cognitive restraint prevents intervention fatigue
-- Timeline semantics provide life continuity
+### Phase D3: Long-Horizon Soak Operation
+1. **Long-Horizon Run** — Weeks-long continuous background operational simulation.
+2. **Semantic Accumulation** — Analyze entity graph scaling, link density decay, and WAL propagation sludge over time.
+3. **Homeostasis Maintenance** — Validate priority stacks and metabolic resource triage under prolonged low-to-high activity cycles.
 
-### Priority 3: Intervention Refinement — NEXT
+### Phase D4: Real Task Execution Validation
+1. **Task Robustness** — Ensure end-to-end task completion (e.g., generating research reports, browser data extraction, file curation) on messy desktops.
+2. **Interruption Recovery** — Gracefully pause automation steps when users hijack input or focus and resume safely.
 
-1. **Intervention accuracy** — Track which interventions users act on
-2. **Intervention timing** — Don't interrupt focus, deliver at natural breaks
-3. **Intervention personalization** — Learn what types of interventions work
-4. **Intervention fatigue** — Don't overwhelm with too many alerts (CognitiveRestraintEngine addresses this)
-
-### Priority 4: Memory Quality
-
-1. **Fact verification** — Cross-reference facts across sources
-2. **Source confidence** — Weight facts by source reliability
-3. **Memory consolidation** — Merge related facts over time
-4. **Memory forgetting** — Intentional forgetting of irrelevant details
-
-### Priority 5: Platform Expansion (DEFERRED)
-
-1. **macOS support** — Tauri supports macOS, need LLamaSharp backend
-2. **Linux support** — Tauri + LLamaSharp work on Linux
-3. **Mobile companion** — iOS/Android app for quick capture
+### Phase D5: Productization
+1. **Packaging & Security** — Formally sign binaries, configure secure auto-update mechanisms, and enforce localized privacy walls.
+2. **Governance UI** — Expose permission dashboards, explainability traces, and correction interfaces to the user clearly.
 
 ## Key Decisions
 

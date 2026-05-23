@@ -1047,18 +1047,48 @@ Established a single coherent Semantic Reality Graph that integrates Engram's op
 
 ---
 
-## Final Statistics (as of Phase 10 Completion)
+## Phase 11: Human Trust & Coexistence (May 22, 2026)
+
+Established constitutional supremacy over cognition and execution, moving Engram from a raw cognitive system to a governable cognitive institution.
+
+### New Components
+
+- **Constitutional State Machine & Safety Audit** (`Governance/SafetyConstitution.cs`): Enforces system operational states (`Operational`, `Restrained`, `Degraded`, `AuditRequired`, `Frozen`, `RecoveryPending`) based on violation severity (`C1` through `C5`). Implements an append-only, tamper-evident audit log using SHA-256 hash chains to guarantee log integrity.
+- **Explainability & Decision Narrator** (`Governance/ReasonTraceEngine.cs`, `Governance/DecisionNarrator.cs`): Captures causal reason traces explaining *why* decisions were made, and translates them into natural, non-technical human narratives.
+- **Memory Sovereignty System** (`Governance/MemorySovereigntySystem.cs`): Implements true forgetting, clean edge/relation pruning, and structural deletion envelopes to preserve timeline coherence without retaining content.
+- **Reality Correction Layer** (`Governance/RealityCorrectionLayer.cs`): Handles user disputes by downgrading claim confidence and rolling back derived salience/propagation metrics.
+- **Trust Calibration & Boundaries** (`Governance/TrustCalibrationEngine.cs`, `Governance/CognitiveBoundarySystem.cs`): Calibrates domain trust scores using reversibility weightings and enforces directory whitelists and privacy exclusions.
+
+**Tests**: 8 new integration tests. Total 1675/1675 passing.
+
+---
+
+## Phase 12: Cognitive Homeostasis & Longitudinal Endurance (May 23, 2026)
+
+Established metabolic resource-awareness, dynamic cognitive triage, auto-recovery self-healing, and longitudinal pacing to support month-scale continuous execution.
+
+### New Components
+
+- **Metabolic Homeostasis Controller** (`Metabolism/HomeostasisController.cs`): Implements a cognitive priority stack to dynamically adjust context depth under high CPU/memory load. Absolutely shields constitutional safeguards. Tracks and queues deferred low-priority tasks (Cognitive Debt) for idle-time processing. Detects homeostatic floors and simulates exponential recovery curves to prevent oscillation.
+- **Causal Reconciler** (`Ingestion/CausalReconciler.cs`): Replays Write-Ahead Logs (WAL) on startup to repair causal sequence fractures, complete/delete uncommitted files, and backfill the duplicate hash index.
+- **Backup Manager** (`Security/BackupManager.cs`): Automatically packages daily ZIP backups of `.engram/` metadata with a 7-day pruning retention limit.
+- **Operational Pacing & Friction** (`Governance/PacingController.cs`, `Governance/FrictionTracker.cs`): Limits intervention frequency using a token-bucket rate limiter. Scales up alert silence thresholds dynamically when consecutive human friction is logged.
+- **UI Dashboard Integration** (`GovernancePanel.tsx`, `api.ts`): Surfaces real-time metabolic states, recovery factors, pacing tokens, and cognitive debt counts in a sleek visual card.
+
+**Tests**: 10 new unit/integration tests (across `LongitudinalTrustTests.cs` and `CausalReconcilerTests.cs`). Total 1685/1685 passing.
+
+---
+
+## Final Statistics (as of Phase 12 Completion)
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 105+ |
-| Test count | 1667/1667 passing |
-| C# source files | ~240+ |
-| Lines of code | ~48,000+ |
+| Total commits | 110+ |
+| Test count | 1685/1685 passing |
+| C# source files | ~260+ |
+| Lines of code | ~51,000+ |
 | API endpoints | 97 |
-| Cognitive sprints | 10 (Sprint 1-8 + Phase 7 + Phase 8-10) |
-| New components | 58 |
-| Phase 10 components | 9 |
-| Phase 10 tests | 35 |
+| Cognitive sprints | 12 (Sprint 1-8 + Phase 7 + Phase 8-12) |
+| New components | 70 |
 
 
