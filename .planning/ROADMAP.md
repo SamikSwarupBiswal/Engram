@@ -30,7 +30,15 @@
   - [x] **Phase 10F: Cross-System Memory Propagation** — Automate seamless memory and insight propagation between workflows, browser, cognition, and timelines
   - [x] **Phase 10G: Global Consistency Engine** — A coherence immune system that prevents duplicate entities, contradictions, and narrative drift
 - [x] **Phase 11: Human Trust & Coexistence** [CRITICAL] — Explainability, privacy maps, memory editing, trust pacing, and ambient cognition restraint
-- [ ] **Phase 12: Longitudinal Endurance** [CRITICAL] — Month-scale runtime, semantic compaction, graph entropy control, memory pollution resistance, and operational fatigue defense
+- [ ] **Phase 12: Longitudinal Endurance & Entropy Resistance** [CRITICAL]
+  - [ ] **Phase 12A: Semantic Entropy Resistance** — Prevent graph inflation, salience sludge, contradiction accumulation, stale narratives, and attention saturation.
+  - [ ] **Phase 12B: Longitudinal Trust Stability** — Prevent autonomy creep, permission inflation, intervention fatigue, and governance erosion.
+  - [ ] **Phase 12C: Memory Ecology Management** — Implement automatic compaction, archival, salience pruning, dormant entity compression, and contradiction expiration.
+  - [ ] **Phase 12D: Operational Fatigue Systems** — Prevent retry obsession, intervention persistence, narrative fixation, and workflow haunting.
+  - [ ] **Phase 12E: Multi-Month Runtime Survival** — Implement corruption recovery, graph reconciliation, replay validation, causal continuity repair, and operational archaeology integrity.
+  - [ ] **Phase 12F: Cognitive Homeostasis** — Implement dynamic stabilization, equilibrium enforcement, semantic load balancing, emotional neutrality preservation, and activation damping.
+  - [ ] **Phase 12G: Longitudinal Human Adaptation** — Enable calmer, non-intrusive operations and learning restraint patterns without accumulating overconfidence.
+
 
 ## Current State
 

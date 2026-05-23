@@ -25,7 +25,13 @@
 - [ ] **REQ-021** Add Google Workspace metadata ingestion with OAuth, minimal scopes, revocation, and source-linked raw events. Phase: 9.
 - [ ] **REQ-022** Build a Unified Semantic World Model to fuse wiki, operational, workflow, browser, and filesystem entities into a single coherent identity system and living semantic scene. Phase: 10.
 - [ ] **REQ-023** Implement Human Trust & Coexistence boundaries, including explainability interfaces, user-configurable privacy maps, memory editing utilities, and ambient cognition restraint gates. Phase: 11.
-- [ ] **REQ-024** Establish Longitudinal Endurance capabilities, supporting month-scale runtime stability, automatic semantic compaction, graph entropy limits, and memory pollution filters. Phase: 12.
+- [ ] **REQ-024A** Implement Semantic Entropy Resistance to monitor and throttle graph inflation, prune stale narratives, and prevent attention/salience saturation. Phase: 12A.
+- [ ] **REQ-024B** Establish Longitudinal Trust Stability features to restrict autonomy inflation, control permission creep, and throttle interventions under fatigue bounds. Phase: 12B.
+- [ ] **REQ-024C** Implement Memory Ecology Management, supporting automatic semantic compaction, dormant entity compression, and contradiction expiration rules. Phase: 12C.
+- [ ] **REQ-024D** Enforce Operational Fatigue limits to prevent retry obsession, intervention persistence, and narrative fixation. Phase: 12D.
+- [ ] **REQ-024E** Provide Multi-Month Runtime Survival infrastructure, including automatic data corruption recovery, causal continuity repairs, and re-index validation tools. Phase: 12E.
+- [ ] **REQ-024F** Enforce Cognitive Homeostasis, balancing semantic loads and maintaining emotional neutrality constraints. Phase: 12F.
+- [ ] **REQ-024G** Support Longitudinal Human Adaptation, enabling calm, non-intrusive operations and restraint learning patterns. Phase: 12G.
 - [ ] **REQ-025** Implement production-grade packaging, including Windows code-signing, automatic updater integration, crash diagnostics telemetry, and installation validation. Phase: 12.
 - [ ] **REQ-026** Implement Discovery Skill interview (15-minute AI-guided SOP) that captures anti-goals, comfort triggers, and recurring anxieties into `user.md`. Phase: 6.
 - [ ] **REQ-027** Integrate local SLM inference via tiered model strategy: embeddings (always on), task SLM (on demand), reasoning SLM (on demand). Must run on 4GB RAM minimum. Phase: 7.
@@ -75,7 +81,13 @@
 | REQ-021 | PRD section 2.1 | Phase 9 | Pending |
 | REQ-022 | PRD section 6.1 | Phase 10 | Pending |
 | REQ-023 | PRD section 6 | Phase 11 | Pending |
-| REQ-024 | PRD section 10 and Implementation Plan section 5 | Phase 12 | Pending |
+| REQ-024A | PRD section 10 and Implementation Plan section 5 | Phase 12A | Pending |
+| REQ-024B | PRD section 10 and Implementation Plan section 5 | Phase 12B | Pending |
+| REQ-024C | PRD section 10 and Implementation Plan section 5 | Phase 12C | Pending |
+| REQ-024D | PRD section 10 and Implementation Plan section 5 | Phase 12D | Pending |
+| REQ-024E | PRD section 10 and Implementation Plan section 5 | Phase 12E | Pending |
+| REQ-024F | PRD section 10 and Implementation Plan section 5 | Phase 12F | Pending |
+| REQ-024G | PRD section 10 and Implementation Plan section 5 | Phase 12G | Pending |
 | REQ-025 | Product Vision — installer-based distribution | Phase 12 | Pending |
 | REQ-026 | Product Vision — Discovery Skill identity hardening | Phase 6 | Pending |
 | REQ-027 | Product Vision — local SLM tiered inference | Phase 7 | Pending |
