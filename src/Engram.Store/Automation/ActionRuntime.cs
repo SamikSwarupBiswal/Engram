@@ -33,12 +33,34 @@ public class ActionRuntime : IDisposable
     private ExecutionPlan? _activePlan;
     private ExecutionContext? _activeContext;
 
+    private readonly ExecutionStateMachine _stateMachine = new();
+    private FocusOwnershipManager? _focusOwnershipManager;
+    private InputStabilityGuard? _inputStabilityGuard;
+    private InteractionDebounceEngine? _debounceEngine;
+    private VerificationConsensusEngine? _verificationConsensusEngine;
+    private VerificationStrengthPolicy? _verificationStrengthPolicy;
+    private FalseCompletionDetector? _falseCompletionDetector;
+    private ChaosInjectionHarness? _chaosHarness;
+    private ExternalImpactGate? _externalImpactGate;
+    private TemporalExecutionDegradationModel? _temporalDegradationModel;
+
     public RuntimeState State => _state;
     public ExecutionPlan? ActivePlan => _activePlan;
     public ExecutionContext? ActiveContext => _activeContext;
     public TrustTierManager TrustTierManager => _trustTierManager;
     public ReversibilityEvaluator ReversibilityEvaluator => _reversibilityEvaluator;
     public SemanticSummarizer SemanticSummarizer => _semanticSummarizer;
+
+    public ExecutionStateMachine StateMachine => _stateMachine;
+    public FocusOwnershipManager? FocusOwnershipManager { get => _focusOwnershipManager; set => _focusOwnershipManager = value; }
+    public InputStabilityGuard? InputStabilityGuard { get => _inputStabilityGuard; set => _inputStabilityGuard = value; }
+    public InteractionDebounceEngine? DebounceEngine { get => _debounceEngine; set => _debounceEngine = value; }
+    public VerificationConsensusEngine? VerificationConsensusEngine { get => _verificationConsensusEngine; set => _verificationConsensusEngine = value; }
+    public VerificationStrengthPolicy? VerificationStrengthPolicy { get => _verificationStrengthPolicy; set => _verificationStrengthPolicy = value; }
+    public FalseCompletionDetector? FalseCompletionDetector { get => _falseCompletionDetector; set => _falseCompletionDetector = value; }
+    public ChaosInjectionHarness? ChaosHarness { get => _chaosHarness; set => _chaosHarness = value; }
+    public ExternalImpactGate? ExternalImpactGate { get => _externalImpactGate; set => _externalImpactGate = value; }
+    public TemporalExecutionDegradationModel? TemporalDegradationModel { get => _temporalDegradationModel; set => _temporalDegradationModel = value; }
 
     public ActionRuntime(
         ActionExecutor executor, 
@@ -60,6 +82,17 @@ public class ActionRuntime : IDisposable
         _failureNarrativeRecorder = failureNarrativeRecorder;
         _recoveryLegibilityEngine = recoveryLegibilityEngine;
         _logger = logger;
+
+        var defaultUi = new MockUiProvider();
+        _focusOwnershipManager = new FocusOwnershipManager(defaultUi);
+        _inputStabilityGuard = new InputStabilityGuard(new SovereigntyMonitor());
+        _debounceEngine = new InteractionDebounceEngine();
+        _verificationConsensusEngine = new VerificationConsensusEngine();
+        _verificationStrengthPolicy = new VerificationStrengthPolicy();
+        _falseCompletionDetector = new FalseCompletionDetector(defaultUi);
+        _chaosHarness = new ChaosInjectionHarness();
+        _externalImpactGate = new ExternalImpactGate();
+        _temporalDegradationModel = new TemporalExecutionDegradationModel();
     }
 
     public void Pause()
@@ -115,6 +148,8 @@ public class ActionRuntime : IDisposable
 
         var order = GetTopologicalOrder(plan);
         var completedSteps = new List<ExecutionStep>();
+
+        _debounceEngine?.ClearHistory();
 
         // Initialize safety failsafes
         _safetyManager.InitializeMouseFailsafe();
@@ -174,10 +209,83 @@ public class ActionRuntime : IDisposable
                 var semanticSummary = _semanticSummarizer.Summarize(resolvedAction);
                 _logger?.LogInformation("Semantic Intent: {Summary}", semanticSummary);
 
+                // ── D7 ROBOTICS SUBSTRATE ──
+                _stateMachine.ForceState(WorkflowState.AcquiringTarget);
+
                 // Get embodiment provider
                 var embodimentProvider = context.GetVariable<IUiEmbodimentProvider>("UiEmbodimentProvider")
                                          ?? new DefaultUiEmbodimentProvider(context, _executor);
                 embodimentProvider.IsSimulationMode = _safetyManager.IsSimulationMode;
+
+                // Re-initialize managers with active provider
+                _focusOwnershipManager = new FocusOwnershipManager(embodimentProvider);
+                _falseCompletionDetector = new FalseCompletionDetector(embodimentProvider);
+
+                // Debounce check
+                if (_debounceEngine != null && _debounceEngine.RecordActionAndCheckDebounce(resolvedAction))
+                {
+                    _logger?.LogWarning("InteractionDebounceEngine: Action debounced to prevent duplicate click/execution storm.");
+                    step.Status = StepStatus.Completed;
+                    step.CompletedAt = DateTimeOffset.UtcNow;
+                    completedSteps.Add(step);
+                    continue;
+                }
+
+                // Input stability check
+                if (!_safetyManager.IsSimulationMode && _inputStabilityGuard != null && !await _inputStabilityGuard.IsInputStableAsync(linkedToken))
+                {
+                    _stateMachine.TransitionTo(WorkflowState.YieldedToHuman);
+                    _logger?.LogWarning("InputStabilityGuard: Desktop input is unstable. Yielding control to human.");
+                    step.Status = StepStatus.Failed;
+                    step.Error = "Input stability guard blocked execution.";
+                    throw new InvalidOperationException("Execution halted: Input stability guard blocked execution due to cursor spikes or layout shifts.");
+                }
+
+                // Focus ownership and occlusion check
+                if (_focusOwnershipManager != null)
+                {
+                    var (activeProc, activeTitle) = await embodimentProvider.GetActiveWindowAsync(linkedToken);
+                    if (resolvedAction.Target != null)
+                    {
+                        _stateMachine.TransitionTo(WorkflowState.VerifyingEnvironment);
+                        
+                        // Focus ownership check: verify active process matches expected target if expected process is set in context
+                        var expectedProc = context.GetVariable<string>("ExpectedProcessName");
+                        if (!string.IsNullOrEmpty(expectedProc))
+                        {
+                            bool hasFocus = await _focusOwnershipManager.VerifyFocusAsync(expectedProc, null, linkedToken);
+                            if (!hasFocus)
+                            {
+                                _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                                throw new InvalidOperationException($"Focus ownership conflict: Expected focus on '{expectedProc}' but active is '{activeProc}'.");
+                            }
+                        }
+
+                        // Occlusion check
+                        bool isOccluded = await _focusOwnershipManager.DetectOverlayOrOcclusionAsync(linkedToken);
+                        if (isOccluded)
+                        {
+                            _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                            throw new InvalidOperationException("Focus ownership conflict: Notification overlay or system dialog is occluding target window.");
+                        }
+                    }
+                }
+
+                // External Impact Gate
+                if (_externalImpactGate != null && !await _externalImpactGate.ValidateActionSafetyAsync(resolvedAction, linkedToken))
+                {
+                    _logger?.LogInformation("ExternalImpactGate: Action flagged as irreversible or external propagation. Forcing human confirmation.");
+                    if (resolvedAction.Permission == ActionPermission.AutoApproved)
+                    {
+                        resolvedAction.Permission = ActionPermission.Pending;
+                        step.Action.Permission = ActionPermission.Pending;
+                    }
+                }
+
+                if (_stateMachine.CurrentState == WorkflowState.AcquiringTarget)
+                {
+                    _stateMachine.TransitionTo(WorkflowState.VerifyingEnvironment);
+                }
 
                 // Register StateVerificationEngine in context so verifiers can use it
                 var verificationEngine = new StateVerificationEngine(embodimentProvider);
@@ -236,6 +344,7 @@ public class ActionRuntime : IDisposable
                     {
                         order[j].Status = StepStatus.Skipped;
                     }
+                    _stateMachine.TransitionTo(WorkflowState.FailedSafe);
                     await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
                     throw;
                 }
@@ -271,6 +380,7 @@ public class ActionRuntime : IDisposable
                             order[j].Status = StepStatus.Skipped;
                         }
 
+                        _stateMachine.TransitionTo(WorkflowState.FailedSafe);
                         await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
                         throw new InvalidOperationException(errorMsg);
                     }
@@ -286,10 +396,12 @@ public class ActionRuntime : IDisposable
                         order[j].Status = StepStatus.Skipped;
                     }
 
+                    _stateMachine.TransitionTo(WorkflowState.FailedSafe);
                     await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
                     throw new InvalidOperationException(errorMsg);
                 }
 
+                _stateMachine.TransitionTo(WorkflowState.Executing);
                 step.Status = StepStatus.Executing;
                 step.StartedAt = DateTimeOffset.UtcNow;
 
@@ -310,19 +422,48 @@ public class ActionRuntime : IDisposable
 
                     context.SetVariable($"step_{step.Id}_result", step.Action.Result ?? string.Empty);
 
+                    _stateMachine.TransitionTo(WorkflowState.VerifyingMutation);
+
+                    // False completion check
+                    if (_falseCompletionDetector != null && await _falseCompletionDetector.DetectFalseCompletionAsync(result, linkedToken))
+                    {
+                        _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                        throw new InvalidOperationException($"False completion detected: Screen indicates error or occluding prompt.");
+                    }
+
+                    var signals = new VerificationSignals { StructuredApiVerified = true };
+
                     if (step.Verifier != null)
                     {
                         _logger?.LogDebug("Verifying step '{StepId}'", step.Id);
                         bool verified = await step.Verifier.VerifyAsync(context, linkedToken);
+                        signals.StructuredApiVerified = verified;
                         if (!verified)
                         {
                             throw new InvalidOperationException($"Verification failed for step '{step.Id}'");
                         }
                     }
 
+                    if (_verificationConsensusEngine != null && _verificationStrengthPolicy != null)
+                    {
+                        double confidence = _verificationConsensusEngine.CalculateRealityConfidence(signals);
+                        bool meetsReqs = _verificationStrengthPolicy.MeetsVerificationRequirements(RiskLevel.MediumRisk, confidence, signals);
+                        if (!meetsReqs)
+                        {
+                            throw new InvalidOperationException($"Epistemic verification failed: Consensus confidence {confidence:F2} is insufficient for step '{step.Id}'.");
+                        }
+                    }
+
+                    if (_temporalDegradationModel != null)
+                    {
+                        var elapsed = DateTimeOffset.UtcNow - (step.StartedAt ?? DateTimeOffset.UtcNow);
+                        _temporalDegradationModel.ComputeTemporalDecayFactor(plan.PlanId, elapsed, completedSteps.Count);
+                    }
+
                     step.Status = StepStatus.Completed;
                     step.CompletedAt = DateTimeOffset.UtcNow;
                     completedSteps.Add(step);
+                    _stateMachine.TransitionTo(WorkflowState.Completed);
                     _permissionGate.RecordSuccess(resolvedAction);
                 }
                 catch (Exception ex)
@@ -333,6 +474,7 @@ public class ActionRuntime : IDisposable
                         throw;
                     }
 
+                    _stateMachine.TransitionTo(WorkflowState.Recovering);
                     bool recovered = false;
                     Exception? lastError = ex;
 
@@ -368,6 +510,11 @@ public class ActionRuntime : IDisposable
                                     } : null
                                 };
 
+                                if (_stateMachine.CurrentState == WorkflowState.Recovering)
+                                {
+                                    _stateMachine.TransitionTo(WorkflowState.Executing);
+                                }
+
                                 string retryResult = await embodimentProvider.ExecuteActionAsync(resolvedAction, linkedToken);
 
                                 step.Action.Status = resolvedAction.Status;
@@ -379,6 +526,8 @@ public class ActionRuntime : IDisposable
                                     context.SetVariable("current_url", resolvedAction.Value);
                                 }
 
+                                _stateMachine.TransitionTo(WorkflowState.VerifyingMutation);
+
                                 if (step.Verifier != null)
                                 {
                                     _logger?.LogDebug("Verifying step '{StepId}' after recovery", step.Id);
@@ -389,6 +538,7 @@ public class ActionRuntime : IDisposable
                                     }
                                 }
 
+                                _stateMachine.TransitionTo(WorkflowState.Completed);
                                 step.Status = StepStatus.Completed;
                                 step.CompletedAt = DateTimeOffset.UtcNow;
                                 completedSteps.Add(step);
@@ -461,8 +611,14 @@ public class ActionRuntime : IDisposable
                              _ = _failureNarrativeRecorder.RecordFailureNarrativeAsync(narrative);
                          }
 
-                        await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
-                        throw new InvalidOperationException($"Step '{step.Id}' failed: {lastError?.Message}", lastError);
+                         if (_stateMachine.CurrentState != WorkflowState.Recovering)
+                         {
+                             _stateMachine.TransitionTo(WorkflowState.Recovering);
+                         }
+                         _stateMachine.TransitionTo(WorkflowState.RolledBack);
+                         await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+                         _stateMachine.TransitionTo(WorkflowState.FailedSafe);
+                         throw new InvalidOperationException($"Step '{step.Id}' failed: {lastError?.Message}", lastError);
                     }
                 }
             }

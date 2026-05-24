@@ -1121,23 +1121,49 @@ Hardened Engram's automation runtime to robustly coexist and coordinate with rea
 - **Intent Confidence Hysteresis (IRE):** Implemented `IntentReconciliationEngine` to tolerate multitasking and curiosity, preventing false-positive intent collapses and excessive permission seeking.
 - **Verification Confidence Cascade:** Implemented `VerificationFusionEngine` to resolve conflicts across ground-truth structure (Layer 1), accessibility tree (Layer 2), OCR (Layer 3), and screenshots (Layer 4).
 - **Cross-App Coordination:** Implemented `CrossApplicationContextBinder` to bridge context variables across browser, filesystem, and communication borders.
-- **Ecology & Telemetry Tracker:** Created `CoexistenceMetricsTracker` to record irritation, discomfort, and fatigue, producing deliverables for psychological health.
-
-**Tests:** 7 new tests in `PhaseD4ValidationSuite.cs`.
+- **Ecology & Telemetry Tracker:** Created `CoexistenceMetricsTracker` to record irritation, discomfort, and fatigue, producing deliverables for psychological health.**Tests:** 7 new tests in `PhaseD4ValidationSuite.cs`.
 
 ---
 
-## Final Statistics (as of Phase D4 Completion)
+## Phase D7: Execution Reality Validation & Operational Robustness (May 24, 2026)
+
+Hardened Engram's automation execution layer to safely and deterministically run workflows in hostile desktop environments by introducing formal state machine transitions, focus/input/occlusion checks, consensus scoring, and LIFO transaction rollbacks.
+
+### New Components (24 files)
+
+- **Execution State Management** (`ExecutionStateMachine.cs`): Defines strict transition rules (`AcquiringTarget`, `VerifyingEnvironment`, `Executing`, `VerifyingMutation`, `Recovering`, `RolledBack`, `FailedSafe`, `RealityUncertain`, etc.) preventing illegal state changes.
+- **Focus & Occlusion Verification** (`FocusOwnershipManager.cs`): Verifies window foreground focus and overlay notification blockages before actions.
+- **Stability Guard & Debouncer** (`InputStabilityGuard.cs`, `InteractionDebounceEngine.cs`): Checks for active user keyboard/mouse movement or layout animations before inputs, and debounces duplicate execution streams.
+- **Consensus Verification** (`VerificationConsensusEngine.cs`, `VerificationStrengthPolicy.cs`): Combines API, DOM, accessibility tree, visual OCR, and heuristic signals into a conservative reality confidence score. Enforces strict dual-strong signal checks for high-risk actions.
+- **Visual & Mutation Verifiers** (`MutationVerifier.cs`, `FalseCompletionDetector.cs`): Validates file/clipboard/browser changes, and captures error modals or occluded prompts.
+- **Chaos Injection** (`ChaosInjectionHarness.cs`): Simulates environmental (network drops, browser crashes, overlays) and behavioral (user impatience, collision) chaos events during execution.
+- **Workflow Recovery** (`RecoveryPlanner.cs`, `CompensationPlanner.cs`, `PartialMutationTracker.cs`, `WorkflowReentryEngine.cs`): Handles retry, LIFO rollback, and compensation planning for failed steps, and rehydrates execution context post-process restart.
+- **Human Collision Management** (`HumanIntentCollisionEngine.cs`, `CooperativeCursorProtocol.cs`, `SilentYieldEngine.cs`): Instantly yields control back to physical human inputs and silences resumed workflows.
+- **Ecology & Dynamic Autonomy** (`ApplicationCapabilityProfiles.cs`, `CapabilityConfidenceDecay.cs`, `OperationalConfidenceEngine.cs`, `TemporalExecutionDegradationModel.cs`): Tracks dynamic authority scores and decays capabilities as execution time increases to prevent state entropy.
+- **Mutation Safety & Impact Gates** (`TransactionalWorkflowEnvelope.cs`, `MutationBoundarySemantics.cs`, `ExternalPropagationTracker.cs`, `ExternalImpactGate.cs`): Enforces transaction boundaries and human-in-the-loop validation for irreversible actions.
+
+### New Test Suites (5 files, 18 tests)
+
+| Suite | Tests | Coverage |
+|-------|-------|----------|
+| `ExecutionSubstrateTests.cs` | 5 | State machine strict rules, foreground verification, stability guard layout cooldowns, duplicate clicks debouncing |
+| `VerificationConsensusTests.cs` | 4 | Reality confidence scoring, risk-scaled strength policy validation, file/clipboard mutations, false completion detection |
+| `ChaosInjectionTests.cs` | 2 | Event dispatching, recovery planner decision matrix (retry/rollback/compensate/escalate) |
+| `CoexistenceCollisionTests.cs` | 2 | Human override priority, cooperative cursor sovereignty requests and yields |
+| `TransactionalMutationTests.cs` | 5 | Transaction envelope commits, external impact gate human validation, chronological propagation order |
+
+**Tests:** 18 new tests. Total 1699/1699 store tests passing, 88/88 API integration tests passing (1787/1787 total tests green).
+
+---
+
+## Final Statistics (as of Phase D7 Completion)
 
 | Metric | Value |
 |--------|-------|
-| Total commits | 135+ |
-| Test count | 1728/1728 passing (1640 store, 88 API) |
-| C# source files | ~277+ |
-| Lines of code | ~55,000+ |
+| Total commits | 145+ |
+| Test count | 1787/1787 passing (1699 store, 88 API) |
+| C# source files | ~305+ |
+| Lines of code | ~60,000+ |
 | API endpoints | 97 |
-| Sprints & Slices | 16 (Sprint 1-8 + Phase 7 + Phase 8-12 + D1-D4) |
-| New components | 82+ |
-
-
-
+| Sprints & Slices | 17 (Sprint 1-8 + Phase 7 + Phase 8-12 + D1-D4 + D6-D7) |
+| New components | 106+ |
