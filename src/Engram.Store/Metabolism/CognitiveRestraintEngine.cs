@@ -13,26 +13,23 @@ namespace Engram.Store.Metabolism;
 /// - Timing intelligence (know when feedback is welcome)
 /// - Accuracy history (stay silent on modes with poor track record)
 /// 
-/// Without this, users uninstall it.
-/// </summary>
 public class CognitiveRestraintEngine
 {
     private readonly ILogger<CognitiveRestraintEngine>? _logger;
     private readonly RestraintPolicy _policy;
     private readonly List<RestraintDecision> _decisions = new();
     private readonly object _lock = new();
-
-    /// <summary>Timestamp of last intervention allowed by this engine.</summary>
     private DateTimeOffset _lastInterventionAt = DateTimeOffset.MinValue;
-
-    /// <summary>Number of consecutive suppressions.</summary>
     private int _consecutiveSuppressions;
+    private readonly GovernanceConfig? _config;
 
     public CognitiveRestraintEngine(
         RestraintPolicy? policy = null,
+        GovernanceConfig? config = null,
         ILogger<CognitiveRestraintEngine>? logger = null)
     {
         _policy = policy ?? new RestraintPolicy();
+        _config = config;
         _logger = logger;
     }
 
@@ -69,25 +66,57 @@ public class CognitiveRestraintEngine
 
     private RestraintDecision Evaluate(RestraintContext context)
     {
+        // Resolve parameters dynamically based on Autonomy Level
+        double minConfidence = _policy.MinConfidenceThreshold;
+        TimeSpan minSilence = _policy.MinSilenceBetweenInterventions;
+        int maxPerHour = _policy.MaxInterventionsPerHour;
+        bool allowDeepWorkInterruptions = _policy.AllowDeepWorkInterruptions;
+
+        if (_config != null)
+        {
+            var active = _config.ActiveAutonomy;
+            if (active == AutonomyLevel.Low)
+            {
+                minConfidence = 0.95;
+                minSilence = TimeSpan.FromMinutes(15);
+                maxPerHour = 1;
+                allowDeepWorkInterruptions = false;
+            }
+            else if (active == AutonomyLevel.Aggressive)
+            {
+                minConfidence = 0.65;
+                minSilence = TimeSpan.FromMinutes(3);
+                maxPerHour = 5;
+                allowDeepWorkInterruptions = true;
+            }
+            else // Medium
+            {
+                minConfidence = 0.70;
+                minSilence = TimeSpan.FromMinutes(5);
+                maxPerHour = 3;
+                allowDeepWorkInterruptions = false;
+            }
+        }
+
         // 1. Confidence gate — don't speak when uncertain
-        if (context.InterpretationConfidence < _policy.MinConfidenceThreshold)
+        if (context.InterpretationConfidence < minConfidence)
         {
             return RestraintDecision.SuppressDecision(
-                $"Confidence {context.InterpretationConfidence:F2} below threshold {_policy.MinConfidenceThreshold:F2}",
+                $"Confidence {context.InterpretationConfidence:F2} below threshold {minConfidence:F2}",
                 RestraintReason.LowConfidence);
         }
 
         // 2. Silence threshold — respect quiet periods after last intervention
         var timeSinceLastIntervention = DateTimeOffset.UtcNow - _lastInterventionAt;
-        if (timeSinceLastIntervention < _policy.MinSilenceBetweenInterventions)
+        if (timeSinceLastIntervention < minSilence)
         {
             return RestraintDecision.SuppressDecision(
-                $"Only {timeSinceLastIntervention.TotalSeconds:F0}s since last intervention (min: {_policy.MinSilenceBetweenInterventions.TotalSeconds:F0}s)",
+                $"Only {timeSinceLastIntervention.TotalSeconds:F0}s since last intervention (min: {minSilence.TotalSeconds:F0}s)",
                 RestraintReason.SilenceThreshold);
         }
 
         // 3. Flow state protection — don't interrupt deep work
-        if (context.CurrentBehavioralMode == "deep_work" && !_policy.AllowDeepWorkInterruptions)
+        if (context.CurrentBehavioralMode == "deep_work" && !allowDeepWorkInterruptions)
         {
             return RestraintDecision.SuppressDecision(
                 "User is in deep work mode — do not interrupt",
@@ -127,10 +156,10 @@ public class CognitiveRestraintEngine
         }
 
         // 8. Intervention fatigue — too many interventions in a short period
-        if (context.InterventionsInLastHour > _policy.MaxInterventionsPerHour)
+        if (context.InterventionsInLastHour > maxPerHour)
         {
             return RestraintDecision.SuppressDecision(
-                $"Too many interventions: {context.InterventionsInLastHour} in last hour (max: {_policy.MaxInterventionsPerHour})",
+                $"Too many interventions: {context.InterventionsInLastHour} in last hour (max: {maxPerHour})",
                 RestraintReason.InterventionFatigue);
         }
 

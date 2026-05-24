@@ -16,6 +16,7 @@ public class CoexistenceMetrics
     public double SilenceQuality { get; set; } // 0 to 1
     public double TransparencyClarity { get; set; } // 0 to 1
     public double ApprovalFatigue { get; set; } // 0 to 1
+    public double CognitiveResidue { get; set; } // 0 to 1
 }
 
 public class CoexistenceMetricsTracker
@@ -35,6 +36,16 @@ public class CoexistenceMetricsTracker
     private int _acceptedInterventions = 0;
     private int _dismissedInterventions = 0;
     private int _approvalPromptsCount = 0;
+
+    // --- Phase D6: Dogfooding Metrics ---
+    private int _manualOverrides = 0;
+    private int _abortedWorkflows = 0;
+    private int _ignoredInterventions = 0;
+    private int _resumedWorkflows = 0;
+    private int _userFrustrationMoments = 0;
+    private int _recoveryEvents = 0;
+    private int _startedWorkflows = 0;
+    private int _completedWorkflows = 0;
 
     public CoexistenceMetricsTracker(string? customBaseDir = null)
     {
@@ -91,6 +102,64 @@ public class CoexistenceMetricsTracker
         }
     }
 
+    public void RecordManualOverride()
+    {
+        lock (_lock)
+        {
+            _manualOverrides++;
+            _userFrustrationMoments++;
+        }
+    }
+
+    public void RecordAbortedWorkflow()
+    {
+        lock (_lock)
+        {
+            _abortedWorkflows++;
+        }
+    }
+
+    public void RecordIgnoredIntervention()
+    {
+        lock (_lock)
+        {
+            _ignoredInterventions++;
+        }
+    }
+
+    public void RecordResumedWorkflow()
+    {
+        lock (_lock)
+        {
+            _resumedWorkflows++;
+        }
+    }
+
+    public void RecordUserFrustrationMoment()
+    {
+        lock (_lock)
+        {
+            _userFrustrationMoments++;
+        }
+    }
+
+    public void RecordRecoveryEvent()
+    {
+        lock (_lock)
+        {
+            _recoveryEvents++;
+        }
+    }
+
+    public void RecordWorkflowActivity(bool started, bool completed)
+    {
+        lock (_lock)
+        {
+            if (started) _startedWorkflows++;
+            if (completed) _completedWorkflows++;
+        }
+    }
+
     public CoexistenceMetrics CalculateMetrics()
     {
         lock (_lock)
@@ -142,6 +211,14 @@ public class CoexistenceMetricsTracker
             }
             fatigue = Math.Min(1.0, fatigue);
 
+            // Calculate Cognitive Residue (0 to 1 scale)
+            double dismissalRate = totalInterventions > 0 ? (double)_dismissedInterventions / totalInterventions : 0.0;
+            double overrideBurden = Math.Min(1.0, _manualOverrides * 0.15 + _userFrustrationMoments * 0.1);
+            double abortBurden = Math.Min(1.0, _abortedWorkflows * 0.25);
+            
+            double cognitiveResidue = (dismissalRate * 0.3) + (overrideBurden * 0.4) + (abortBurden * 0.3);
+            cognitiveResidue = Math.Min(1.0, Math.Max(0.0, cognitiveResidue));
+
             return new CoexistenceMetrics
             {
                 InterruptionIrritation = irritation,
@@ -150,7 +227,8 @@ public class CoexistenceMetricsTracker
                 InterventionUsefulness = usefulness,
                 SilenceQuality = silenceQuality,
                 TransparencyClarity = clarity,
-                ApprovalFatigue = fatigue
+                ApprovalFatigue = fatigue,
+                CognitiveResidue = cognitiveResidue
             };
         }
     }

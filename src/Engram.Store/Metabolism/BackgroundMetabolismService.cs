@@ -45,6 +45,8 @@ public class BackgroundMetabolismService : BackgroundService
     private readonly ContradictionResolutionDetector? _resolutionDetector;
     private readonly CognitiveTelemetry? _telemetry;
     private readonly ILogger<BackgroundMetabolismService>? _logger;
+    private readonly ResourceBudgetGovernor _governor;
+    private readonly ThermalProtectionLayer _thermalLayer;
 
 
 
@@ -90,7 +92,9 @@ public class BackgroundMetabolismService : BackgroundService
         ContradictionHistoryStore? contradictionHistoryStore = null,
         ContradictionResolutionDetector? resolutionDetector = null,
         CognitiveTelemetry? telemetry = null,
-        ILogger<BackgroundMetabolismService>? logger = null)
+        ILogger<BackgroundMetabolismService>? logger = null,
+        ResourceBudgetGovernor? governor = null,
+        ThermalProtectionLayer? thermalLayer = null)
     {
         _nodeStore = nodeStore;
         _metabolizer = metabolizer;
@@ -107,16 +111,22 @@ public class BackgroundMetabolismService : BackgroundService
         _resolutionDetector = resolutionDetector;
         _telemetry = telemetry;
         _logger = logger;
+        _governor = governor ?? new ResourceBudgetGovernor();
+        _thermalLayer = thermalLayer ?? new ThermalProtectionLayer();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger?.LogInformation("BackgroundMetabolismService starting. Cycle interval: {Interval}", CycleInterval);
+        _logger?.LogInformation("BackgroundMetabolismService starting. Base cycle interval: {Interval}", CycleInterval);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                // Dynamic Resource Courtesy state interval calculation
+                var intervalMinutes = _governor.GetMetabolicIntervalMinutes();
+                CycleInterval = TimeSpan.FromMinutes(intervalMinutes);
+
                 await Task.Delay(CycleInterval, stoppingToken);
 
                 if (!stoppingToken.IsCancellationRequested)
@@ -145,6 +155,20 @@ public class BackgroundMetabolismService : BackgroundService
     /// </summary>
     public async Task<MetabolismCycleResult> RunMetabolismCycle(CancellationToken ct = default)
     {
+        await _governor.MeasureSchedulingLatencyAsync();
+        var state = _governor.CurrentState;
+
+        if (state == ResourceCourtesyState.GamingFullscreen)
+        {
+            _logger?.LogInformation("Resource courtesy state: Gaming/Fullscreen active. Yielding metabolism cycle to prevent system disturbance.");
+            return new MetabolismCycleResult { Success = true, Error = "Suspended due to GamingFullscreen state" };
+        }
+
+        if (state == ResourceCourtesyState.ThermalStress)
+        {
+            _logger?.LogWarning("Resource courtesy state: ThermalStress active. Reducing cycle execution load.");
+        }
+
         if (DegradationTracker.Instance.IsDegraded("SafeModeActive"))
         {
             _logger?.LogWarning("System is running in read-only Safe Mode. Background metabolism cycle suspended.");
@@ -169,21 +193,25 @@ public class BackgroundMetabolismService : BackgroundService
 
         try
         {
-            _logger?.LogInformation("Starting metabolism cycle {Cycle}", CyclesCompleted + 1);
+            _logger?.LogInformation("Starting metabolism cycle {Cycle} (Courtesy State: {State})", CyclesCompleted + 1, state);
 
             // Step 1: Load all nodes for analysis
             var nodes = _nodeStore.LoadAll();
             result.NodesAnalyzed = nodes.Count;
 
             // Step 2: Deduplicate (prevent wiki rot)
-            var dedupResult = _deduplicator.Deduplicate();
-            result.MergesPerformed = dedupResult.MergesPerformed;
+            DeduplicationResult? dedupResult = null;
+            if (state != ResourceCourtesyState.HeavyWorkload)
+            {
+                dedupResult = _deduplicator.Deduplicate();
+                result.MergesPerformed = dedupResult?.MergesPerformed ?? 0;
+            }
 
             // Step 3: Reload after dedup
             nodes = _nodeStore.LoadAll();
 
             // Compaction: Check if node count exceeds trigger threshold
-            if (nodes.Count > CompactionTriggerThreshold)
+            if (nodes.Count > CompactionTriggerThreshold && state != ResourceCourtesyState.HeavyWorkload && state != ResourceCourtesyState.ThermalStress)
             {
                 _logger?.LogInformation("Graph size ({Count}) exceeds compaction threshold ({Threshold}). Triggering semantic compactor...", nodes.Count, CompactionTriggerThreshold);
                 var compactor = new SemanticCompactor(_nodeStore, null, null);
@@ -201,12 +229,20 @@ public class BackgroundMetabolismService : BackgroundService
             result.SalienceUpdated = salienceUpdated;
 
             // Step 5: Detect contradictions across the graph
-            var contradictions = DetectContradictions(nodes);
-            result.ContradictionsDetected = contradictions.Count;
+            var contradictions = new List<DriftAlert>();
+            if (state != ResourceCourtesyState.HeavyWorkload)
+            {
+                contradictions = DetectContradictions(nodes);
+                result.ContradictionsDetected = contradictions.Count;
+            }
 
             // Step 6: Detect behavioral contradictions (the moat)
-            var behavioralContradictions = _contradictionDetector.DetectAll();
-            result.BehavioralContradictionsDetected = behavioralContradictions.Count;
+            var behavioralContradictions = new List<BehavioralContradiction>();
+            if (state != ResourceCourtesyState.HeavyWorkload)
+            {
+                behavioralContradictions = _contradictionDetector.DetectAll();
+                result.BehavioralContradictionsDetected = behavioralContradictions.Count;
+            }
 
             // Step 6b: Generate interventions from contradictions
             if (_interventionGenerator != null && behavioralContradictions.Count > 0)
@@ -258,7 +294,10 @@ public class BackgroundMetabolismService : BackgroundService
 
             // Step 8: Report telemetry
             _telemetry?.RecordMetabolismCycle(result);
-            _telemetry?.RecordDeduplication(dedupResult);
+            if (dedupResult != null)
+            {
+                _telemetry?.RecordDeduplication(dedupResult);
+            }
             _telemetry?.RecordContradictionDetection(contradictions.Count, behavioralContradictions.Count);
 
             if (_telemetry != null)

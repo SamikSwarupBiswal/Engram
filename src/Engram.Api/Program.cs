@@ -182,13 +182,26 @@ var interventionGenerator = new Engram.Store.Metabolism.InterventionGenerator(id
 var interventionStore = new Engram.Store.Metabolism.InterventionStore(paths);
 var contradictionHistoryStore = new Engram.Store.Metabolism.ContradictionHistoryStore(paths);
 var resolutionDetector = new Engram.Store.Metabolism.ContradictionResolutionDetector(contradictionHistoryStore, nodeStore);
+var resourceGovernor = new Engram.Store.Metabolism.ResourceBudgetGovernor();
+var thermalLayer = new Engram.Store.Metabolism.ThermalProtectionLayer();
+
 var backgroundMetabolism = new Engram.Store.Metabolism.BackgroundMetabolismService(
     nodeStore, wikiMetabolizer, salienceScorer, driftDetector,
     archiveManager, conversationExtractor, deduplicator, contradictionDetector,
     eventBus, interventionGenerator, interventionStore, contradictionHistoryStore,
-    resolutionDetector, cognitiveTelemetry);
+    resolutionDetector, cognitiveTelemetry, null, resourceGovernor, thermalLayer);
 // Start as a background hosted service
 _ = backgroundMetabolism.StartAsync(CancellationToken.None);
+
+var versionCompatibility = new Engram.Store.Deployment.VersionCompatibilityManager(paths);
+var snapshotRollback = new Engram.Store.Deployment.SnapshotRollbackSystem(paths);
+var semanticMigration = new Engram.Store.Deployment.SemanticMigrationEngine(nodeStore, versionCompatibility);
+var integrityVerifier = new Engram.Store.Deployment.MigrationIntegrityVerifier();
+var upgradeCoordinator = new Engram.Store.Deployment.AtomicUpgradeCoordinator(
+    paths, nodeStore, versionCompatibility, snapshotRollback, semanticMigration, integrityVerifier);
+var explainabilityEngine = new Engram.Store.Governance.ExplainabilityNarrativeEngine();
+var supportBundleGen = new Engram.Store.Security.SupportBundleGenerator(paths);
+var healthAuditor = new Engram.Store.Governance.DeploymentHealthAuditor(paths, nodeStore, governance.Trust);
 var ocrService = new OcrService();
 var stateDetector = new UiStateDetector();
 var perceptionPipeline = new VisualPerceptionPipeline(paths.Raw, screenCapture, ocrService, stateDetector);
@@ -1785,6 +1798,110 @@ app.MapGet("/api/governance/audit", () =>
         integrityValid = governance.SafetyAudit.VerifyIntegrity()
     }));
 
+app.MapGet("/api/deployment/status", () =>
+{
+    var info = versionCompatibility.GetCurrentVersionInfo();
+    return Results.Ok(new
+    {
+        systemVersion = info.SystemVersion,
+        schemaVersion = info.SchemaVersion,
+        capabilityVersion = info.CapabilityVersion,
+        lastUpdatedAt = info.LastUpdatedAt
+    });
+});
+
+app.MapPost("/api/deployment/upgrade/preflight", (UpgradePreflightRequest request) =>
+{
+    var res = upgradeCoordinator.RunPreflight(request.TargetSystemVersion, request.TargetSchemaVersion);
+    return Results.Ok(res);
+});
+
+app.MapPost("/api/deployment/upgrade/execute", (UpgradeExecuteRequest request) =>
+{
+    var res = upgradeCoordinator.ExecuteUpgrade(request.TargetSystemVersion, request.TargetSchemaVersion);
+    return Results.Ok(res);
+});
+
+app.MapPost("/api/deployment/upgrade/rollback", (UpgradeRollbackRequest request) =>
+{
+    try
+    {
+        snapshotRollback.RestoreSnapshot(request.SnapshotPath);
+        return Results.Ok(new { success = true, message = "System state successfully rolled back." });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
+app.MapGet("/api/governance/degradations", () =>
+{
+    var activeDegradations = new Dictionary<string, string>();
+    if (resourceGovernor.CurrentState == Engram.Store.Metabolism.ResourceCourtesyState.HeavyWorkload)
+    {
+        activeDegradations["HeavyWorkload"] = "Background cognition deferred to yield CPU capacity to foreground apps.";
+    }
+    else if (resourceGovernor.CurrentState == Engram.Store.Metabolism.ResourceCourtesyState.GamingFullscreen)
+    {
+        activeDegradations["GamingFullscreen"] = "Metabolic tasks suspended during gaming/fullscreen mode.";
+    }
+    else if (resourceGovernor.CurrentState == Engram.Store.Metabolism.ResourceCourtesyState.BatterySaver)
+    {
+        activeDegradations["BatterySaver"] = "Metabolic tasks throttled to extend battery life.";
+    }
+    else if (resourceGovernor.CurrentState == Engram.Store.Metabolism.ResourceCourtesyState.ThermalStress)
+    {
+        activeDegradations["ThermalStress"] = "System operating in low metabolic intensity to protect processor thermal safety.";
+    }
+
+    var explanation = explainabilityEngine.ExplainActiveDegradations(activeDegradations);
+
+    return Results.Ok(new
+    {
+        courtesyState = resourceGovernor.CurrentState.ToString(),
+        schedulingLatencyMs = resourceGovernor.SchedulingLatencyMs,
+        isThermalThrottling = thermalLayer.IsThrottlingDetected,
+        activeDegradations = activeDegradations,
+        explanation = explanation
+    });
+});
+
+app.MapGet("/api/governance/lineage", (string? entityId) =>
+{
+    if (string.IsNullOrEmpty(entityId))
+    {
+        return Results.BadRequest(new { error = "entityId parameter is required." });
+    }
+
+    var traces = governance.Traces.GetTracesForEntity(entityId);
+    var narratives = traces.Select(t => new
+    {
+        traceId = t.TraceId,
+        timestamp = t.Timestamp,
+        component = t.SystemComponent,
+        triggerType = t.TriggerType.ToString(),
+        narrative = explainabilityEngine.GenerateActionExplanation(t),
+        factors = t.CausalFactors
+    }).ToList();
+
+    return Results.Ok(narratives);
+});
+
+app.MapPost("/api/diagnostics/support-bundle", () =>
+{
+    try
+    {
+        var outputDir = Path.Combine(paths.Root, "diagnostics");
+        var bundlePath = supportBundleGen.GenerateBundle(outputDir);
+        return Results.Ok(new { success = true, bundlePath = bundlePath });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = ex.Message });
+    }
+});
+
 log.Api("All endpoints registered");
 log.Api($"Listening on: {string.Join(", ", app.Urls)}");
 
@@ -1823,6 +1940,10 @@ record CollaborationResponseRequest(string RequestId, string Response, bool Appr
 record ForgetRequest(string NodeId);
 record DisputeRequest(string NodeId, string ClaimId, string CorrectedValue);
 record RecoveryRequest(string ResolutionDetail);
+
+record UpgradePreflightRequest(string TargetSystemVersion, int TargetSchemaVersion);
+record UpgradeExecuteRequest(string TargetSystemVersion, int TargetSchemaVersion);
+record UpgradeRollbackRequest(string SnapshotPath);
 
 // Required for WebApplicationFactory<Program> in integration tests
 public partial class Program { }

@@ -475,6 +475,37 @@ export const api = {
 
   governanceAudit: () =>
     apiFetch<AuditResponse>("/api/governance/audit"),
+
+  // D5 Deployment & Stability
+  deploymentStatus: () =>
+    apiFetch<{ systemVersion: string; schemaVersion: number; capabilityVersion: number; lastUpdatedAt: string }>("/api/deployment/status"),
+
+  deploymentPreflight: (targetSystemVersion: string, targetSchemaVersion: number) =>
+    apiFetch<{ success: boolean; message: string; targetSystemVersion: string; targetSchemaVersion: number; behavioralTrustDiff: Record<string, string> }>("/api/deployment/upgrade/preflight", {
+      method: "POST",
+      body: JSON.stringify({ targetSystemVersion, targetSchemaVersion }),
+    }),
+
+  deploymentUpgrade: (targetSystemVersion: string, targetSchemaVersion: number) =>
+    apiFetch<{ success: boolean; message: string; confidence: string; errors: string[] }>("/api/deployment/upgrade/execute", {
+      method: "POST",
+      body: JSON.stringify({ targetSystemVersion, targetSchemaVersion }),
+    }),
+
+  deploymentRollback: (snapshotPath: string) =>
+    apiFetch<{ success: boolean; message: string }>("/api/deployment/upgrade/rollback", {
+      method: "POST",
+      body: JSON.stringify({ snapshotPath }),
+    }),
+
+  governanceDegradations: () =>
+    apiFetch<{ courtesyState: string; schedulingLatencyMs: number; isThermalThrottling: boolean; activeDegradations: Record<string, string>; explanation: string }>("/api/governance/degradations"),
+
+  governanceLineage: (entityId: string) =>
+    apiFetch<{ traceId: string; timestamp: string; component: string; triggerType: string; narrative: string; factors: string[] }[]>(`/api/governance/lineage?entityId=${encodeURIComponent(entityId)}`),
+
+  diagnosticsSupportBundle: () =>
+    apiFetch<{ success: boolean; bundlePath: string }>("/api/diagnostics/support-bundle", { method: "POST" }),
 };
 
 export interface StartupMetrics {

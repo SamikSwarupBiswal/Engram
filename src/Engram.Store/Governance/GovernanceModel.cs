@@ -110,4 +110,25 @@ public class GovernanceConfig
     public int MaxDailyInterventions { get; set; } = 5;
     public double MinConfidenceToEscalate { get; set; } = 0.7;
     public double DefaultTrustCeiling { get; set; } = 1.0;
+
+    // --- Phase D6: Autonomy Gating & Calibration ---
+    public AutonomyLevel BaselineAutonomy { get; set; } = AutonomyLevel.Medium;
+    public AutonomyLevel ActiveAutonomy { get; set; } = AutonomyLevel.Medium;
+    
+    public Dictionary<string, AutonomyLevel> DomainAutonomyCeilings { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "destructive", AutonomyLevel.Low },
+        { "financial", AutonomyLevel.Low },
+        { "filesystem_write", AutonomyLevel.Medium },
+        { "email", AutonomyLevel.Medium },
+        { "browser_research", AutonomyLevel.Aggressive },
+        { "coding", AutonomyLevel.Aggressive }
+    };
+}
+
+public enum AutonomyLevel
+{
+    Low,
+    Medium,
+    Aggressive
 }

@@ -23,6 +23,8 @@ public class ActionRuntime : IDisposable
     private readonly TrustTierManager _trustTierManager;
     private readonly ReversibilityEvaluator _reversibilityEvaluator;
     private readonly SemanticSummarizer _semanticSummarizer;
+    private readonly FailureNarrativeRecorder? _failureNarrativeRecorder;
+    private readonly RecoveryLegibilityEngine? _recoveryLegibilityEngine;
     private readonly ILogger<ActionRuntime>? _logger;
 
     private RuntimeState _state = RuntimeState.Idle;
@@ -45,6 +47,8 @@ public class ActionRuntime : IDisposable
         TrustTierManager? trustTierManager = null,
         ReversibilityEvaluator? reversibilityEvaluator = null,
         SemanticSummarizer? semanticSummarizer = null,
+        FailureNarrativeRecorder? failureNarrativeRecorder = null,
+        RecoveryLegibilityEngine? recoveryLegibilityEngine = null,
         ILogger<ActionRuntime>? logger = null)
     {
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
@@ -53,6 +57,8 @@ public class ActionRuntime : IDisposable
         _trustTierManager = trustTierManager ?? new TrustTierManager(TrustTier.Privileged);
         _reversibilityEvaluator = reversibilityEvaluator ?? new ReversibilityEvaluator();
         _semanticSummarizer = semanticSummarizer ?? new SemanticSummarizer();
+        _failureNarrativeRecorder = failureNarrativeRecorder;
+        _recoveryLegibilityEngine = recoveryLegibilityEngine;
         _logger = logger;
     }
 
@@ -205,6 +211,27 @@ public class ActionRuntime : IDisposable
                     step.Status = StepStatus.Failed;
                     step.Error = ex.Message;
                     _permissionGate.RecordFailure(resolvedAction, wasCancelled: false);
+                    
+                    if (_failureNarrativeRecorder != null && _recoveryLegibilityEngine != null)
+                    {
+                        var activeAutonomy = context.GetVariable<string>("ActiveAutonomy") ?? "Medium";
+                        var legibleExplanation = _recoveryLegibilityEngine.TranslateFailure(ex.Message, ex.ToString());
+                        var narrative = new FailureNarrative
+                        {
+                            WorkflowId = plan.PlanId,
+                            Goal = plan.Goal,
+                            FailedStepId = step.Id,
+                            StepDescription = step.Action.Description,
+                            TechnicalDetails = ex.ToString(),
+                            LegibleExplanation = legibleExplanation,
+                            AutonomyLevel = activeAutonomy,
+                            RecoveryAttempted = false,
+                            RecoverySucceeded = false,
+                            RecoveryExplanation = "No recovery policy specified."
+                        };
+                        _ = _failureNarrativeRecorder.RecordFailureNarrativeAsync(narrative);
+                    }
+
                     for (int j = i + 1; j < order.Count; j++)
                     {
                         order[j].Status = StepStatus.Skipped;
@@ -367,6 +394,28 @@ public class ActionRuntime : IDisposable
                                 completedSteps.Add(step);
                                 _permissionGate.RecordSuccess(resolvedAction);
                                 recovered = true;
+                                
+                                if (_failureNarrativeRecorder != null && _recoveryLegibilityEngine != null)
+                                {
+                                    var activeAutonomy = context.GetVariable<string>("ActiveAutonomy") ?? "Medium";
+                                    var legibleExplanation = _recoveryLegibilityEngine.TranslateFailure(ex.Message, ex.ToString());
+                                    var recoveryExplanation = _recoveryLegibilityEngine.TranslateRecovery(true);
+                                    var narrative = new FailureNarrative
+                                    {
+                                        WorkflowId = plan.PlanId,
+                                        Goal = plan.Goal,
+                                        FailedStepId = step.Id,
+                                        StepDescription = step.Action.Description,
+                                        TechnicalDetails = ex.ToString(),
+                                        LegibleExplanation = legibleExplanation,
+                                        AutonomyLevel = activeAutonomy,
+                                        RecoveryAttempted = true,
+                                        RecoverySucceeded = true,
+                                        RecoveryExplanation = recoveryExplanation
+                                    };
+                                    _ = _failureNarrativeRecorder.RecordFailureNarrativeAsync(narrative);
+                                }
+
                                 lastError = null;
                             }
                         }

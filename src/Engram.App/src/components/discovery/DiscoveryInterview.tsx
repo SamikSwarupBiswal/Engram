@@ -6,7 +6,7 @@ interface DiscoveryInterviewProps {
   onSkip: () => void;
 }
 
-type Step = "welcome" | "name" | "goals" | "triggers" | "anxieties" | "priorities" | "antiGoals" | "confirm";
+type Step = "welcome" | "name" | "goals" | "triggers" | "anxieties" | "priorities" | "antiGoals" | "warmup" | "confirm";
 
 const STEPS: { id: Step; title: string; prompt: string; placeholder: string }[] = [
   {
@@ -47,6 +47,8 @@ const STEPS: { id: Step; title: string; prompt: string; placeholder: string }[] 
   },
 ];
 
+const ALL_STEPS: Step[] = ["name", "goals", "triggers", "anxieties", "priorities", "antiGoals", "warmup"];
+
 export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewProps) {
   const [currentStep, setCurrentStep] = useState<Step>("welcome");
   const [answers, setAnswers] = useState<Partial<DiscoveryAnswers>>({
@@ -60,9 +62,17 @@ export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewPro
   const [textInput, setTextInput] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Trust warmup parameters state
+  const [autonomyCeiling, setAutonomyCeiling] = useState<number>(0.5);
+  const [maxDailyInterventions, setMaxDailyInterventions] = useState<number>(15);
+  const [minConfidenceToEscalate, setMinConfidenceToEscalate] = useState<number>(0.7);
+
   const stepIndex = STEPS.findIndex((s) => s.id === currentStep);
   const step = STEPS[stepIndex];
-  const progress = stepIndex >= 0 ? ((stepIndex + 1) / STEPS.length) * 100 : 0;
+
+  const allStepsIndex = ALL_STEPS.indexOf(currentStep);
+  const progress = allStepsIndex >= 0 ? ((allStepsIndex + 1) / ALL_STEPS.length) * 100 : 0;
+  const progressLabel = currentStep === "warmup" ? "Trust Warmup" : step?.title;
 
   const parseLines = (text: string) =>
     text
@@ -116,6 +126,10 @@ export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewPro
             severity: "Medium",
           })),
         }));
+        setTextInput("");
+        setCurrentStep("warmup");
+        break;
+      case "warmup":
         setCurrentStep("confirm");
         break;
       case "confirm":
@@ -128,6 +142,15 @@ export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewPro
     setSaving(true);
     try {
       await api.runDiscovery(answers as DiscoveryAnswers);
+      // Update governance settings with choices selected during trust warmup onboarding
+      await api.governanceUpdateSettings({
+        retentionPolicies: [],
+        sensitiveDomains: [],
+        privacyZones: [],
+        maxDailyInterventions,
+        minConfidenceToEscalate,
+        defaultTrustCeiling: autonomyCeiling
+      }).catch((err) => console.error("Governance onboarding update failed", err));
       onComplete();
     } catch (e) {
       console.error("Discovery save failed:", e);
@@ -140,6 +163,7 @@ export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewPro
 
   const canProceed =
     currentStep === "welcome" ||
+    currentStep === "warmup" ||
     currentStep === "confirm" ||
     textInput.trim().length > 0;
 
@@ -150,7 +174,7 @@ export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewPro
         {currentStep !== "welcome" && currentStep !== "confirm" && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] text-[#888]">{step?.title}</span>
+              <span className="text-[11px] text-[#888]">{progressLabel}</span>
               <span className="text-[11px] text-[#666]">{Math.round(progress)}%</span>
             </div>
             <div className="h-1 w-full rounded-full bg-white/[0.06]">
@@ -225,6 +249,111 @@ export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewPro
           </div>
         )}
 
+        {/* Trust Warmup Step */}
+        {currentStep === "warmup" && (
+          <div>
+            <h2 className="text-lg font-medium mb-2">Trust Warmup & Autonomy</h2>
+            <p className="text-sm text-[#b4b4b4] mb-5">
+              Engram operates entirely locally and builds trust dynamically. Select your initial autonomy limits.
+            </p>
+
+            <div className="space-y-5">
+              {/* Autonomy Ceiling */}
+              <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+                <label className="block text-xs font-semibold text-[#ececec] uppercase tracking-wider mb-2">
+                  Initial Autonomy Ceiling: {(autonomyCeiling * 100).toFixed(0)}%
+                </label>
+                <p className="text-[11px] text-[#888] mb-3 leading-relaxed">
+                  Controls the maximum autonomy Engram has to perform operations (like filing web references or organizing concepts) before requesting explicit approval.
+                </p>
+                <div className="flex gap-2.5">
+                  {[0.2, 0.5, 0.8].map((ceiling) => (
+                    <button
+                      key={ceiling}
+                      type="button"
+                      onClick={() => setAutonomyCeiling(ceiling)}
+                      className={`flex-1 rounded-lg border py-2.5 text-xs font-semibold transition-all ${
+                        autonomyCeiling === ceiling
+                          ? "border-emerald-500 bg-emerald-950/20 text-emerald-400 font-semibold"
+                          : "border-white/[0.06] bg-[#212121] text-[#888] hover:text-[#ececec]"
+                      }`}
+                    >
+                      {ceiling === 0.2 ? "Conservative (20%)" : ceiling === 0.5 ? "Balanced (50%)" : "Autonomous (80%)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Max Daily Interventions */}
+              <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+                <label className="block text-xs font-semibold text-[#ececec] uppercase tracking-wider mb-2">
+                  Daily Interventions Cap: {maxDailyInterventions} / day
+                </label>
+                <p className="text-[11px] text-[#888] mb-3 leading-relaxed">
+                  Defines the daily limit for notifications, prompts, or questions to prevent flow-state interruptions.
+                </p>
+                <div className="flex gap-2.5">
+                  {[5, 15, 30].map((limit) => (
+                    <button
+                      key={limit}
+                      type="button"
+                      onClick={() => setMaxDailyInterventions(limit)}
+                      className={`flex-1 rounded-lg border py-2.5 text-xs font-semibold transition-all ${
+                        maxDailyInterventions === limit
+                          ? "border-emerald-500 bg-emerald-950/20 text-emerald-400 font-semibold"
+                          : "border-white/[0.06] bg-[#212121] text-[#888] hover:text-[#ececec]"
+                      }`}
+                    >
+                      {limit === 5 ? "Calm (5)" : limit === 15 ? "Balanced (15)" : "Active (30)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Warmup Rate / Speed */}
+              <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+                <label className="block text-xs font-semibold text-[#ececec] uppercase tracking-wider mb-2">
+                  Warmup Rate: {minConfidenceToEscalate === 0.85 ? "Slow & Cautious" : minConfidenceToEscalate === 0.7 ? "Standard" : "Swift"}
+                </label>
+                <p className="text-[11px] text-[#888] mb-3 leading-relaxed">
+                  Engram warms up capabilities over repeated successful runs. Cautious pace requires high confidence before auto-approving actions.
+                </p>
+                <div className="flex gap-2.5">
+                  {[0.85, 0.7, 0.55].map((conf) => (
+                    <button
+                      key={conf}
+                      type="button"
+                      onClick={() => setMinConfidenceToEscalate(conf)}
+                      className={`flex-1 rounded-lg border py-2.5 text-xs font-semibold transition-all ${
+                        minConfidenceToEscalate === conf
+                          ? "border-emerald-500 bg-emerald-950/20 text-emerald-400 font-semibold"
+                          : "border-white/[0.06] bg-[#212121] text-[#888] hover:text-[#ececec]"
+                      }`}
+                    >
+                      {conf === 0.85 ? "Cautious" : conf === 0.7 ? "Standard" : "Swift"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-between">
+              <button
+                onClick={() => setCurrentStep("antiGoals")}
+                className="rounded-xl px-4 py-2 text-sm text-[#888] hover:text-[#ececec]"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleNext}
+                className="rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Confirmation */}
         {currentStep === "confirm" && (
           <div>
@@ -250,10 +379,16 @@ export function DiscoveryInterview({ onComplete, onSkip }: DiscoveryInterviewPro
                 <div className="text-[11px] text-[#888] mb-1">Anti-Goals ({answers.antiGoals?.length || 0})</div>
                 <div className="text-sm">{answers.antiGoals?.map((a) => a.description).join(", ") || "None"}</div>
               </div>
+              <div className="rounded-xl border border-white/[0.06] bg-[#2f2f2f]/50 p-4">
+                <div className="text-[11px] text-[#888] mb-1">Trust & Autonomy Settings</div>
+                <div className="text-sm">
+                  Autonomy Ceiling: {autonomyCeiling * 100}% · Interventions Limit: {maxDailyInterventions}/day · Warmup Rate: {minConfidenceToEscalate === 0.85 ? "Cautious" : minConfidenceToEscalate === 0.7 ? "Standard" : "Swift"}
+                </div>
+              </div>
             </div>
             <div className="mt-6 flex justify-between">
               <button
-                onClick={() => setCurrentStep("antiGoals")}
+                onClick={() => setCurrentStep("warmup")}
                 className="rounded-xl px-4 py-2 text-sm text-[#888] hover:text-[#ececec]"
               >
                 Edit

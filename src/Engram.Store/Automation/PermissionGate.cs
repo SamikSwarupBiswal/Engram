@@ -17,6 +17,7 @@ public class PermissionGate
     private readonly string _warmupFilePath;
     private readonly Dictionary<string, int> _warmupCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _warmupLock = new();
+    private Governance.GovernanceConfig? _config;
 
     /// <summary>Actions that are auto-approved (safe, read-only).</summary>
     private static readonly HashSet<ActionType> SafeActions = new()
@@ -31,9 +32,10 @@ public class PermissionGate
         // Currently no permanently blocked actions — all require approval
     };
 
-    public PermissionGate(WorkspacePaths? paths = null, ILogger<PermissionGate>? logger = null)
+    public PermissionGate(WorkspacePaths? paths = null, Governance.GovernanceConfig? config = null, ILogger<PermissionGate>? logger = null)
     {
         _logger = logger;
+        _config = config;
         if (paths != null)
         {
             var dir = Path.Combine(paths.Config, "governance");
@@ -45,6 +47,11 @@ public class PermissionGate
         {
             _warmupFilePath = string.Empty;
         }
+    }
+
+    public void SetGovernanceConfig(Governance.GovernanceConfig config)
+    {
+        _config = config;
     }
 
     /// <summary>
@@ -61,12 +68,31 @@ public class PermissionGate
         string fp = CapabilityFingerprint.Compute(action);
         int warmupCount = GetWarmupCount(fp);
 
+        // Resolve capability-scoped autonomy ceiling
+        var activeAutonomy = _config?.ActiveAutonomy ?? Governance.AutonomyLevel.Medium;
+        var domainCeiling = GetDomainCeiling(action);
+        var effectiveAutonomy = (Governance.AutonomyLevel)Math.Min((int)activeAutonomy, (int)domainCeiling);
+
+        int requiredWarmup = effectiveAutonomy switch
+        {
+            Governance.AutonomyLevel.Low => 30,
+            Governance.AutonomyLevel.Aggressive => 5,
+            _ => 10
+        };
+
+        double minConfidence = effectiveAutonomy switch
+        {
+            Governance.AutonomyLevel.Low => 0.95,
+            Governance.AutonomyLevel.Aggressive => 0.65,
+            _ => 0.8
+        };
+
         if (SafeActions.Contains(action.Type))
         {
             var confidence = Engram.Store.Inference.DegradationTracker.Instance.GetEnvironmentalConfidence();
-            if (confidence < 0.8)
+            if (confidence < minConfidence)
             {
-                _logger?.LogInformation("Action '{Type}' requires approval due to low environmental confidence ({Confidence:F2} < 0.8): {Description}", action.Type, confidence, action.Description);
+                _logger?.LogInformation("Action '{Type}' requires approval due to low environmental confidence ({Confidence:F2} < {MinConfidence:F2}): {Description}", action.Type, confidence, minConfidence, action.Description);
                 return ActionPermission.Pending;
             }
 
@@ -74,15 +100,45 @@ public class PermissionGate
             return ActionPermission.AutoApproved;
         }
 
-        // If capability has not warmed up (less than 10 successful manual approvals), force approval
-        if (warmupCount < 10)
+        // Low autonomy forces approval for all non-safe actions
+        if (effectiveAutonomy == Governance.AutonomyLevel.Low)
         {
-            _logger?.LogInformation("Action requires warmup approval ({WarmupCount}/10 runs for fingerprint '{Fingerprint}'): {Description}", warmupCount, fp, action.Description);
+            _logger?.LogInformation("Action requires manual approval under Low Autonomy: {Description}", action.Description);
             return ActionPermission.Pending;
         }
 
-        _logger?.LogInformation("Action auto-approved after warmup ({WarmupCount}/10 runs for fingerprint '{Fingerprint}'): {Description}", warmupCount, fp, action.Description);
+        // If capability has not warmed up (less than required successful manual approvals), force approval
+        if (warmupCount < requiredWarmup)
+        {
+            _logger?.LogInformation("Action requires warmup approval ({WarmupCount}/{RequiredWarmup} runs for fingerprint '{Fingerprint}'): {Description}", warmupCount, requiredWarmup, fp, action.Description);
+            return ActionPermission.Pending;
+        }
+
+        _logger?.LogInformation("Action auto-approved after warmup ({WarmupCount}/{RequiredWarmup} runs for fingerprint '{Fingerprint}'): {Description}", warmupCount, requiredWarmup, fp, action.Description);
         return ActionPermission.AutoApproved;
+    }
+
+    private Governance.AutonomyLevel GetDomainCeiling(AutomationAction action)
+    {
+        var desc = action.Description.ToLowerInvariant();
+        
+        // Destructive
+        if (desc.Contains("delete") || desc.Contains("remove") || desc.Contains("wipe") || desc.Contains("format") || desc.Contains("purge"))
+            return Governance.AutonomyLevel.Low;
+        
+        // Financial
+        if (desc.Contains("bank") || desc.Contains("pay") || desc.Contains("checkout") || desc.Contains("buy") || desc.Contains("card") || desc.Contains("purchase") || desc.Contains("billing"))
+            return Governance.AutonomyLevel.Low;
+        
+        // Filesystem Write
+        if (desc.Contains("write") || desc.Contains("save") || desc.Contains("create") || desc.Contains("export") || desc.Contains("file"))
+            return Governance.AutonomyLevel.Medium;
+        
+        // Email
+        if (desc.Contains("email") || desc.Contains("mail") || desc.Contains("send"))
+            return Governance.AutonomyLevel.Medium;
+
+        return Governance.AutonomyLevel.Aggressive;
     }
 
     public int GetWarmupCount(string fingerprint)

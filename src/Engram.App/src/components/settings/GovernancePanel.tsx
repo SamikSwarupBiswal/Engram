@@ -35,11 +35,51 @@ export function GovernancePanel() {
   const [submittingDispute, setSubmittingDispute] = useState(false);
   const [submittingRecovery, setSubmittingRecovery] = useState(false);
   const [activeSovereigntyTab, setActiveSovereigntyTab] = useState<"forget" | "dispute">("forget");
+  const [activePanelTab, setActivePanelTab] = useState<"safety" | "upgrades" | "metabolism">("safety");
+
+  // D5 state variables
+  const [degradations, setDegradations] = useState<{
+    courtesyState: string;
+    schedulingLatencyMs: number;
+    isThermalThrottling: boolean;
+    activeDegradations: Record<string, string>;
+    explanation: string;
+  } | null>(null);
+
+  const [deployStatus, setDeployStatus] = useState<{
+    systemVersion: string;
+    schemaVersion: number;
+    capabilityVersion: number;
+    lastUpdatedAt: string;
+  } | null>(null);
+
+  const [targetVersion, setTargetVersion] = useState("1.1.0");
+  const [targetSchema, setTargetSchema] = useState(2);
+  const [preflightResult, setPreflightResult] = useState<{
+    success: boolean;
+    message: string;
+    targetSystemVersion: string;
+    targetSchemaVersion: number;
+    behavioralTrustDiff: Record<string, string>;
+  } | null>(null);
+
+  const [upgradeResult, setUpgradeResult] = useState<{
+    success: boolean;
+    message: string;
+    confidence: string;
+    errors: string[];
+  } | null>(null);
+
+  const [bundlePath, setBundlePath] = useState<string | null>(null);
+  const [generatingBundle, setGeneratingBundle] = useState(false);
+  const [submittingPreflight, setSubmittingPreflight] = useState(false);
+  const [submittingUpgrade, setSubmittingUpgrade] = useState(false);
+  const [rollbackPath, setRollbackPath] = useState("");
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [auditData, trustData, tracesData, activityData] = await Promise.all([
+      const [auditData, trustData, tracesData, activityData, degData, depData] = await Promise.all([
         api.governanceAudit().catch(() => ({ state: "Operational", entries: [], integrityValid: true })),
         api.governanceTrust().catch(() => ({
           scores: {},
@@ -56,7 +96,9 @@ export function GovernancePanel() {
           floorDetected: false
         })),
         api.governanceTraces().catch(() => []),
-        api.governanceActivity().catch(() => [])
+        api.governanceActivity().catch(() => []),
+        api.governanceDegradations().catch(() => null),
+        api.deploymentStatus().catch(() => null)
       ]);
 
       setAuditState(auditData.state);
@@ -79,6 +121,8 @@ export function GovernancePanel() {
       
       setTraces(tracesData);
       setActivity(activityData);
+      setDegradations(degData);
+      setDeployStatus(depData);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load governance metrics");
@@ -140,6 +184,81 @@ export function GovernancePanel() {
       alert("Recovery bypass failed: " + (err instanceof Error ? err.message : "unknown error"));
     } finally {
       setSubmittingRecovery(false);
+    }
+  };
+
+  const handlePreflight = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingPreflight(true);
+    try {
+      const res = await api.deploymentPreflight(targetVersion, targetSchema);
+      setPreflightResult(res);
+      if (res.success) {
+        alert("Preflight validation succeeded. Review the Behavioral Trust Diff before upgrading.");
+      } else {
+        alert(`Preflight failed: ${res.message}`);
+      }
+    } catch (err) {
+      alert("Preflight check failed: " + (err instanceof Error ? err.message : "unknown error"));
+    } finally {
+      setSubmittingPreflight(false);
+    }
+  };
+
+  const handleUpgrade = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirm("Are you sure you want to run the upgrade? This will snapshot the environment and perform semantic schema migrations.")) {
+      return;
+    }
+    setSubmittingUpgrade(true);
+    try {
+      const res = await api.deploymentUpgrade(targetVersion, targetSchema);
+      setUpgradeResult(res);
+      if (res.success) {
+        alert(`Upgrade succeeded! Confidence: ${res.confidence}`);
+      } else {
+        alert(`Upgrade failed. Automated rollback executed. Reason: ${res.message}`);
+      }
+      loadData();
+    } catch (err) {
+      alert("Upgrade failed: " + (err instanceof Error ? err.message : "unknown error"));
+    } finally {
+      setSubmittingUpgrade(false);
+    }
+  };
+
+  const handleRollbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rollbackPath.trim()) return;
+    if (!confirm("Reverting to this snapshot will overwrite current data. Proceed?")) return;
+    try {
+      const res = await api.deploymentRollback(rollbackPath.trim());
+      if (res.success) {
+        alert("Rollback successful. Restored previous configuration and governance states.");
+        setRollbackPath("");
+        loadData();
+      } else {
+        alert(`Rollback failed: ${res.message}`);
+      }
+    } catch (err) {
+      alert("Rollback failed: " + (err instanceof Error ? err.message : "unknown error"));
+    }
+  };
+
+  const handleGenerateBundle = async () => {
+    setGeneratingBundle(true);
+    try {
+      const res = await api.diagnosticsSupportBundle();
+      if (res.success) {
+        setBundlePath(res.bundlePath);
+        alert(`Support bundle successfully compiled!\nSaved to: ${res.bundlePath}`);
+      } else {
+        alert("Failed to generate support bundle.");
+      }
+    } catch (err) {
+      alert("Error generating support bundle: " + (err instanceof Error ? err.message : "unknown error"));
+    } finally {
+      setGeneratingBundle(false);
     }
   };
 
@@ -206,6 +325,40 @@ export function GovernancePanel() {
         </button>
       </div>
 
+      {/* Main Panel Tabs */}
+      <div className="mb-6 flex gap-4 border-b border-white/[0.06] pb-px">
+        <button
+          onClick={() => setActivePanelTab("safety")}
+          className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${
+            activePanelTab === "safety"
+              ? "border-emerald-500 text-white font-semibold"
+              : "border-transparent text-[#888] hover:text-[#b4b4b4]"
+          }`}
+        >
+          Safety & Constitution
+        </button>
+        <button
+          onClick={() => setActivePanelTab("upgrades")}
+          className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${
+            activePanelTab === "upgrades"
+              ? "border-emerald-500 text-white font-semibold"
+              : "border-transparent text-[#888] hover:text-[#b4b4b4]"
+          }`}
+        >
+          System Upgrades
+        </button>
+        <button
+          onClick={() => setActivePanelTab("metabolism")}
+          className={`pb-2.5 px-1 text-sm font-medium border-b-2 transition-all ${
+            activePanelTab === "metabolism"
+              ? "border-emerald-500 text-white font-semibold"
+              : "border-transparent text-[#888] hover:text-[#b4b4b4]"
+          }`}
+        >
+          Metabolism & Diagnostics
+        </button>
+      </div>
+
       {error && (
         <div className="mb-6 rounded-xl bg-red-900/20 border border-red-900/30 px-4 py-3 text-sm text-red-400">
           {error}
@@ -246,67 +399,256 @@ export function GovernancePanel() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left Column: Metrics and Sovereignty */}
-        <div className="space-y-6">
-          {/* Status & Calibration meters */}
-          <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
-            <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Cognitive Calibration</h3>
-            
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-[#888]">Autonomy Ceiling</span>
-                  <span className="text-xs font-mono text-emerald-400">{(autonomyCeiling * 100).toFixed(0)}%</span>
+      {/* Tab Contents */}
+      {activePanelTab === "safety" && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left Column: Metrics and Sovereignty */}
+          <div className="space-y-6">
+            {/* Cognitive Calibration */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Cognitive Calibration</h3>
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[#888]">Autonomy Ceiling</span>
+                    <span className="text-xs font-mono text-emerald-400">{(autonomyCeiling * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-500"
+                      style={{ width: `${autonomyCeiling * 100}%` }}
+                    />
+                  </div>
+                  <span className="mt-1.5 block text-[10px] text-[#666]">Limits how deep Engram can execute actions autonomously.</span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 transition-all duration-500"
-                    style={{ width: `${autonomyCeiling * 100}%` }}
-                  />
+
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[#888]">Intervention Throttle</span>
+                    <span className="text-xs font-mono text-blue-400">{(interventionFreq * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all duration-500"
+                      style={{ width: `${interventionFreq * 100}%` }}
+                    />
+                  </div>
+                  <span className="mt-1.5 block text-[10px] text-[#666]">Scales down alert frequency under high user friction or flow state.</span>
                 </div>
-                <span className="mt-1.5 block text-[10px] text-[#666]">Limits how deep Engram can execute actions autonomously.</span>
               </div>
 
-              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-[#888]">Intervention Throttle</span>
-                  <span className="text-xs font-mono text-blue-400">{(interventionFreq * 100).toFixed(0)}%</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-500"
-                    style={{ width: `${interventionFreq * 100}%` }}
-                  />
-                </div>
-                <span className="mt-1.5 block text-[10px] text-[#666]">Scales down alert frequency under high user friction or flow state.</span>
+              {/* Granular trust score table */}
+              <div className="mt-5">
+                <h4 className="text-xs text-[#888] mb-2 font-medium">Domain Trust Scores</h4>
+                {Object.keys(trustScores).length === 0 ? (
+                  <p className="text-xs text-[#666] italic py-2">No active scores recorded yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {Object.entries(trustScores).map(([domain, data]) => (
+                      <div key={domain} className="flex items-center justify-between rounded-lg bg-white/[0.02] p-2.5 border border-white/[0.04]">
+                        <div>
+                          <div className="text-xs font-medium font-mono text-[#ececec]">{domain}</div>
+                          <div className="text-[10px] text-[#666]">Streak: {data.successStreak} successes · Overrides: {data.overrideCount}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-16 rounded-full bg-white/[0.06] overflow-hidden">
+                            <div
+                              className={`h-full transition-all ${data.score > 0.7 ? "bg-emerald-500" : data.score > 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
+                              style={{ width: `${data.score * 100}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-mono font-medium ${data.score > 0.7 ? "text-emerald-400" : data.score > 0.4 ? "text-yellow-400" : "text-red-400"}`}>
+                            {data.score.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Granular trust score table */}
-            <div className="mt-5">
-              <h4 className="text-xs text-[#888] mb-2 font-medium">Domain Trust Scores</h4>
-              {Object.keys(trustScores).length === 0 ? (
-                <p className="text-xs text-[#666] italic py-2">No active scores recorded yet.</p>
+            {/* Metabolic Homeostasis & Pacing */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Cognitive Homeostasis & Pacing</h3>
+                {floorDetected && (
+                  <span className="rounded-full bg-red-950/60 border border-red-500/30 px-2.5 py-0.5 text-[9px] font-semibold text-red-400 animate-pulse">
+                    FLOOR DETECTED
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02] sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[#888]">Cognitive Health</span>
+                    <span className={`text-xs font-mono font-medium ${
+                      homeostasisState === "Optimal" ? "text-emerald-400" : homeostasisState === "Congested" ? "text-yellow-400" : "text-red-400 animate-pulse"
+                    }`}>
+                      {homeostasisState}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-[#b4b4b4] leading-relaxed">
+                    {semanticState}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[#888]">Homeostasis Index</span>
+                    <span className="text-xs font-mono text-emerald-400">{(homeostasisIndex * 100).toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden mt-1.5">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        homeostasisIndex > 0.8 ? "bg-emerald-500" : homeostasisIndex > 0.4 ? "bg-yellow-500" : "bg-red-500"
+                      }`}
+                      style={{ width: `${homeostasisIndex * 100}%` }}
+                    />
+                  </div>
+                  <span className="mt-1.5 block text-[10px] text-[#666]">Stability baseline. Scales autonomy ceiling under active strain.</span>
+                </div>
+
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[#888]">Pacing & Friction</span>
+                    <span className="text-xs font-mono text-blue-400">{availablePacingTokens} / 5 tokens</span>
+                  </div>
+                  <div className="text-[10px] text-[#666] leading-relaxed mt-1">
+                    Annoyance Score: <span className="font-mono text-[#ececec]">{annoyanceScore.toFixed(1)}/10.0</span> <br />
+                    Consecutive Friction: <span className="font-mono text-[#ececec]">{consecutiveFriction}</span>
+                  </div>
+                  <span className="mt-1.5 block text-[10px] text-[#666]">Tokens block frequent alerts to secure human flow-state.</span>
+                </div>
+
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02] sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[#888]">Cognitive Debt Queue</span>
+                    <span className="text-xs font-mono text-yellow-400">{cognitiveDebtCount} tasks</span>
+                  </div>
+                  <span className="mt-1.5 block text-[10px] text-[#666]">Deferred background consolidation reflections waiting for system idle state.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Memory Sovereignty System */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Memory Sovereignty</h3>
+                <div className="flex gap-1 bg-white/[0.04] p-0.5 rounded-lg border border-white/[0.04]">
+                  <button
+                    onClick={() => setActiveSovereigntyTab("forget")}
+                    className={`px-2 py-1 text-[11px] rounded-md font-medium transition-colors ${activeSovereigntyTab === "forget" ? "bg-white/[0.06] text-white" : "text-[#888] hover:text-[#b4b4b4]"}`}
+                  >
+                    Forget Node
+                  </button>
+                  <button
+                    onClick={() => setActiveSovereigntyTab("dispute")}
+                    className={`px-2 py-1 text-[11px] rounded-md font-medium transition-colors ${activeSovereigntyTab === "dispute" ? "bg-white/[0.06] text-white" : "text-[#888] hover:text-[#b4b4b4]"}`}
+                  >
+                    Dispute Claim
+                  </button>
+                </div>
+              </div>
+
+              {activeSovereigntyTab === "forget" ? (
+                <form onSubmit={handleForget} className="space-y-3">
+                  <p className="text-[11px] text-[#888] leading-relaxed">
+                    Permanently deletes a node by ID. This executes a <strong>true forget</strong>: removing node content, scrubbing links/edges from other nodes, purges claims, and installs a placeholder `HistoricalDeletionEnvelope`.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter wiki node ID (e.g. project_alpha)..."
+                      value={forgetNodeId}
+                      onChange={(e) => setForgetNodeId(e.target.value)}
+                      className="flex-1 rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
+                      disabled={submittingForget}
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={submittingForget || !forgetNodeId.trim()}
+                      className="rounded-lg bg-red-600/20 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-600/30 disabled:opacity-50 border border-red-500/20 transition-colors"
+                    >
+                      {submittingForget ? "Purging..." : "Purge Memory"}
+                    </button>
+                  </div>
+                </form>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {Object.entries(trustScores).map(([domain, data]) => (
-                    <div key={domain} className="flex items-center justify-between rounded-lg bg-white/[0.02] p-2.5 border border-white/[0.04]">
-                      <div>
-                        <div className="text-xs font-medium font-mono text-[#ececec]">{domain}</div>
-                        <div className="text-[10px] text-[#666]">Streak: {data.successStreak} successes · Overrides: {data.overrideCount}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-16 rounded-full bg-white/[0.06] overflow-hidden">
-                          <div
-                            className={`h-full transition-all ${data.score > 0.7 ? "bg-emerald-500" : data.score > 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
-                            style={{ width: `${data.score * 100}%` }}
-                          />
-                        </div>
-                        <span className={`text-xs font-mono font-medium ${data.score > 0.7 ? "text-emerald-400" : data.score > 0.4 ? "text-yellow-400" : "text-red-400"}`}>
-                          {data.score.toFixed(2)}
+                <form onSubmit={handleDispute} className="space-y-3">
+                  <p className="text-[11px] text-[#888] leading-relaxed">
+                    Contests a specific semantic claim on a node. Immediately sets claim confidence to 0%, prompts narrative rollback to recalculate derivative weights, and preserves the correction as a future alignment constraint.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      placeholder="Node ID"
+                      value={disputeNodeId}
+                      onChange={(e) => setDisputeNodeId(e.target.value)}
+                      className="rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
+                      disabled={submittingDispute}
+                      required
+                    />
+                    <input
+                      type="text"
+                      placeholder="Claim ID"
+                      value={disputeClaimId}
+                      onChange={(e) => setDisputeClaimId(e.target.value)}
+                      className="rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
+                      disabled={submittingDispute}
+                      required
+                    />
+                    <input
+                      type="text"
+                      placeholder="Correct Value"
+                      value={disputeCorrectedValue}
+                      onChange={(e) => setDisputeCorrectedValue(e.target.value)}
+                      className="rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
+                      disabled={submittingDispute}
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submittingDispute || !disputeNodeId.trim() || !disputeClaimId.trim() || !disputeCorrectedValue.trim()}
+                    className="w-full rounded-lg bg-blue-600/20 px-4 py-2 text-xs font-medium text-blue-400 hover:bg-blue-600/30 disabled:opacity-50 border border-blue-500/20 transition-colors"
+                  >
+                    {submittingDispute ? "Submitting Dispute..." : "Submit Reality Dispute"}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* Causal Reason Traces */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Causal Reason Traces</h3>
+              {traces.length === 0 ? (
+                <p className="text-xs text-[#666] italic py-4 text-center">No reason traces recorded yet.</p>
+              ) : (
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  {traces.map((trace) => (
+                    <div key={trace.traceId} className="rounded-xl bg-white/[0.02] p-3 border border-white/[0.04]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-mono text-[#888]">{new Date(trace.timestamp).toLocaleString()}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] border font-medium ${getSeverityBadgeColor(trace.triggerType)}`}>
+                          {getTriggerTypeLabel(trace.triggerType)}
                         </span>
                       </div>
+                      <div className="text-xs font-semibold text-[#ececec]">{trace.description}</div>
+                      <div className="mt-1 text-[10px] text-[#666]">Component: {trace.systemComponent} · Target: {trace.targetEntityId}</div>
+                      {trace.causalFactors.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-[9px] text-[#888] font-medium mb-1">Causal Factors:</div>
+                          <ul className="list-disc pl-3 text-[10px] text-[#b4b4b4] space-y-0.5">
+                            {trace.causalFactors.map((f, i) => (
+                              <li key={i}>{f}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -314,288 +656,417 @@ export function GovernancePanel() {
             </div>
           </div>
 
-          {/* Metabolic Homeostasis & Pacing */}
-          <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Metabolic Homeostasis & Pacing</h3>
-              {floorDetected && (
-                <span className="rounded-full bg-red-950/60 border border-red-500/30 px-2.5 py-0.5 text-[9px] font-semibold text-red-400 animate-pulse">
-                  FLOOR DETECTED
-                </span>
+          {/* Right Column: Audit Trail & Activity */}
+          <div className="space-y-6">
+            {/* Safety Constitution Audit Trail */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Constitutional Audit</h3>
+                <div className="flex items-center gap-1.5">
+                  <span className={`h-1.5 w-1.5 rounded-full ${integrityValid ? "bg-emerald-500" : "bg-red-500 animate-ping"}`} />
+                  <span className={`text-[10px] font-mono font-medium ${integrityValid ? "text-emerald-400" : "text-red-400"}`}>
+                    {integrityValid ? "VERIFIED OK" : "INTEGRITY COMPROMISED"}
+                  </span>
+                </div>
+              </div>
+
+              {auditEntries.length === 0 ? (
+                <p className="text-xs text-[#666] italic py-8 text-center">Audit log is currently empty.</p>
+              ) : (
+                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                  {auditEntries.slice().reverse().map((entry) => {
+                    const violation = parseViolationData(entry.data);
+                    return (
+                      <div key={entry.entryId} className="rounded-xl bg-white/[0.02] p-3 border border-white/[0.04]">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-mono text-[#888]">{new Date(entry.timestamp).toLocaleString()}</span>
+                          {violation && (
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] border font-medium ${getSeverityBadgeColor(violation.severity)}`}>
+                              {getSeverityLabel(violation.severity)}
+                            </span>
+                          )}
+                        </div>
+
+                        {violation ? (
+                          <div className="space-y-2">
+                            <div className="text-xs font-semibold text-[#ececec]">
+                              {violation.violatingSubsystem}: {violation.details}
+                            </div>
+                            {violation.triggerAction && (
+                              <div className="text-[10px] text-[#888]">
+                                Trigger action: <span className="font-mono text-[#b4b4b4]">{violation.triggerAction}</span>
+                              </div>
+                            )}
+                            {violation.causalChain && violation.causalChain.length > 0 && (
+                              <div className="rounded bg-black/20 p-2 text-[10px] text-[#888] font-mono">
+                                <div className="font-semibold text-[9px] mb-1 text-[#666]">Chain of logic:</div>
+                                {violation.causalChain.map((step, idx) => (
+                                  <div key={idx}>→ {step}</div>
+                                ))}
+                              </div>
+                            )}
+                            {violation.userResolution && (
+                              <div className="text-[10px] border-t border-white/[0.04] pt-1.5 text-emerald-400">
+                                Resolution: <span className="text-[#b4b4b4]">{violation.userResolution}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-xs font-mono text-[#888] break-all">{entry.data}</div>
+                        )}
+
+                        <div className="mt-2 text-[8px] font-mono text-[#555] break-all">
+                          Block Hash: {entry.hash.slice(0, 16)}...
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02] sm:col-span-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-[#888]">Metabolic State</span>
-                  <span className={`text-xs font-mono font-medium ${
-                    homeostasisState === "Optimal" ? "text-emerald-400" : homeostasisState === "Congested" ? "text-yellow-400" : "text-red-400 animate-pulse"
-                  }`}>
-                    {homeostasisState}
-                  </span>
+            {/* Semantic Activity Feed */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Semantic Activity Feed</h3>
+              {activity.length === 0 ? (
+                <p className="text-xs text-[#666] italic py-8 text-center">No activity recorded yet.</p>
+              ) : (
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  {activity.slice().reverse().map((act) => (
+                    <div key={act.entryId} className="rounded-xl bg-white/[0.02] p-3 border border-[#3c3c3c]/10 flex items-start gap-3">
+                      <span className={`mt-1 h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                        act.impactLevel === "High" ? "bg-red-500 animate-pulse" : act.impactLevel === "Medium" ? "bg-yellow-500" : "bg-[#888]"
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-[#b4b4b4] font-medium">{act.action}</span>
+                          <span className="text-[9px] text-[#666] font-mono">{new Date(act.timestamp).toLocaleTimeString()}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-[#888] leading-relaxed break-words">{act.description}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <p className="mt-1 text-[11px] text-[#b4b4b4] leading-relaxed">
-                  {semanticState}
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-[#888]">Homeostasis Index</span>
-                  <span className="text-xs font-mono text-emerald-400">{(homeostasisIndex * 100).toFixed(0)}%</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden mt-1.5">
-                  <div
-                    className={`h-full transition-all duration-500 ${
-                      homeostasisIndex > 0.8 ? "bg-emerald-500" : homeostasisIndex > 0.4 ? "bg-yellow-500" : "bg-red-500"
-                    }`}
-                    style={{ width: `${homeostasisIndex * 100}%` }}
-                  />
-                </div>
-                <span className="mt-1.5 block text-[10px] text-[#666]">Recovery/capacity scaling factor under local resource load.</span>
-              </div>
-
-              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-[#888]">Pacing & Friction</span>
-                  <span className="text-xs font-mono text-blue-400">{availablePacingTokens} / 5 tokens</span>
-                </div>
-                <div className="text-[10px] text-[#666] leading-relaxed mt-1">
-                  Annoyance Score: <span className="font-mono text-[#ececec]">{annoyanceScore.toFixed(1)}/10.0</span> <br />
-                  Consecutive Friction: <span className="font-mono text-[#ececec]">{consecutiveFriction}</span>
-                </div>
-                <span className="mt-1.5 block text-[10px] text-[#666]">Friction decays trust / increases alert silence thresholds.</span>
-              </div>
-
-              <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02] sm:col-span-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-[#888]">Cognitive Debt Queue</span>
-                  <span className="text-xs font-mono text-yellow-400">{cognitiveDebtCount} tasks</span>
-                </div>
-                <span className="mt-1.5 block text-[10px] text-[#666]">Deferred background reflections and narrative synthesis waiting for system idle state.</span>
-              </div>
+              )}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Memory Sovereignty System */}
-          <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Memory Sovereignty</h3>
-              <div className="flex gap-1 bg-white/[0.04] p-0.5 rounded-lg border border-white/[0.04]">
-                <button
-                  onClick={() => setActiveSovereigntyTab("forget")}
-                  className={`px-2 py-1 text-[11px] rounded-md font-medium transition-colors ${activeSovereigntyTab === "forget" ? "bg-white/[0.06] text-white" : "text-[#888] hover:text-[#b4b4b4]"}`}
-                >
-                  Forget Node
-                </button>
-                <button
-                  onClick={() => setActiveSovereigntyTab("dispute")}
-                  className={`px-2 py-1 text-[11px] rounded-md font-medium transition-colors ${activeSovereigntyTab === "dispute" ? "bg-white/[0.06] text-white" : "text-[#888] hover:text-[#b4b4b4]"}`}
-                >
-                  Dispute Claim
-                </button>
+      {activePanelTab === "upgrades" && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left Column: Upgrade Dashboard */}
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider font-semibold">Current System Status</h3>
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="text-xs text-[#888]">System Version</div>
+                  <div className="text-lg font-semibold font-mono mt-1 text-[#ececec]">
+                    {deployStatus?.systemVersion || "1.0.0"}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="text-xs text-[#888]">Schema Version</div>
+                  <div className="text-lg font-semibold font-mono mt-1 text-[#ececec]">
+                    Level {deployStatus?.schemaVersion ?? 1}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="text-xs text-[#888]">Capability Schema</div>
+                  <div className="text-lg font-semibold font-mono mt-1 text-[#ececec]">
+                    v{deployStatus?.capabilityVersion ?? 1}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white/[0.03] p-4 border border-white/[0.02]">
+                  <div className="text-xs text-[#888]">Last Upgraded</div>
+                  <div className="text-xs font-mono mt-1.5 text-[#b4b4b4] truncate">
+                    {deployStatus?.lastUpdatedAt ? new Date(deployStatus.lastUpdatedAt).toLocaleString() : "Initial install"}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {activeSovereigntyTab === "forget" ? (
-              <form onSubmit={handleForget} className="space-y-3">
-                <p className="text-[11px] text-[#888] leading-relaxed">
-                  Permanently deletes a node by ID. This executes a <strong>true forget</strong>: removing node content, scrubbing links/edges from other nodes, purges claims, and installs a placeholder `HistoricalDeletionEnvelope`.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter wiki node ID (e.g. project_alpha)..."
-                    value={forgetNodeId}
-                    onChange={(e) => setForgetNodeId(e.target.value)}
-                    className="flex-1 rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
-                    disabled={submittingForget}
-                    required
-                  />
-                  <button
-                    type="submit"
-                    disabled={submittingForget || !forgetNodeId.trim()}
-                    className="rounded-lg bg-red-600/20 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-600/30 disabled:opacity-50 border border-red-500/20 transition-colors animate-pulse-slow"
-                  >
-                    {submittingForget ? "Purging..." : "Purge Memory"}
-                  </button>
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider font-semibold">Prepare System Upgrade</h3>
+              <p className="mb-4 text-xs text-[#888] leading-relaxed">
+                Enter target version information to check compatibility and run preflight disk and capability checks.
+              </p>
+              
+              <form onSubmit={handlePreflight} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-[11px] text-[#888] mb-1.5 font-medium">Target Version</label>
+                    <input
+                      type="text"
+                      value={targetVersion}
+                      onChange={(e) => setTargetVersion(e.target.value)}
+                      className="w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none"
+                      disabled={submittingPreflight || submittingUpgrade}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#888] mb-1.5 font-medium">Target Schema Level</label>
+                    <input
+                      type="number"
+                      value={targetSchema}
+                      onChange={(e) => setTargetSchema(Number(e.target.value))}
+                      className="w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none"
+                      disabled={submittingPreflight || submittingUpgrade}
+                      required
+                    />
+                  </div>
                 </div>
-              </form>
-            ) : (
-              <form onSubmit={handleDispute} className="space-y-3">
-                <p className="text-[11px] text-[#888] leading-relaxed">
-                  Contests a specific semantic claim on a node. Immediately sets claim confidence to 0%, prompts narrative rollback to recalculate derivative weights, and preserves the correction as a future alignment constraint.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <input
-                    type="text"
-                    placeholder="Node ID"
-                    value={disputeNodeId}
-                    onChange={(e) => setDisputeNodeId(e.target.value)}
-                    className="rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
-                    disabled={submittingDispute}
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Claim ID"
-                    value={disputeClaimId}
-                    onChange={(e) => setDisputeClaimId(e.target.value)}
-                    className="rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
-                    disabled={submittingDispute}
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Correct Value"
-                    value={disputeCorrectedValue}
-                    onChange={(e) => setDisputeCorrectedValue(e.target.value)}
-                    className="rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555]"
-                    disabled={submittingDispute}
-                    required
-                  />
-                </div>
+
                 <button
                   type="submit"
-                  disabled={submittingDispute || !disputeNodeId.trim() || !disputeClaimId.trim() || !disputeCorrectedValue.trim()}
-                  className="w-full rounded-lg bg-blue-600/20 px-4 py-2 text-xs font-medium text-blue-400 hover:bg-blue-600/30 disabled:opacity-50 border border-blue-500/20 transition-colors"
+                  disabled={submittingPreflight || submittingUpgrade}
+                  className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                 >
-                  {submittingDispute ? "Submitting Dispute..." : "Submit Reality Dispute"}
+                  {submittingPreflight ? "Running Preflight Checks..." : "Run Preflight Validation"}
                 </button>
               </form>
-            )}
-          </div>
 
-          {/* Causal Reason Traces */}
-          <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
-            <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Causal Reason Traces</h3>
-            {traces.length === 0 ? (
-              <p className="text-xs text-[#666] italic py-4 text-center">No reason traces recorded yet.</p>
-            ) : (
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                {traces.map((trace) => (
-                  <div key={trace.traceId} className="rounded-xl bg-white/[0.02] p-3 border border-white/[0.04]">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-mono text-[#888]">{new Date(trace.timestamp).toLocaleString()}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[9px] border font-medium ${getSeverityBadgeColor(trace.triggerType)}`}>
-                        {getTriggerTypeLabel(trace.triggerType)}
-                      </span>
-                    </div>
-                    <div className="text-xs font-semibold text-[#ececec]">{trace.description}</div>
-                    <div className="mt-1 text-[10px] text-[#666]">Component: {trace.systemComponent} · Target: {trace.targetEntityId}</div>
-                    {trace.causalFactors.length > 0 && (
-                      <div className="mt-2">
-                        <div className="text-[9px] text-[#888] font-medium mb-1">Causal Factors:</div>
-                        <ul className="list-disc pl-3 text-[10px] text-[#b4b4b4] space-y-0.5">
-                          {trace.causalFactors.map((f, i) => (
-                            <li key={i}>{f}</li>
+              {/* Preflight diff results */}
+              {preflightResult && (
+                <div className="mt-5 border-t border-white/[0.06] pt-4 space-y-4">
+                  <div className={`rounded-xl p-3 border text-xs ${
+                    preflightResult.success 
+                      ? "bg-emerald-950/20 border-emerald-900/30 text-emerald-400" 
+                      : "bg-red-950/20 border-red-900/30 text-red-400"
+                  }`}>
+                    <span className="font-semibold">Preflight:</span> {preflightResult.message}
+                  </div>
+
+                  {preflightResult.success && (
+                    <>
+                      <div className="rounded-xl bg-[#212121] border border-white/[0.04] p-4">
+                        <h4 className="text-xs font-semibold text-[#ececec] mb-2">Behavioral Trust Diff</h4>
+                        <p className="text-[10px] text-[#888] mb-3 leading-relaxed">
+                          Review changes in observation range, capability bounds, or system permissions before proceeding.
+                        </p>
+                        
+                        <div className="space-y-2">
+                          {Object.entries(preflightResult.behavioralTrustDiff).map(([key, val]) => (
+                            <div key={key} className="flex justify-between items-start text-xs border-b border-white/[0.02] pb-1.5">
+                              <span className="font-medium text-[#b4b4b4]">{key}</span>
+                              <span className="text-[#888] text-right font-mono max-w-[60%]">{val}</span>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleUpgrade}
+                        disabled={submittingUpgrade}
+                        className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      >
+                        {submittingUpgrade ? "Executing Upgrade..." : "Execute Atomic Upgrade"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Upgrade results */}
+              {upgradeResult && (
+                <div className="mt-5 border-t border-white/[0.06] pt-4 space-y-3">
+                  <div className={`rounded-xl p-4 border text-xs leading-relaxed ${
+                    upgradeResult.success 
+                      ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-400" 
+                      : "bg-red-950/30 border-red-500/30 text-red-400"
+                  }`}>
+                    <div className="font-semibold text-sm mb-1">
+                      Upgrade {upgradeResult.success ? "Succeeded!" : "Failed & Rolled Back"}
+                    </div>
+                    <div>{upgradeResult.message}</div>
+                    {upgradeResult.success && (
+                      <div className="mt-2 font-mono text-[10px]">
+                        Migration Confidence: <span className="underline">{upgradeResult.confidence}</span>
                       </div>
                     )}
                   </div>
-                ))}
+
+                  {upgradeResult.errors && upgradeResult.errors.length > 0 && (
+                    <div className="rounded-xl bg-black/20 border border-white/[0.04] p-3">
+                      <div className="text-[10px] text-[#888] font-semibold mb-1">Upgrade Event Log:</div>
+                      <ul className="list-disc pl-4 text-[10px] text-[#b4b4b4] space-y-1">
+                        {upgradeResult.errors.map((err, i) => (
+                          <li key={i} className="font-mono">{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Snapshot Rollback Console */}
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider font-semibold">Snapshot Rollback Console</h3>
+              <p className="mb-4 text-xs text-[#888] leading-relaxed">
+                If an upgrade experiences subtle cognitive bugs or structural performance drops, you can instantly revert.
+                Our rollback-first framework restores both raw database structures and the exact previous <strong>Governance State</strong>.
+              </p>
+
+              <div className="mb-5 rounded-xl bg-yellow-950/10 border border-yellow-500/10 p-3.5 text-xs text-yellow-400/90 leading-relaxed">
+                <strong>💡 Continuity Protection:</strong> Trust buckets, pacing thresholds, autonomy ceilings, and warmup levels are restored to their precise prior values, preventing behavioral discontinuity or sudden permission drops.
               </div>
-            )}
+
+              <form onSubmit={handleRollbackSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] text-[#888] mb-1.5 font-medium">Snapshot Backup Path</label>
+                  <input
+                    type="text"
+                    value={rollbackPath}
+                    onChange={(e) => setRollbackPath(e.target.value)}
+                    placeholder="c:\projects\Engram\Engram\backups\snapshot_yyyyMMdd_HHmmss"
+                    className="w-full rounded-lg border border-white/[0.08] bg-[#212121] px-3 py-2 text-xs text-[#ececec] focus:border-white/[0.2] focus:outline-none placeholder:text-[#555] font-mono"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!rollbackPath.trim()}
+                  className="w-full rounded-lg bg-red-950/40 border border-red-500/20 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-900/30 transition-colors"
+                >
+                  Restore Snapshot Rollback
+                </button>
+              </form>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Right Column: Audit Trail & Activity */}
-        <div className="space-y-6">
-          {/* Safety Constitution Audit Trail */}
-          <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Constitutional Audit</h3>
-              <div className="flex items-center gap-1.5">
-                <span className={`h-1.5 w-1.5 rounded-full ${integrityValid ? "bg-emerald-500" : "bg-red-500 animate-ping"}`} />
-                <span className={`text-[10px] font-mono font-medium ${integrityValid ? "text-emerald-400" : "text-red-400"}`}>
-                  {integrityValid ? "VERIFIED OK" : "INTEGRITY COMPROMISED"}
-                </span>
-              </div>
-            </div>
+      {activePanelTab === "metabolism" && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left Column: Metabolism & Courtesy States */}
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Resource Courtesy State</h3>
+              <p className="mb-4 text-xs text-[#888] leading-relaxed">
+                Engram monitors machine load behaviorally (via token latency and scheduling delays) rather than intrusive hardware scraping, ensuring quiet operation during demanding tasks.
+              </p>
 
-            {auditEntries.length === 0 ? (
-              <p className="text-xs text-[#666] italic py-8 text-center">Audit log is currently empty.</p>
-            ) : (
-              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                {auditEntries.slice().reverse().map((entry) => {
-                  const violation = parseViolationData(entry.data);
-                  return (
-                    <div key={entry.entryId} className="rounded-xl bg-white/[0.02] p-3 border border-white/[0.04]">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-mono text-[#888]">{new Date(entry.timestamp).toLocaleString()}</span>
-                        {violation && (
-                          <span className={`rounded-full px-2 py-0.5 text-[9px] border font-medium ${getSeverityBadgeColor(violation.severity)}`}>
-                            {getSeverityLabel(violation.severity)}
-                          </span>
-                        )}
-                      </div>
+              {degradations && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between rounded-xl bg-white/[0.02] p-4 border border-white/[0.04]">
+                    <div>
+                      <div className="text-[10px] text-[#888] uppercase tracking-wider font-semibold">Active State</div>
+                      <div className="text-base font-semibold font-mono text-[#ececec] mt-1">{degradations.courtesyState}</div>
+                    </div>
+                    <span className="rounded-full bg-blue-950/60 border border-blue-500/30 px-3 py-1 text-xs font-medium text-blue-400">
+                      Courtesy Bound
+                    </span>
+                  </div>
 
-                      {violation ? (
-                        <div className="space-y-2">
-                          <div className="text-xs font-semibold text-[#ececec]">
-                            {violation.violatingSubsystem}: {violation.details}
-                          </div>
-                          {violation.triggerAction && (
-                            <div className="text-[10px] text-[#888]">
-                              Trigger action: <span className="font-mono text-[#b4b4b4]">{violation.triggerAction}</span>
-                            </div>
-                          )}
-                          {violation.causalChain && violation.causalChain.length > 0 && (
-                            <div className="rounded bg-black/20 p-2 text-[10px] text-[#888] font-mono">
-                              <div className="font-semibold text-[9px] mb-1 text-[#666]">Chain of logic:</div>
-                              {violation.causalChain.map((step, idx) => (
-                                <div key={idx}>→ {step}</div>
-                              ))}
-                            </div>
-                          )}
-                          {violation.userResolution && (
-                            <div className="text-[10px] border-t border-white/[0.04] pt-1.5 text-emerald-400">
-                              Resolution: <span className="text-[#b4b4b4]">{violation.userResolution}</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-xs font-mono text-[#888] break-all">{entry.data}</div>
-                      )}
+                  <p className="text-xs text-[#b4b4b4] bg-[#212121]/50 border border-white/[0.02] rounded-xl p-3.5 leading-relaxed">
+                    {degradations.explanation || "System operating at full metabolic capacity."}
+                  </p>
 
-                      <div className="mt-2 text-[8px] font-mono text-[#555] break-all">
-                        Block Hash: {entry.hash.slice(0, 16)}...
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-xl bg-white/[0.03] p-3 border border-white/[0.02]">
+                      <div className="text-[10px] text-[#888]">Scheduling Jitter</div>
+                      <div className="text-sm font-semibold font-mono mt-1 text-[#ececec]">
+                        {degradations.schedulingLatencyMs.toFixed(1)} ms
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
-          {/* Semantic Activity Feed */}
-          <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
-            <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Semantic Activity Feed</h3>
-            {activity.length === 0 ? (
-              <p className="text-xs text-[#666] italic py-8 text-center">No activity recorded yet.</p>
-            ) : (
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                {activity.slice().reverse().map((act) => (
-                  <div key={act.entryId} className="rounded-xl bg-white/[0.02] p-3 border border-[#3c3c3c]/10 flex items-start gap-3">
-                    <span className={`mt-1 h-1.5 w-1.5 rounded-full flex-shrink-0 ${
-                      act.impactLevel === "High" ? "bg-red-500 animate-pulse" : act.impactLevel === "Medium" ? "bg-yellow-500" : "bg-[#888]"
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[#b4b4b4] font-medium">{act.action}</span>
-                        <span className="text-[9px] text-[#666] font-mono">{new Date(act.timestamp).toLocaleTimeString()}</span>
+                    <div className="rounded-xl bg-white/[0.03] p-3 border border-white/[0.02]">
+                      <div className="text-[10px] text-[#888]">Thermal Throttling</div>
+                      <div className={`text-sm font-semibold font-mono mt-1 ${
+                        degradations.isThermalThrottling ? "text-red-400 font-bold animate-pulse" : "text-emerald-400"
+                      }`}>
+                        {degradations.isThermalThrottling ? "Active" : "Normal"}
                       </div>
-                      <p className="mt-1 text-xs text-[#888] leading-relaxed break-words">{act.description}</p>
                     </div>
                   </div>
-                ))}
+                </div>
+              )}
+            </div>
+
+            {/* Active Degradations */}
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider">Active Degradations</h3>
+              
+              {degradations && Object.keys(degradations.activeDegradations).length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-[#888] mb-3 leading-relaxed">
+                    The following background services are temporarily paused or throttled to conserve system resource priority:
+                  </p>
+                  
+                  {Object.entries(degradations.activeDegradations).map(([subsystem, status]) => (
+                    <div key={subsystem} className="flex justify-between items-center rounded-xl bg-white/[0.02] p-3 border border-white/[0.04]">
+                      <span className="text-xs font-mono font-medium text-[#ececec]">{subsystem}</span>
+                      <span className="rounded-full bg-yellow-950/60 border border-yellow-500/20 px-2 py-0.5 text-[10px] font-semibold text-yellow-400">
+                        {status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#666] italic py-3 text-center">No active metabolic degradations. All systems normal.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Support Bundles */}
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/[0.06] bg-[#2f2f2f]/50 p-5 backdrop-blur-md">
+              <h3 className="mb-4 text-[13px] font-medium text-[#b4b4b4] uppercase tracking-wider font-semibold">Diagnostics Support Bundle</h3>
+              <p className="mb-4 text-xs text-[#888] leading-relaxed">
+                Generate a privacy-first diagnostics package to debug background execution issues.
+                Sensitive details are automatically scrubbed locally on your machine before packaging.
+              </p>
+
+              <div className="mb-5 rounded-xl bg-[#212121] border border-white/[0.04] p-4">
+                <h4 className="text-[11px] font-semibold text-[#b4b4b4] uppercase tracking-wider mb-2.5">Anonymization & Redaction Rules</h4>
+                <ul className="space-y-2 text-[11px] text-[#888]">
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-500">✓</span>
+                    <span>Home directories matching local usernames are replaced with <code>&lt;USER_HOME&gt;</code></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-500">✓</span>
+                    <span>All email addresses are hashed and replaced with placeholders</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-500">✓</span>
+                    <span>API keys, secrets, hashes, and encryption credentials are omitted</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-500">✓</span>
+                    <span>No raw screen captures or personal wiki timeline entries are packaged</span>
+                  </li>
+                </ul>
               </div>
-            )}
+
+              <button
+                onClick={handleGenerateBundle}
+                disabled={generatingBundle}
+                className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                {generatingBundle ? "Generating Support Bundle..." : "Compile Diagnostics Support Bundle"}
+              </button>
+
+              {bundlePath && (
+                <div className="mt-4 rounded-xl bg-emerald-950/20 border border-emerald-900/30 p-3.5 text-xs text-emerald-400">
+                  <div className="font-semibold mb-1">Bundle Compiled Successfully!</div>
+                  <div className="font-mono text-[10px] text-[#b4b4b4] break-all select-all">{bundlePath}</div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
