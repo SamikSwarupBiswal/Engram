@@ -42,7 +42,7 @@
   - [x] **Phase D1: Reality Hardening** — Installer resilience, Windows dynamic environments, sleep/wake, driver fallbacks, anti-virus.
   - [x] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
   - [x] **Phase D3: Long-Horizon Soak Operation** — Virtual 30-day time-warp simulation, auto-expiry of active contradictions, protected islands archival shield, and ecological health telemetry metrics — 2026-05-24
-  - [ ] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
+  - [x] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
   - [ ] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
 
 
@@ -129,7 +129,7 @@ All remaining roadmap work is focused on robustness, coexistence, endurance, exe
 2. **Semantic Accumulation** — Analyze entity graph scaling, link density decay, and WAL propagation sludge over time.
 3. **Homeostasis Maintenance** — Validate priority stacks and metabolic resource triage under prolonged low-to-high activity cycles.
 
-### Phase D4: Real Task Execution Validation (Active)
+### Phase D4: Real Task Execution Validation (Completed)
 1. **Task Robustness** — Ensure end-to-end task completion (e.g., generating research reports, browser data extraction, file curation) on messy desktops.
 2. **Interruption Recovery** — Gracefully pause automation steps when users hijack input or focus and resume safely.
 
