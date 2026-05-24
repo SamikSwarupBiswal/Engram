@@ -41,11 +41,11 @@ public class DesktopOperator : IDesktopOperator
         ct.ThrowIfCancellationRequested();
         _logger?.LogInformation("Click requested at ({X}, {Y}). Simulation={Sim}", x, y, IsSimulationMode);
 
-        // Bounds check
-        var (screenWidth, screenHeight) = GetScreenResolution();
-        if (x < 0 || y < 0 || x > screenWidth || y > screenHeight)
+        // Bounds check across the virtual multi-monitor desktop
+        var bounds = DpiScaleAwareCoordinates.GetVirtualScreenBounds();
+        if (x < bounds.Left || y < bounds.Top || x > bounds.Left + bounds.Width || y > bounds.Top + bounds.Height)
         {
-            throw new ArgumentOutOfRangeException(nameof(x), $"Coordinates ({x}, {y}) are outside screen boundaries (0, 0) to ({screenWidth}, {screenHeight})");
+            throw new ArgumentOutOfRangeException(nameof(x), $"Coordinates ({x}, {y}) are outside virtual screen boundaries (Left: {bounds.Left}, Top: {bounds.Top}, Width: {bounds.Width}, Height: {bounds.Height})");
         }
 
         if (IsSimulationMode)
@@ -56,7 +56,7 @@ public class DesktopOperator : IDesktopOperator
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            SendWindowsMouseClick(x, y, screenWidth, screenHeight);
+            SendWindowsMouseClick(x, y);
         }
     }
 
@@ -132,11 +132,10 @@ public class DesktopOperator : IDesktopOperator
     // ─── Windows Native Implementation ───
 
     [SupportedOSPlatform("windows")]
-    private void SendWindowsMouseClick(int x, int y, int screenWidth, int screenHeight)
+    private void SendWindowsMouseClick(int x, int y)
     {
-        // Convert to absolute mouse coordinates (0 to 65535)
-        var dx = (x * 65536) / screenWidth;
-        var dy = (y * 65536) / screenHeight;
+        // Convert to absolute mouse coordinates (0 to 65535) across virtual desktop bounds
+        var (dx, dy) = DpiScaleAwareCoordinates.MapToAbsoluteCoordinates(x, y);
 
         var inputs = new INPUT[3];
 

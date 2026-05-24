@@ -1,9 +1,9 @@
 # Engram State
 
-**Status:** Existential Validation Era (D1-D5) — Active Phase: D1 (Reality Hardening)
-**Last Activity:** 2026-05-23
+**Status:** Existential Validation Era (D1-D5) — Completed Phase: D1 (Reality Hardening), Next Phase: D2 (Human Coexistence Validation)
+**Last Activity:** 2026-05-24
 **Branch:** `master`
-**Tests:** 1597 store tests + 88 API tests passing (1685/1685 total tests green)
+**Tests:** 1618 store tests + 88 API tests passing (1706/1706 total tests green)
 **Latest Commit:** (completed — Phase 12 implementation)
 
 ## What Engram Is
@@ -122,12 +122,13 @@ Engram/
 └── .planning/                 All planning docs
 ```
 
-## API Endpoints (91)
+## API Endpoints (92)
 
 ```
 GET  /                              Health
 GET  /api/health                    Lifecycle health (single source of truth)
 GET  /api/health/logs               Lifecycle logs
+GET  /api/health/transparency       Get transparency and active degradations profile
 POST /api/health/retry              Retry after error
 GET  /api/search                    Search wiki
 GET  /api/wiki                      List wiki nodes

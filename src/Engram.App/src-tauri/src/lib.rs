@@ -9,9 +9,15 @@ use tauri_plugin_shell::{
     ShellExt,
 };
 
+mod preflight;
+
 struct SidecarState {
     pid: Mutex<Option<u32>>,
     child: Mutex<Option<CommandChild>>,
+}
+
+struct PreflightState {
+    report: Mutex<preflight::PreflightReport>,
 }
 
 #[tauri::command]
@@ -30,6 +36,11 @@ fn get_capture_status() -> serde_json::Value {
     })
 }
 
+#[tauri::command]
+fn get_preflight_report(state: tauri::State<'_, PreflightState>) -> preflight::PreflightReport {
+    state.report.lock().unwrap().clone()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -40,7 +51,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_version,
-            get_capture_status
+            get_capture_status,
+            get_preflight_report
         ])
         .setup(|app| {
             // ── Spawn .NET API sidecar ──
@@ -60,6 +72,25 @@ pub fn run() {
                     return Ok(());
                 }
             };
+
+            // Run pre-flight diagnostics
+            let report = preflight::run_checks(install_dir);
+            eprintln!("[Engram] Preflight severity: {}", report.severity);
+            for err in &report.errors {
+                eprintln!("[Engram] Preflight alert: {}", err);
+            }
+
+            // Manage preflight state so UI can retrieve it
+            app.manage(PreflightState {
+                report: Mutex::new(report.clone()),
+            });
+
+            if report.severity == "Critical" {
+                eprintln!("[Engram] CRITICAL PREFLIGHT FAILURE. Spawning sidecar aborted.");
+                // React UI fetches report via `get_preflight_report` command and renders a critical block.
+                return Ok(());
+            }
+
             let sidecar_dir = install_dir.join("sidecar").join("publish");
             let sidecar_exe = if cfg!(target_os = "windows") {
                 sidecar_dir.join("Engram.Api.exe")
@@ -71,8 +102,14 @@ pub fn run() {
             eprintln!("[Engram] Sidecar dir: {:?}", sidecar_dir);
             eprintln!("[Engram] Sidecar exists: {}", sidecar_exe.exists());
 
+            let mut args = vec!["--urls", "http://127.0.0.1:5000"];
+            if report.severity == "IntegrityUncertain" {
+                eprintln!("[Engram] INTEGRITY UNCERTAIN. Launching sidecar in Safe Mode.");
+                args.push("--safe-mode");
+            }
+
             match app.shell().command(&sidecar_exe)
-                .args(["--urls", "http://127.0.0.1:5000"])
+                .args(args)
                 .current_dir(&sidecar_dir)
                 .spawn()
             {

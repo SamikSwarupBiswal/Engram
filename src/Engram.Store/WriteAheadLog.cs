@@ -59,6 +59,76 @@ public class WriteAheadLog : IDisposable
     }
 
     /// <summary>
+    /// Append a transaction start entry to the WAL.
+    /// </summary>
+    public void LogTransactionStart(Guid transactionId, List<WalTransactionOperation> operations)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var entry = new WalEntry
+        {
+            Operation = "tx_start",
+            EventId = transactionId.ToString(),
+            TxOperations = operations,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        AppendEntry(entry);
+    }
+
+    /// <summary>
+    /// Append a transaction commit entry to the WAL.
+    /// </summary>
+    public void LogTransactionCommit(Guid transactionId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var entry = new WalEntry
+        {
+            Operation = "tx_commit",
+            EventId = transactionId.ToString(),
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        AppendEntry(entry);
+    }
+
+    /// <summary>
+    /// Replay WAL on startup to get uncommitted transactions.
+    /// </summary>
+    public IReadOnlyList<WalEntry> GetUncommittedTransactions()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!File.Exists(_walPath))
+            return Array.Empty<WalEntry>();
+
+        var txs = new Dictionary<string, WalEntry>();
+        var commits = new HashSet<string>();
+
+        try
+        {
+            foreach (var line in File.ReadLines(_walPath))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                var entry = JsonSerializer.Deserialize<WalEntry>(line, JsonOptions);
+                if (entry == null) continue;
+
+                if (entry.Operation == "tx_start")
+                    txs[entry.EventId] = entry;
+                else if (entry.Operation == "tx_commit")
+                    commits.Add(entry.EventId);
+            }
+        }
+        catch
+        {
+            // Corrupted line - skip or treat as uncommitted
+        }
+
+        return txs.Values
+            .Where(t => !commits.Contains(t.EventId))
+            .ToList();
+    }
+
+    /// <summary>
     /// Replay WAL on startup. Returns list of uncommitted writes that need recovery.
     /// </summary>
     public IReadOnlyList<WalEntry> GetUncommittedWrites()
@@ -137,6 +207,24 @@ public class WalEntry
     [System.Text.Json.Serialization.JsonPropertyName("file_path")]
     public string? FilePath { get; set; }
 
+    [System.Text.Json.Serialization.JsonPropertyName("tx_operations")]
+    public List<WalTransactionOperation>? TxOperations { get; set; }
+
     [System.Text.Json.Serialization.JsonPropertyName("timestamp")]
     public DateTimeOffset Timestamp { get; set; }
+}
+
+public class WalTransactionOperation
+{
+    [System.Text.Json.Serialization.JsonPropertyName("file_path")]
+    public string FilePath { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("hash")]
+    public string Hash { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("previous_content")]
+    public string? PreviousContent { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("new_content")]
+    public string NewContent { get; set; } = string.Empty;
 }

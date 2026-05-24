@@ -1,4 +1,5 @@
 using Engram.Store.Identity;
+using Engram.Store.Inference;
 using Engram.Store.Wiki;
 using Microsoft.Extensions.Logging;
 
@@ -47,8 +48,36 @@ public class ContradictionDetector
         contradictions.AddRange(DetectAbandonedCommitments());
         contradictions.AddRange(DetectIdentityBehaviorGaps());
 
+        // Apply epistemic caution scaling under low confidence
+        foreach (var c in contradictions)
+        {
+            c.Severity = ScaleSeverity(c.Severity);
+        }
+
         _logger?.LogInformation("Detected {Count} behavioral contradictions", contradictions.Count);
         return contradictions;
+    }
+
+    private ContradictionSeverity ScaleSeverity(ContradictionSeverity originalSeverity)
+    {
+        var confidence = DegradationTracker.Instance.GetEnvironmentalConfidence();
+        if (confidence >= 0.8)
+        {
+            return originalSeverity;
+        }
+
+        if (confidence < 0.5)
+        {
+            return ContradictionSeverity.Low;
+        }
+
+        return originalSeverity switch
+        {
+            ContradictionSeverity.Critical => ContradictionSeverity.High,
+            ContradictionSeverity.High => ContradictionSeverity.Medium,
+            ContradictionSeverity.Medium => ContradictionSeverity.Low,
+            _ => ContradictionSeverity.Low
+        };
     }
 
     /// <summary>

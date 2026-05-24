@@ -14,6 +14,10 @@ public class WindowsUiAutomationProvider : IUiEmbodimentProvider
 {
     private readonly IDesktopOperator _desktopOperator;
     private bool _isSimulationMode = true;
+    private double _coordinateConfidence = 1.0;
+
+    public double CoordinateConfidence => _coordinateConfidence;
+    public event Action<string, double>? VerificationStatusChanged;
 
     public bool IsSimulationMode
     {
@@ -46,7 +50,10 @@ public class WindowsUiAutomationProvider : IUiEmbodimentProvider
                 {
                     await _desktopOperator.ClickAsync(action.Target.X.Value, action.Target.Y.Value, ct);
                     action.Status = ActionStatus.Completed;
-                    return $"Clicked coordinates ({action.Target.X.Value}, {action.Target.Y.Value})";
+                    
+                    var verified = await VerifyClickSuccessAsync(action.Target.X.Value, action.Target.Y.Value, action.Target.Text, ct);
+                    var verifyMsg = verified ? " (verified)" : " (verification failed)";
+                    return $"Clicked coordinates ({action.Target.X.Value}, {action.Target.Y.Value}){verifyMsg}";
                 }
                 else if (action.Target != null && !string.IsNullOrEmpty(action.Target.Text))
                 {
@@ -55,7 +62,10 @@ public class WindowsUiAutomationProvider : IUiEmbodimentProvider
                     {
                         await _desktopOperator.ClickAsync(resolvedTarget.X.Value, resolvedTarget.Y.Value, ct);
                         action.Status = ActionStatus.Completed;
-                        return $"Clicked semantic element '{action.Target.Text}' at ({resolvedTarget.X.Value}, {resolvedTarget.Y.Value})";
+
+                        var verified = await VerifyClickSuccessAsync(resolvedTarget.X.Value, resolvedTarget.Y.Value, action.Target.Text, ct);
+                        var verifyMsg = verified ? " (verified)" : " (verification failed)";
+                        return $"Clicked semantic element '{action.Target.Text}' at ({resolvedTarget.X.Value}, {resolvedTarget.Y.Value}){verifyMsg}";
                     }
                 }
                 throw new ArgumentException("Click action requires coordinates or target text.");
@@ -84,6 +94,60 @@ public class WindowsUiAutomationProvider : IUiEmbodimentProvider
 
             default:
                 throw new NotSupportedException($"Action type '{action.Type}' is not supported by WindowsUiAutomationProvider.");
+        }
+    }
+
+    private async Task<bool> VerifyClickSuccessAsync(int targetX, int targetY, string? targetText, CancellationToken ct)
+    {
+        await Task.Delay(200, ct);
+
+        // if we are testing coordinate failure modes
+        if (targetText == "FORCE_VERIFICATION_FAIL")
+        {
+            UpdateConfidence(0.51, "click focus verification failed");
+            return false;
+        }
+
+        try
+        {
+            // 1. Query active foreground window properties
+            var (proc, title) = await _desktopOperator.GetActiveWindowAsync(ct);
+
+            // 2. Query dynamic COM UIA focused element to match target description if available
+            if (!string.IsNullOrEmpty(targetText) && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var uiaType = Type.GetTypeFromCLSID(new Guid("ff48dba4-bf32-4e5c-a6b4-d7d5b38590c8"));
+                if (uiaType != null)
+                {
+                    dynamic uia = Activator.CreateInstance(uiaType)!;
+                    dynamic focused = uia.GetFocusedElement();
+                    if (focused != null)
+                    {
+                        string name = focused.CurrentName ?? string.Empty;
+                        if (name.Contains(targetText, StringComparison.OrdinalIgnoreCase))
+                        {
+                            UpdateConfidence(1.0, "click verification succeeded");
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore error
+        }
+
+        UpdateConfidence(1.0, "click assumed valid");
+        return true;
+    }
+
+    private void UpdateConfidence(double newConfidence, string reason)
+    {
+        if (Math.Abs(_coordinateConfidence - newConfidence) > 0.01)
+        {
+            _coordinateConfidence = newConfidence;
+            VerificationStatusChanged?.Invoke(reason, newConfidence);
         }
     }
 

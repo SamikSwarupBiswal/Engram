@@ -231,6 +231,12 @@ app.MapGet("/api/health", () =>
     });
 });
 
+app.MapGet("/api/health/transparency", () =>
+{
+    var transparencyProfile = BehavioralTransparencyProfile.Generate(paths);
+    return Results.Ok(transparencyProfile);
+});
+
 app.MapGet("/", () => Results.Ok(new
 {
     service = "Engram API",

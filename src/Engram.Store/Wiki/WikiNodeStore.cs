@@ -28,6 +28,12 @@ public class WikiNodeStore : IDisposable
     {
         ArgumentNullException.ThrowIfNull(node);
 
+        if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--safe-mode") ||
+            Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true")
+        {
+            throw new InvalidOperationException("System is running in read-only Safe Mode due to semantic uncertainty.");
+        }
+
         var filePath = GetFilePath(node.NodeId);
         Directory.CreateDirectory(_wikiPath);
 
@@ -126,6 +132,12 @@ public class WikiNodeStore : IDisposable
     /// </summary>
     public bool Delete(string nodeId)
     {
+        if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--safe-mode") ||
+            Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true")
+        {
+            throw new InvalidOperationException("System is running in read-only Safe Mode due to semantic uncertainty.");
+        }
+
         var filePath = GetFilePath(nodeId);
 
         _lock.EnterWriteLock();

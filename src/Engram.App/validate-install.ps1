@@ -43,7 +43,7 @@ Write-Host "  ===============================" -ForegroundColor Cyan
 Write-Host ""
 
 # ── Check 1: API Reachable ──
-Write-Host "[1/7] API Reachable" -ForegroundColor Yellow
+Write-Host "[1/8] API Reachable" -ForegroundColor Yellow
 try {
     $root = Invoke-RestMethod "$BaseUrl/" -TimeoutSec 5
     Write-Check "API responds" ($root.service -eq "Engram API") "service=$($root.service)"
@@ -57,7 +57,7 @@ try {
 
 # ── Check 2: Lifecycle States ──
 Write-Host ""
-Write-Host "[2/7] Startup Lifecycle" -ForegroundColor Yellow
+Write-Host "[2/8] Startup Lifecycle" -ForegroundColor Yellow
 $health = Wait-ForState "Ready" 180
 if ($health) {
     Write-Check "Reached Ready state" ($health.state -eq "Ready") "state=$($health.state)"
@@ -70,7 +70,7 @@ if ($health) {
 
 # ── Check 3: Backend Detection ──
 Write-Host ""
-Write-Host "[3/7] Backend Detection" -ForegroundColor Yellow
+Write-Host "[3/8] Backend Detection" -ForegroundColor Yellow
 if ($health) {
     Write-Check "Backend detected" (-not [string]::IsNullOrEmpty($health.backend)) "backend=$($health.backend)"
     Write-Check "GPU info available" ($null -ne $health.metadata.gpuDevice) "device=$($health.metadata.gpuDevice)"
@@ -78,7 +78,7 @@ if ($health) {
 
 # ── Check 4: First Inference ──
 Write-Host ""
-Write-Host "[4/7] First Inference" -ForegroundColor Yellow
+Write-Host "[4/8] First Inference" -ForegroundColor Yellow
 try {
     $body = @{
         messages = @(@{ role = "user"; content = "Say hello in one word." })
@@ -98,7 +98,7 @@ try {
 
 # ── Check 5: Cleanup Telemetry ──
 Write-Host ""
-Write-Host "[5/7] Cleanup Telemetry" -ForegroundColor Yellow
+Write-Host "[5/8] Cleanup Telemetry" -ForegroundColor Yellow
 try {
     $diag = Invoke-RestMethod "$BaseUrl/api/diagnostics/export" -TimeoutSec 10
     $cleanup = $diag.cleanup
@@ -119,7 +119,7 @@ try {
 
 # ── Check 6: Soak Test (50 requests) ──
 Write-Host ""
-Write-Host "[6/7] Soak Test ($RequestCount requests)" -ForegroundColor Yellow
+Write-Host "[6/8] Soak Test ($RequestCount requests)" -ForegroundColor Yellow
 $soakSuccess = 0
 $soakFail = 0
 $kvNotReset = 0
@@ -157,7 +157,7 @@ Write-Check "No collapse (old bug)" ($soakSuccess -gt 33) "survived $soakSuccess
 
 # ── Check 7: Post-Soak Health ──
 Write-Host ""
-Write-Host "[7/7] Post-Soak Health" -ForegroundColor Yellow
+Write-Host "[7/8] Post-Soak Health" -ForegroundColor Yellow
 try {
     $postHealth = Invoke-RestMethod "$BaseUrl/api/health" -TimeoutSec 5
     Write-Check "Still Ready after soak" ($postHealth.state -eq "Ready") "state=$($postHealth.state)"
@@ -165,6 +165,22 @@ try {
     Write-Check "Consecutive failures = 0" ($postHealth.consecutiveFailures -eq 0) "count=$($postHealth.consecutiveFailures)"
 } catch {
     Write-Check "Post-soak health" $false "Error: $_"
+}
+
+# ── Check 8: Environmental Degradation and Transparency ──
+Write-Host ""
+Write-Host "[8/8] Environmental Degradation and Transparency" -ForegroundColor Yellow
+try {
+    $transparency = Invoke-RestMethod "$BaseUrl/api/health/transparency" -TimeoutSec 5
+    Write-Check "Transparency profile available" ($null -ne $transparency) ""
+    if ($transparency) {
+        Write-Check "Environmental Confidence score present" ($null -ne $transparency.environmentalConfidence) "confidence=$($transparency.environmentalConfidence)"
+        Write-Check "Safe Mode status reported" ($null -ne $transparency.safeModeActive) "safeModeActive=$($transparency.safeModeActive)"
+        Write-Host "    Active Degradations: $($transparency.activeDegradations.Keys -join ', ')" -ForegroundColor Gray
+        Write-Host "    Sandbox Root: $($transparency.sandboxRoot)" -ForegroundColor Gray
+    }
+} catch {
+    Write-Check "Transparency check" $false "Error: $_"
 }
 
 # ── Summary ──

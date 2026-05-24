@@ -1,4 +1,5 @@
 using Engram.Store.Events;
+using Engram.Store.Inference;
 using Engram.Store.Memory;
 using Engram.Store.Salience;
 using Engram.Store.Wiki;
@@ -136,6 +137,18 @@ public class BackgroundMetabolismService : BackgroundService
     /// </summary>
     public async Task<MetabolismCycleResult> RunMetabolismCycle(CancellationToken ct = default)
     {
+        if (DegradationTracker.Instance.IsDegraded("SafeModeActive"))
+        {
+            _logger?.LogWarning("System is running in read-only Safe Mode. Background metabolism cycle suspended.");
+            return LastCycleResult ?? new MetabolismCycleResult();
+        }
+
+        if (DegradationTracker.Instance.IsDegraded("WakeStabilizing"))
+        {
+            _logger?.LogWarning("System is stabilizing after wake. Deferring metabolism cycle.");
+            return LastCycleResult ?? new MetabolismCycleResult();
+        }
+
         if (IsProcessing)
         {
             _logger?.LogWarning("Metabolism cycle already in progress. Skipping.");

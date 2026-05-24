@@ -362,7 +362,8 @@ public class InferenceEngineTests : IDisposable
         Assert.Equal(5, (int)InferenceState.Ready);
         Assert.Equal(6, (int)InferenceState.Error);
         Assert.Equal(7, (int)InferenceState.Degraded);
-        Assert.Equal(8, (int)InferenceState.Offline);
+        Assert.Equal(8, (int)InferenceState.SafeMode);
+        Assert.Equal(9, (int)InferenceState.Offline);
     }
 
     // ─── InferenceSession ───

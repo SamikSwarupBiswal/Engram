@@ -42,6 +42,13 @@ public class PermissionGate
 
         if (SafeActions.Contains(action.Type))
         {
+            var confidence = Engram.Store.Inference.DegradationTracker.Instance.GetEnvironmentalConfidence();
+            if (confidence < 0.8)
+            {
+                _logger?.LogInformation("Action '{Type}' requires approval due to low environmental confidence ({Confidence:F2} < 0.8): {Description}", action.Type, confidence, action.Description);
+                return ActionPermission.Pending;
+            }
+
             _logger?.LogDebug("Action auto-approved: {Type}", action.Type);
             return ActionPermission.AutoApproved;
         }

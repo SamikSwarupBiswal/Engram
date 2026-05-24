@@ -90,6 +90,12 @@ public class ActionRuntime : IDisposable
         if (plan == null) throw new ArgumentNullException(nameof(plan));
         if (context == null) throw new ArgumentNullException(nameof(context));
 
+        if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--safe-mode") ||
+            Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true")
+        {
+            throw new InvalidOperationException("System is running in read-only Safe Mode. Automation actions are blocked.");
+        }
+
         _activePlan = plan;
         _activeContext = context;
         _runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);

@@ -41,6 +41,12 @@ public class RawEventWriter : IDisposable
         ArgumentNullException.ThrowIfNull(rawEvent);
         InputValidator.ValidateRawEvent(rawEvent);
 
+        if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--safe-mode") ||
+            Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true")
+        {
+            throw new InvalidOperationException("System is running in read-only Safe Mode due to semantic uncertainty.");
+        }
+
         _concurrencyLock.Wait();
         try
         {

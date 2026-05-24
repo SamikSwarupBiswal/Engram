@@ -29,9 +29,9 @@ public sealed class InferenceLifecycleManager : IDisposable
     private static readonly Dictionary<InferenceState, HashSet<InferenceState>> LegalTransitions = new()
     {
         [InferenceState.Starting] = new()
-            { InferenceState.DetectingBackend, InferenceState.Error, InferenceState.Offline },
+            { InferenceState.DetectingBackend, InferenceState.Error, InferenceState.Offline, InferenceState.SafeMode },
         [InferenceState.DetectingBackend] = new()
-            { InferenceState.BackendReady, InferenceState.Error, InferenceState.Offline },
+            { InferenceState.BackendReady, InferenceState.Error, InferenceState.Offline, InferenceState.SafeMode },
         [InferenceState.BackendReady] = new()
             { InferenceState.DownloadingModel, InferenceState.LoadingModel, InferenceState.Error, InferenceState.Offline },
         [InferenceState.DownloadingModel] = new()
@@ -43,6 +43,8 @@ public sealed class InferenceLifecycleManager : IDisposable
         [InferenceState.Error] = new()
             { InferenceState.Starting, InferenceState.Offline },
         [InferenceState.Degraded] = new()
+            { InferenceState.Starting, InferenceState.Offline },
+        [InferenceState.SafeMode] = new()
             { InferenceState.Starting, InferenceState.Offline },
         [InferenceState.Offline] = new() { } // terminal
     };
@@ -179,6 +181,19 @@ public sealed class InferenceLifecycleManager : IDisposable
         _localEngine.OnCleanupResult += ReportCleanupResult;
     }
 
+    public bool IsSafeModeActive
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _state == InferenceState.SafeMode || 
+                       Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--safe-mode") ||
+                       Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true";
+            }
+        }
+    }
+
     /// <summary>
     /// Start non-blocking background initialization.
     /// Returns immediately. Poll /health for state.
@@ -186,6 +201,18 @@ public sealed class InferenceLifecycleManager : IDisposable
     public void StartInitialization()
     {
         _log.Lifecycle("Starting background initialization");
+
+        if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--safe-mode") ||
+            Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true")
+        {
+            _log.Lifecycle("Safe Mode state detected. Initializing in read-only Safe Mode.");
+            TransitionTo(InferenceState.SafeMode, "Safe-Mode state detected");
+            
+            // Set degradation tracker to SafeModeActive
+            DegradationTracker.Instance.SetDegradation("SafeModeActive", true, "Ontology or WAL consistency check failed");
+            return;
+        }
+
         _initTask = Task.Run(() => RunInitializationSequence(_cts.Token));
     }
 
@@ -635,6 +662,9 @@ public enum InferenceState
 
     /// <summary>Using CPU fallback after GPU failure.</summary>
     Degraded,
+
+    /// <summary>System operating in read-only quarantine due to semantic uncertainty.</summary>
+    SafeMode,
 
     /// <summary>Sidecar process shutting down.</summary>
     Offline

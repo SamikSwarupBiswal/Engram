@@ -33,16 +33,59 @@ public class CausalReconciler
     public int Reconcile()
     {
         using var wal = new WriteAheadLog(_paths.Raw);
+        
+        // 1. Process uncommitted transactions (Rollback Journaling)
+        var uncommittedTxs = wal.GetUncommittedTransactions();
+        if (uncommittedTxs.Count > 0)
+        {
+            _logger?.LogWarning("Causal Reconciler: Found {Count} uncommitted transactions. Initiating rollback...", uncommittedTxs.Count);
+            foreach (var tx in uncommittedTxs)
+            {
+                if (tx.TxOperations != null)
+                {
+                    foreach (var op in tx.TxOperations)
+                    {
+                        try
+                        {
+                            if (op.PreviousContent == null)
+                            {
+                                // New file created in failed transaction -> Delete it
+                                if (File.Exists(op.FilePath))
+                                {
+                                    _logger?.LogInformation("Causal Reconciler: Rolling back transaction {TxId}. Deleting newly created file: {Path}", tx.EventId, op.FilePath);
+                                    File.Delete(op.FilePath);
+                                }
+                            }
+                            else
+                            {
+                                // Updated file -> Restore previous content
+                                _logger?.LogInformation("Causal Reconciler: Rolling back transaction {TxId}. Restoring file content for: {Path}", tx.EventId, op.FilePath);
+                                File.WriteAllText(op.FilePath, op.PreviousContent);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogError(ex, "Causal Reconciler: Failed to roll back file operation for {Path}", op.FilePath);
+                        }
+                    }
+                }
+                
+                // Log transactional commit/rollback in WAL to mark it processed
+                wal.LogTransactionCommit(Guid.Parse(tx.EventId));
+            }
+            _logger?.LogInformation("Causal Reconciler: Completed transaction rollback.");
+        }
+
         var uncommitted = wal.GetUncommittedWrites();
 
         if (uncommitted.Count == 0)
         {
             _logger?.LogInformation("Causal Reconciler: No uncommitted event writes found. System consistent.");
-            return 0;
+            return uncommittedTxs.Count;
         }
 
         _logger?.LogWarning("Causal Reconciler: Found {Count} uncommitted writes. Starting recovery...", uncommitted.Count);
-        int healedCount = 0;
+        int healedCount = uncommittedTxs.Count;
 
         using var hashIndex = new HashIndex(_paths.Raw);
 
