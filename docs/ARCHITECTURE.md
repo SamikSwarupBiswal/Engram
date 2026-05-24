@@ -203,6 +203,8 @@ Cycle:
 │   ├── user_identity.md
 │   ├── priorities.md
 │   └── anti_goals.md
+├── deferred_mutations/ # Suspended writes queued under uncertainty
+│   └── [mutation_id].json
 ├── runs/             # Agent run logs
 │   └── [run_id]/
 │       ├── log.md
