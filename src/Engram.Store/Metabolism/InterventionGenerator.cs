@@ -1,5 +1,6 @@
 using Engram.Store.Events;
 using Engram.Store.Identity;
+using Engram.Store.Governance;
 using Microsoft.Extensions.Logging;
 
 namespace Engram.Store.Metabolism;
@@ -23,6 +24,12 @@ public class InterventionGenerator
     private readonly IdentityStore _identityStore;
     private readonly IEventBus? _eventBus;
     private readonly ILogger<InterventionGenerator>? _logger;
+    private readonly CognitiveRestraintEngine? _restraintEngine;
+    private readonly FrictionTracker? _frictionTracker;
+    private readonly List<DateTimeOffset> _switchTimestamps = new();
+    private readonly List<Intervention> _cognitiveDebt = new();
+    private readonly IDisposable? _windowSub;
+    private readonly IDisposable? _idleSub;
 
     /// <summary>Minimum severity to generate an intervention.</summary>
     public InterventionThreshold Threshold { get; set; } = InterventionThreshold.Medium;
@@ -30,11 +37,81 @@ public class InterventionGenerator
     public InterventionGenerator(
         IdentityStore identityStore,
         IEventBus? eventBus = null,
+        CognitiveRestraintEngine? restraintEngine = null,
+        FrictionTracker? frictionTracker = null,
         ILogger<InterventionGenerator>? logger = null)
     {
         _identityStore = identityStore;
         _eventBus = eventBus;
+        _restraintEngine = restraintEngine;
+        _frictionTracker = frictionTracker;
         _logger = logger;
+
+        if (eventBus != null)
+        {
+            _windowSub = eventBus.Subscribe("perception.active_window_changed", HandleWindowChange);
+            _idleSub = eventBus.Subscribe("perception.idle_transition", HandleIdleTransition);
+        }
+    }
+
+    private void HandleWindowChange(EventEnvelope envelope)
+    {
+        lock (_switchTimestamps)
+        {
+            var now = DateTimeOffset.UtcNow;
+            _switchTimestamps.Add(now);
+            _switchTimestamps.RemoveAll(t => t < now.AddMinutes(-2));
+        }
+    }
+
+    private void HandleIdleTransition(EventEnvelope envelope)
+    {
+        List<Intervention> debtToProcess;
+        lock (_cognitiveDebt)
+        {
+            debtToProcess = _cognitiveDebt.ToList();
+            _cognitiveDebt.Clear();
+        }
+
+        if (debtToProcess.Count > 0)
+        {
+            _logger?.LogInformation("User went idle. Dispatching {Count} deferred interventions from Cognitive Debt.", debtToProcess.Count);
+            foreach (var intervention in debtToProcess)
+            {
+                _eventBus?.Publish(new EventEnvelope
+                {
+                    EventType = "intervention.generated",
+                    Source = "intervention_generator_idle_processor",
+                    Payload = intervention
+                });
+            }
+        }
+    }
+
+    public int GetCurrentMultitaskingVelocity()
+    {
+        lock (_switchTimestamps)
+        {
+            var now = DateTimeOffset.UtcNow;
+            _switchTimestamps.RemoveAll(t => t < now.AddMinutes(-2));
+            return _switchTimestamps.Count;
+        }
+    }
+
+    public IReadOnlyList<Intervention> GetCognitiveDebt()
+    {
+        lock (_cognitiveDebt)
+        {
+            return _cognitiveDebt.ToList();
+        }
+    }
+
+    public void ClearCognitiveDebt()
+    {
+        lock (_cognitiveDebt)
+        {
+            _cognitiveDebt.Clear();
+        }
     }
 
     /// <summary>
@@ -112,13 +189,66 @@ public class InterventionGenerator
     /// </summary>
     private bool ShouldIntervene(BehavioralContradiction contradiction)
     {
-        return Threshold switch
+        bool passesThreshold = Threshold switch
         {
             InterventionThreshold.Low => true,
             InterventionThreshold.Medium => contradiction.Severity >= ContradictionSeverity.Medium,
             InterventionThreshold.High => contradiction.Severity >= ContradictionSeverity.High,
             InterventionThreshold.Critical => contradiction.Severity >= ContradictionSeverity.Critical,
             _ => contradiction.Severity >= ContradictionSeverity.Medium
+        };
+
+        if (!passesThreshold) return false;
+
+        if (_restraintEngine != null)
+        {
+            var isSilenced = _frictionTracker?.IsSilenced ?? false;
+            var multitaskingVelocity = GetCurrentMultitaskingVelocity();
+
+            var restraintContext = new RestraintContext
+            {
+                CurrentBehavioralMode = contradiction.Type.ToString(),
+                InterpretationConfidence = 0.8,
+                Severity = MapRestraintSeverity(contradiction.Severity),
+                MultitaskingSwitchVelocity = multitaskingVelocity,
+                IsFrictionSilenced = isSilenced
+            };
+
+            var decision = _restraintEngine.ShouldSpeak(restraintContext);
+            if (!decision.Allow)
+            {
+                if (decision.ReasonCode == RestraintReason.MultitaskingHighVelocity)
+                {
+                    // Queue into cognitive debt
+                    var intervention = CreateIntervention(contradiction);
+                    if (intervention != null)
+                    {
+                        lock (_cognitiveDebt)
+                        {
+                            if (!_cognitiveDebt.Any(i => i.DeclaredIntent == intervention.DeclaredIntent && i.Type == intervention.Type))
+                            {
+                                _cognitiveDebt.Add(intervention);
+                            }
+                        }
+                        _logger?.LogInformation("Yield-to-Focus active. Queued intervention into Cognitive Debt: {Id}", intervention.InterventionId);
+                    }
+                }
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static RestraintSeverity MapRestraintSeverity(ContradictionSeverity severity)
+    {
+        return severity switch
+        {
+            ContradictionSeverity.Low => RestraintSeverity.Low,
+            ContradictionSeverity.Medium => RestraintSeverity.Medium,
+            ContradictionSeverity.High => RestraintSeverity.High,
+            ContradictionSeverity.Critical => RestraintSeverity.Critical,
+            _ => RestraintSeverity.Medium
         };
     }
 

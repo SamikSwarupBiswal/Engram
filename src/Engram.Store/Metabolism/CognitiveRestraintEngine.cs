@@ -134,7 +134,24 @@ public class CognitiveRestraintEngine
                 RestraintReason.InterventionFatigue);
         }
 
-        // 9. Consecutive suppression release — if suppressed too many times,
+        // 9. Yield-to-Focus Multitasking Gate
+        if (context.MultitaskingSwitchVelocity > _policy.MaxMultitaskingVelocity &&
+            context.Severity < RestraintSeverity.High)
+        {
+            return RestraintDecision.SuppressDecision(
+                $"Multitasking velocity {context.MultitaskingSwitchVelocity} exceeds threshold {_policy.MaxMultitaskingVelocity} - yielding to focus",
+                RestraintReason.MultitaskingHighVelocity);
+        }
+
+        // 10. Friction Silence Gate — respect quiet windows from user friction scaling
+        if (context.IsFrictionSilenced && context.Severity < RestraintSeverity.High)
+        {
+            return RestraintDecision.SuppressDecision(
+                "System silenced by user friction scaling",
+                RestraintReason.SilenceThreshold);
+        }
+
+        // 11. Consecutive suppression release — if suppressed too many times,
         //    allow high-severity interventions through
         if (_consecutiveSuppressions >= _policy.MaxConsecutiveSuppressions &&
             context.Severity >= RestraintSeverity.High)
@@ -214,6 +231,12 @@ public record RestraintContext
 
     /// <summary>Severity of the proposed intervention.</summary>
     public RestraintSeverity Severity { get; init; }
+
+    /// <summary>Multitasking switches in last 2 minutes.</summary>
+    public int MultitaskingSwitchVelocity { get; init; }
+
+    /// <summary>Whether the system is actively silenced by user friction.</summary>
+    public bool IsFrictionSilenced { get; init; }
 }
 
 /// <summary>
@@ -239,7 +262,8 @@ public enum RestraintReason
     OverInterpreted,
     FrequentlyCorrected,
     CategoryIgnored,
-    InterventionFatigue
+    InterventionFatigue,
+    MultitaskingHighVelocity
 }
 
 /// <summary>
@@ -287,6 +311,9 @@ public record RestraintPolicy
 
     /// <summary>Maximum consecutive suppressions before high-severity bypass.</summary>
     public int MaxConsecutiveSuppressions { get; init; } = 10;
+
+    /// <summary>Max multitasking switches allowed before blocking non-essential interventions.</summary>
+    public int MaxMultitaskingVelocity { get; init; } = 5;
 }
 
 /// <summary>

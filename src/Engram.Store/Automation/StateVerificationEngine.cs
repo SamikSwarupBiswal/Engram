@@ -85,4 +85,53 @@ public class StateVerificationEngine
             return false;
         }
     }
+
+    /// <summary>
+    /// Verifies if the active window title or URL contains the expected OCR text.
+    /// </summary>
+    public async Task<bool> VerifyOcrTextAsync(string expectedText, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(expectedText)) return true;
+
+        try
+        {
+            var (proc, title) = await _uiProvider.GetActiveWindowAsync(ct);
+            if (title.Contains(expectedText, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var url = await _uiProvider.GetUrlAsync(ct);
+            if (url.Contains(expectedText, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // Ignore and fail check
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Verifies state changes before/after actions using captured state function.
+    /// </summary>
+    public async Task<bool> VerifyStateDeltaAsync(Func<Task<object>> captureStateFunc, Func<object, object, bool> evaluateDeltaFunc, CancellationToken ct = default)
+    {
+        if (captureStateFunc == null || evaluateDeltaFunc == null) return false;
+        try
+        {
+            var before = await captureStateFunc();
+            // Yield a tiny bit to simulate operational progression
+            await Task.Delay(10, ct);
+            var after = await captureStateFunc();
+            return evaluateDeltaFunc(before, after);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

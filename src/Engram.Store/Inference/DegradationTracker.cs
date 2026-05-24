@@ -17,6 +17,7 @@ public sealed class DegradationTracker
     private readonly ConcurrentDictionary<string, string> _capabilityDetails = new();
     private readonly ConcurrentDictionary<string, DateTime> _recoveryCooldowns = new();
     private readonly ConcurrentDictionary<string, double> _distrustLevels = new();
+    private readonly ConcurrentDictionary<string, DateTime> _lastFailureTimes = new();
 
     private const double DistrustDecayConstant = 0.005; // Distrust decay factor lambda per second
     private static readonly TimeSpan HysteresisCooldown = TimeSpan.FromMinutes(5);
@@ -43,6 +44,7 @@ public sealed class DegradationTracker
                 }
                 // When entering degradation, set initial distrust to 1.0 (maximum caution)
                 _distrustLevels[key] = 1.0;
+                _lastFailureTimes[key] = DateTime.UtcNow;
                 _recoveryCooldowns.TryRemove(key, out _);
             }
             else
@@ -60,7 +62,7 @@ public sealed class DegradationTracker
     }
 
     /// <summary>
-    /// Checks if a degradation key is currently active, taking capability hysteresis into account.
+    /// Checks if a degradation key is currently active, taking capability hysteresis and distrust decay into account.
     /// </summary>
     public bool IsDegraded(string key)
     {
@@ -68,6 +70,22 @@ public sealed class DegradationTracker
         {
             if (_activeDegradations.TryGetValue(key, out var active) && active)
             {
+                // Check if distrust has decayed below recovery threshold
+                if (_lastFailureTimes.TryGetValue(key, out var lastFailure))
+                {
+                    var distrust = GetDistrustLevel(key, lastFailure);
+                    if (distrust < 0.10)
+                    {
+                        // Distrust decayed enough to recover!
+                        _activeDegradations.TryRemove(key, out _);
+                        _capabilityDetails.TryRemove(key, out _);
+                        _recoveryCooldowns.TryRemove(key, out _);
+                        _distrustLevels.TryRemove(key, out _);
+                        _lastFailureTimes.TryRemove(key, out _);
+                        return false;
+                    }
+                }
+
                 // If in cooldown, check if the hysteresis timer has elapsed
                 if (_recoveryCooldowns.TryGetValue(key, out var end))
                 {
@@ -77,6 +95,7 @@ public sealed class DegradationTracker
                         _capabilityDetails.TryRemove(key, out _);
                         _recoveryCooldowns.TryRemove(key, out _);
                         _distrustLevels.TryRemove(key, out _);
+                        _lastFailureTimes.TryRemove(key, out _);
                         return false;
                     }
                     return true;
@@ -151,6 +170,14 @@ public sealed class DegradationTracker
         {
             confidence *= 0.0;  // Safe-Mode block
         }
+        if (IsDegraded("QuarantineActive"))
+        {
+            confidence *= 0.25; // Quarantine block
+        }
+        if (IsDegraded("DegradedActive"))
+        {
+            confidence *= 0.75; // Degraded block
+        }
 
         return Math.Clamp(confidence, 0.0, 1.0);
     }
@@ -166,6 +193,7 @@ public sealed class DegradationTracker
             _capabilityDetails.TryRemove(key, out _);
             _recoveryCooldowns.TryRemove(key, out _);
             _distrustLevels.TryRemove(key, out _);
+            _lastFailureTimes.TryRemove(key, out _);
         }
     }
 }

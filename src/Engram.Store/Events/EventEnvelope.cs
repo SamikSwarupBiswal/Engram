@@ -68,4 +68,9 @@ public static class EventTypes
     // Lifecycle events
     public const string SystemStarted = "system.started";
     public const string SystemShuttingDown = "system.shutting_down";
+
+    // Friction events
+    public const string FrictionUserDismissed = "friction.user_dismissed";
+    public const string FrictionActionCancelled = "friction.action_cancelled";
+    public const string FrictionTrustOverride = "friction.trust_override";
 }

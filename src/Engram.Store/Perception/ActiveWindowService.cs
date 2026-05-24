@@ -35,6 +35,7 @@ public class ActiveWindowService : IDisposable
     private DateTimeOffset _focusStartedAt;
     private readonly List<WindowSession> _recentSessions = new();
     private readonly int _maxRecentSessions = 100;
+    private readonly List<DateTimeOffset> _switchTimestamps = new();
     private bool _disposed;
 
     /// <summary>Minimum focus duration (seconds) to emit a focus session event.</summary>
@@ -51,6 +52,19 @@ public class ActiveWindowService : IDisposable
         _logger = logger;
     }
 
+    public int MultitaskingVelocity
+    {
+        get
+        {
+            lock (_switchTimestamps)
+            {
+                var now = DateTimeOffset.UtcNow;
+                _switchTimestamps.RemoveAll(t => t < now.AddMinutes(-2));
+                return _switchTimestamps.Count;
+            }
+        }
+    }
+
     /// <summary>
     /// Process an active window change. Called by ActiveWindowTracker or polling.
     /// </summary>
@@ -59,6 +73,26 @@ public class ActiveWindowService : IDisposable
         if (string.IsNullOrEmpty(processName)) return;
 
         var now = DateTimeOffset.UtcNow;
+
+        lock (_switchTimestamps)
+        {
+            _switchTimestamps.Add(now);
+            _switchTimestamps.RemoveAll(t => t < now.AddMinutes(-2));
+        }
+
+        if (MultitaskingVelocity > 5)
+        {
+            _eventBus.Publish(new EventEnvelope
+            {
+                EventType = "perception.focus_intensive",
+                Source = "active_window_service",
+                Payload = new
+                {
+                    Velocity = MultitaskingVelocity,
+                    Timestamp = now
+                }
+            });
+        }
 
         // End previous focus session if significant
         if (!string.IsNullOrEmpty(_currentProcess))

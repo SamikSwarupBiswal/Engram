@@ -47,6 +47,14 @@ public class WikiNode
 
     /// <summary>Claim ecology containing competing claims over time.</summary>
     public List<SemanticClaim> Claims { get; set; } = new();
+
+    // --- Provenance Metadata ---
+    public string ProvenanceWorkflowId { get; set; } = string.Empty;
+    public double ProvenanceConfidence { get; set; } = 1.0;
+    public string ProvenanceDegradationState { get; set; } = string.Empty;
+    public string ProvenanceAutonomyMode { get; set; } = string.Empty;
+    public double ProvenanceEnvironmentalReliability { get; set; } = 1.0;
+    public string ProvenanceApprovalSource { get; set; } = string.Empty;
 }
 
 /// <summary>

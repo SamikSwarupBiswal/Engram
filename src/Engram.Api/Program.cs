@@ -115,7 +115,7 @@ lifecycle.Configure(gpuDetector, modelManager, localEngine, inferenceRouter,
 var tokenBudget = new TokenBudget(paths.Config);
 var gwsManager = new GoogleWorkspaceManager(paths.Config);
 var researchAgent = new ResearchAgent(paths.Config);
-var permissionGate = new PermissionGate();
+var permissionGate = new PermissionGate(paths);
 var actionExecutor = new ActionExecutor();
 var keyManager = new KeyManager(paths.Config);
 var dataExport = new DataExport(paths.Root);

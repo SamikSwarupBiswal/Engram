@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Engram.Store.Inference;
 
 namespace Engram.Store.Governance;
 
@@ -13,6 +14,8 @@ public enum ConstitutionalState
     Restrained,       // Minor anomaly, throttled alerts
     Degraded,         // Governance anomaly, increased restraint gates
     AuditRequired,    // Invariant breached, awaiting automated check
+    IntegrityUncertain, // Writes suspended due to semantic uncertainty
+    Quarantine,       // Memory mutations frozen
     Frozen,           // Critical breach, execution layer completely disabled
     RecoveryPending   // Human review required to unlock
 }
@@ -195,10 +198,10 @@ public class ConstitutionalStateMachine
 
             var nextState = violation.Severity switch
             {
-                ConstitutionalSeverity.C1 => ConstitutionalState.Operational,
-                ConstitutionalSeverity.C2 => ConstitutionalState.Restrained,
-                ConstitutionalSeverity.C3 => ConstitutionalState.Degraded,
-                ConstitutionalSeverity.C4 => ConstitutionalState.Frozen,
+                ConstitutionalSeverity.C1 => ConstitutionalState.Restrained,
+                ConstitutionalSeverity.C2 => ConstitutionalState.Degraded,
+                ConstitutionalSeverity.C3 => ConstitutionalState.IntegrityUncertain,
+                ConstitutionalSeverity.C4 => ConstitutionalState.Quarantine,
                 ConstitutionalSeverity.C5 => ConstitutionalState.Frozen,
                 _ => ConstitutionalState.Frozen
             };
@@ -207,6 +210,26 @@ public class ConstitutionalStateMachine
             {
                 CurrentState = nextState;
                 SaveState();
+
+                // Propagate to DegradationTracker
+                if (CurrentState == ConstitutionalState.Frozen)
+                {
+                    DegradationTracker.Instance.SetDegradation("SafeModeActive", true, "Constitutional State Frozen");
+                }
+                else if (CurrentState == ConstitutionalState.Quarantine)
+                {
+                    DegradationTracker.Instance.SetDegradation("QuarantineActive", true, "Constitutional State Quarantine");
+                }
+                else if (CurrentState == ConstitutionalState.Degraded)
+                {
+                    DegradationTracker.Instance.SetDegradation("DegradedActive", true, "Constitutional State Degraded");
+                }
+                else
+                {
+                    DegradationTracker.Instance.ResetDegradation("SafeModeActive");
+                    DegradationTracker.Instance.ResetDegradation("QuarantineActive");
+                    DegradationTracker.Instance.ResetDegradation("DegradedActive");
+                }
             }
         }
     }
@@ -232,6 +255,11 @@ public class ConstitutionalStateMachine
 
                 CurrentState = ConstitutionalState.Operational;
                 SaveState();
+
+                // Clear degradation states
+                DegradationTracker.Instance.ResetDegradation("SafeModeActive");
+                DegradationTracker.Instance.ResetDegradation("QuarantineActive");
+                DegradationTracker.Instance.ResetDegradation("DegradedActive");
             }
         }
     }
@@ -294,6 +322,31 @@ public class GovernanceIsolationBoundary
         if (_stateMachine.CurrentState == ConstitutionalState.Frozen)
         {
             throw new InvalidOperationException($"Execution layer completely FROZEN due to constitutional safety breach. Locked on: '{actionDetail}'.");
+        }
+    }
+
+    /// <summary>
+    /// Checks write safety. Throws if writes are suspended.
+    /// </summary>
+    public void VerifyWriteSafety(string actionDetail)
+    {
+        if (_stateMachine.CurrentState == ConstitutionalState.IntegrityUncertain ||
+            _stateMachine.CurrentState == ConstitutionalState.Quarantine ||
+            _stateMachine.CurrentState == ConstitutionalState.Frozen)
+        {
+            throw new InvalidOperationException($"Writes are suspended due to constitutional safety state: {_stateMachine.CurrentState}. Blocked on: '{actionDetail}'.");
+        }
+    }
+
+    /// <summary>
+    /// Checks memory mutation safety. Throws if memory updates are frozen.
+    /// </summary>
+    public void VerifyMemorySafety(string actionDetail)
+    {
+        if (_stateMachine.CurrentState == ConstitutionalState.Quarantine ||
+            _stateMachine.CurrentState == ConstitutionalState.Frozen)
+        {
+            throw new InvalidOperationException($"Memory mutations are frozen due to constitutional safety state: {_stateMachine.CurrentState}. Blocked on: '{actionDetail}'.");
         }
     }
 }

@@ -197,58 +197,78 @@ public class Phase11TrustGovernanceTests
         // Act & Assert 1: Normal operational state does not throw
         Assert.Equal(ConstitutionalState.Operational, stateMachine.CurrentState);
         boundary.VerifyExecutionSafety("action 1");
+        boundary.VerifyWriteSafety("action 1");
+        boundary.VerifyMemorySafety("action 1");
 
-        // Act & Assert 2: C1 does not change state or block execution
+        // Act & Assert 2: C1 shifts to Restrained
         stateMachine.HandleViolation(new ConstitutionalViolation
         {
             Severity = ConstitutionalSeverity.C1,
             ViolatingSubsystem = "ComponentA",
             Details = "C1 minor issue"
         });
-        Assert.Equal(ConstitutionalState.Operational, stateMachine.CurrentState);
+        Assert.Equal(ConstitutionalState.Restrained, stateMachine.CurrentState);
         boundary.VerifyExecutionSafety("action 2");
+        boundary.VerifyWriteSafety("action 2");
+        boundary.VerifyMemorySafety("action 2");
 
-        // Act & Assert 3: C2 shifts to Restrained
+        // Act & Assert 3: C2 shifts to Degraded
         stateMachine.HandleViolation(new ConstitutionalViolation
         {
             Severity = ConstitutionalSeverity.C2,
             ViolatingSubsystem = "ComponentB",
             Details = "C2 drift issue"
         });
-        Assert.Equal(ConstitutionalState.Restrained, stateMachine.CurrentState);
+        Assert.Equal(ConstitutionalState.Degraded, stateMachine.CurrentState);
         boundary.VerifyExecutionSafety("action 3");
+        boundary.VerifyWriteSafety("action 3");
+        boundary.VerifyMemorySafety("action 3");
 
-        // Act & Assert 4: C3 shifts to Degraded
+        // Act & Assert 4: C3 shifts to IntegrityUncertain
         stateMachine.HandleViolation(new ConstitutionalViolation
         {
             Severity = ConstitutionalSeverity.C3,
             ViolatingSubsystem = "ComponentC",
             Details = "C3 privacy issue"
         });
-        Assert.Equal(ConstitutionalState.Degraded, stateMachine.CurrentState);
+        Assert.Equal(ConstitutionalState.IntegrityUncertain, stateMachine.CurrentState);
         boundary.VerifyExecutionSafety("action 4");
+        Assert.Throws<InvalidOperationException>(() => boundary.VerifyWriteSafety("action 4"));
+        boundary.VerifyMemorySafety("action 4");
 
-        // Act & Assert 5: C4 shifts to Frozen and blocks operations
+        // Act & Assert 5: C4 shifts to Quarantine
         stateMachine.HandleViolation(new ConstitutionalViolation
         {
             Severity = ConstitutionalSeverity.C4,
             ViolatingSubsystem = "ComponentD",
-            Details = "C4 destructive action"
+            Details = "C4 containment action"
+        });
+        Assert.Equal(ConstitutionalState.Quarantine, stateMachine.CurrentState);
+        boundary.VerifyExecutionSafety("action 5");
+        Assert.Throws<InvalidOperationException>(() => boundary.VerifyWriteSafety("action 5"));
+        Assert.Throws<InvalidOperationException>(() => boundary.VerifyMemorySafety("action 5"));
+
+        // Act & Assert 5b: C5 shifts to Frozen and blocks operations
+        stateMachine.HandleViolation(new ConstitutionalViolation
+        {
+            Severity = ConstitutionalSeverity.C5,
+            ViolatingSubsystem = "ComponentE",
+            Details = "C5 destructive action"
         });
         Assert.Equal(ConstitutionalState.Frozen, stateMachine.CurrentState);
         
-        var ex = Assert.Throws<InvalidOperationException>(() => boundary.VerifyExecutionSafety("action 5"));
+        var ex = Assert.Throws<InvalidOperationException>(() => boundary.VerifyExecutionSafety("action 6"));
         Assert.Contains("FROZEN due to constitutional safety breach", ex.Message);
 
         // Act & Assert 6: Recover returns state back to Operational
         stateMachine.Recover("Human audit resolved the safety breach manually.");
         Assert.Equal(ConstitutionalState.Operational, stateMachine.CurrentState);
-        boundary.VerifyExecutionSafety("action 6");
+        boundary.VerifyExecutionSafety("action 7");
 
         // Act & Assert 7: Verify blockchain-like tamper-evident audit log integrity
         Assert.True(auditLog.VerifyIntegrity());
         var entries = auditLog.GetEntries();
-        Assert.Equal(5, entries.Count); // C1, C2, C3, C4, Recover
+        Assert.Equal(6, entries.Count); // C1, C2, C3, C4, C5, Recover
     }
 
     [Fact]

@@ -1,4 +1,10 @@
 using Microsoft.Extensions.Logging;
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using Engram.Store.Governance;
+using Engram.Store.Inference;
 
 namespace Engram.Store.Wiki;
 
@@ -13,6 +19,12 @@ public class WikiNodeStore : IDisposable
     private readonly ILogger<WikiNodeStore>? _logger;
     private readonly ReaderWriterLockSlim _lock = new();
     private bool _disposed;
+    private GovernanceIsolationBoundary? _boundary;
+
+    public void SetBoundary(GovernanceIsolationBoundary boundary)
+    {
+        _boundary = boundary;
+    }
 
     public WikiNodeStore(WorkspacePaths paths, ILogger<WikiNodeStore>? logger = null)
     {
@@ -32,6 +44,35 @@ public class WikiNodeStore : IDisposable
             Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true")
         {
             throw new InvalidOperationException("System is running in read-only Safe Mode due to semantic uncertainty.");
+        }
+
+        try
+        {
+            _boundary?.VerifyWriteSafety($"Save node {node.NodeId}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Record deferred mutation intent
+            var mutation = new DeferredMutation
+            {
+                OperationType = "Save",
+                TargetNodeId = node.NodeId,
+                TargetContent = _serializer.Serialize(node),
+                CausalReason = ex.Message,
+                ConfidenceState = DegradationTracker.Instance.GetEnvironmentalConfidence(),
+                DegradationState = string.Join(",", DegradationTracker.Instance.GetCapabilityDetails().Keys)
+            };
+            SaveDeferredMutation(mutation);
+            throw;
+        }
+
+        // Dynamically populate provenance if default
+        if (string.IsNullOrEmpty(node.ProvenanceWorkflowId))
+        {
+            node.ProvenanceConfidence = node.Confidence;
+            node.ProvenanceEnvironmentalReliability = DegradationTracker.Instance.GetEnvironmentalConfidence();
+            node.ProvenanceDegradationState = string.Join(",", DegradationTracker.Instance.GetCapabilityDetails().Keys);
+            node.ProvenanceApprovalSource = _boundary != null ? "SafetyConstitutionBounded" : "AutoApproved";
         }
 
         var filePath = GetFilePath(node.NodeId);
@@ -138,6 +179,24 @@ public class WikiNodeStore : IDisposable
             throw new InvalidOperationException("System is running in read-only Safe Mode due to semantic uncertainty.");
         }
 
+        try
+        {
+            _boundary?.VerifyWriteSafety($"Delete node {nodeId}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            var mutation = new DeferredMutation
+            {
+                OperationType = "Delete",
+                TargetNodeId = nodeId,
+                CausalReason = ex.Message,
+                ConfidenceState = DegradationTracker.Instance.GetEnvironmentalConfidence(),
+                DegradationState = string.Join(",", DegradationTracker.Instance.GetCapabilityDetails().Keys)
+            };
+            SaveDeferredMutation(mutation);
+            throw;
+        }
+
         var filePath = GetFilePath(nodeId);
 
         _lock.EnterWriteLock();
@@ -173,6 +232,24 @@ public class WikiNodeStore : IDisposable
         return Path.Combine(_wikiPath, $"{safeId}.md");
     }
 
+    private void SaveDeferredMutation(DeferredMutation mutation)
+    {
+        try
+        {
+            var deferredPath = Path.Combine(_wikiPath, "..", "deferred_mutations");
+            Directory.CreateDirectory(deferredPath);
+            var filePath = Path.Combine(deferredPath, $"{mutation.MutationId}.json");
+            var json = System.Text.Json.JsonSerializer.Serialize(mutation, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var tmpPath = filePath + ".tmp";
+            File.WriteAllText(tmpPath, json);
+            File.Move(tmpPath, filePath, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to save deferred mutation {MutationId}", mutation.MutationId);
+        }
+    }
+
     public void Dispose()
     {
         if (!_disposed)
@@ -181,4 +258,16 @@ public class WikiNodeStore : IDisposable
             _disposed = true;
         }
     }
+}
+
+public class DeferredMutation
+{
+    public string MutationId { get; set; } = Guid.NewGuid().ToString("n");
+    public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
+    public string OperationType { get; set; } = string.Empty; // "Save" or "Delete"
+    public string TargetNodeId { get; set; } = string.Empty;
+    public string TargetContent { get; set; } = string.Empty;
+    public string CausalReason { get; set; } = string.Empty;
+    public double ConfidenceState { get; set; } = 1.0;
+    public string DegradationState { get; set; } = string.Empty;
 }

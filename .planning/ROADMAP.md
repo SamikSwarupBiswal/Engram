@@ -40,7 +40,7 @@
   - [x] **Phase 12G: Longitudinal Human Adaptation** — Enable calmer, non-intrusive operations and learning restraint patterns without accumulating overconfidence.
 - [ ] **Deployment Era (D1-D5)** [CRITICAL]
   - [x] **Phase D1: Reality Hardening** — Installer resilience, Windows dynamic environments, sleep/wake, driver fallbacks, anti-virus.
-  - [ ] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
+  - [x] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
   - [ ] **Phase D3: Long-Horizon Soak Operation** — Weeks-long run, graph growth, semantic entropy, propagation sludge, cognitive debt accumulation, trust drift.
   - [ ] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
   - [ ] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.

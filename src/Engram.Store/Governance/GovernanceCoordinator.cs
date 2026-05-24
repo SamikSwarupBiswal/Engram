@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Engram.Store.Wiki;
 using Engram.Store.Salience;
+using Engram.Store.Events;
 
 namespace Engram.Store.Governance;
 
@@ -29,7 +30,7 @@ public class GovernanceCoordinator
     public OverrideExpiryManager Expiry { get; }
     public Metabolism.HomeostasisController Homeostasis { get; }
 
-    public GovernanceCoordinator(WikiNodeStore nodeStore, WorkspacePaths paths, DriftAlertStore? driftStore = null)
+    public GovernanceCoordinator(WikiNodeStore nodeStore, WorkspacePaths paths, DriftAlertStore? driftStore = null, IEventBus? eventBus = null)
     {
         Config = new GovernanceConfig();
         
@@ -44,9 +45,10 @@ public class GovernanceCoordinator
         SafetyAudit = new ConstitutionalAuditLog(paths);
         SafetyStateMachine = new ConstitutionalStateMachine(paths, SafetyAudit);
         SafetyBoundary = new GovernanceIsolationBoundary(SafetyStateMachine);
+        nodeStore.SetBoundary(SafetyBoundary);
 
         Pacing = new PacingController(Config.MaxDailyInterventions);
-        Friction = new FrictionTracker(Config, LongitudinalTrust);
+        Friction = new FrictionTracker(Config, LongitudinalTrust, eventBus);
         Expiry = new OverrideExpiryManager(Trust, SafetyStateMachine);
         Homeostasis = new Metabolism.HomeostasisController();
 

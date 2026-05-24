@@ -204,6 +204,7 @@ public class ActionRuntime : IDisposable
                 {
                     step.Status = StepStatus.Failed;
                     step.Error = ex.Message;
+                    _permissionGate.RecordFailure(resolvedAction, wasCancelled: false);
                     for (int j = i + 1; j < order.Count; j++)
                     {
                         order[j].Status = StepStatus.Skipped;
@@ -295,6 +296,7 @@ public class ActionRuntime : IDisposable
                     step.Status = StepStatus.Completed;
                     step.CompletedAt = DateTimeOffset.UtcNow;
                     completedSteps.Add(step);
+                    _permissionGate.RecordSuccess(resolvedAction);
                 }
                 catch (Exception ex)
                 {
@@ -363,6 +365,7 @@ public class ActionRuntime : IDisposable
                                 step.Status = StepStatus.Completed;
                                 step.CompletedAt = DateTimeOffset.UtcNow;
                                 completedSteps.Add(step);
+                                _permissionGate.RecordSuccess(resolvedAction);
                                 recovered = true;
                                 lastError = null;
                             }
@@ -386,6 +389,7 @@ public class ActionRuntime : IDisposable
                         }
 
                         _logger?.LogError(lastError, "Step '{StepId}' execution or recovery failed. Initiating rollback.", step.Id);
+                        _permissionGate.RecordFailure(resolvedAction, wasCancelled: lastError is OperationCanceledException || _state == RuntimeState.Aborted);
                         await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
                         throw new InvalidOperationException($"Step '{step.Id}' failed: {lastError?.Message}", lastError);
                     }

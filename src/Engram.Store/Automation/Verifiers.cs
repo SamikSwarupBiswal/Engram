@@ -159,3 +159,67 @@ public class FileExistsVerifier : IStepVerifier
         return await Task.Run(() => System.IO.File.Exists(FilePath), ct);
     }
 }
+
+/// <summary>
+/// Verifies if a specific text is visible on the screen or active window.
+/// </summary>
+public class OcrVerifier : IStepVerifier
+{
+    public string ExpectedText { get; }
+
+    public OcrVerifier(string expectedText)
+    {
+        ExpectedText = expectedText ?? throw new ArgumentNullException(nameof(expectedText));
+    }
+
+    public async Task<bool> VerifyAsync(ExecutionContext context, CancellationToken ct)
+    {
+        if (context == null) throw new ArgumentNullException(nameof(context));
+
+        var verificationEngine = context.GetVariable<StateVerificationEngine>("StateVerificationEngine");
+        if (verificationEngine != null)
+        {
+            return await verificationEngine.VerifyOcrTextAsync(ExpectedText, ct);
+        }
+
+        return false;
+    }
+}
+
+/// <summary>
+/// Verifies that state changed by comparing a captured state delta.
+/// </summary>
+public class StateDeltaVerifier : IStepVerifier
+{
+    private readonly string _stateKey;
+    private readonly Func<ExecutionContext, Task<object>> _captureState;
+    private readonly Func<object, object, bool> _evaluateDelta;
+
+    public StateDeltaVerifier(string stateKey, Func<ExecutionContext, Task<object>> captureState, Func<object, object, bool> evaluateDelta)
+    {
+        _stateKey = stateKey;
+        _captureState = captureState;
+        _evaluateDelta = evaluateDelta;
+    }
+
+    public async Task<bool> VerifyAsync(ExecutionContext context, CancellationToken ct)
+    {
+        if (context == null) throw new ArgumentNullException(nameof(context));
+
+        var beforeState = context.GetVariable<object>(_stateKey + "_before");
+        if (beforeState == null)
+        {
+            var verificationEngine = context.GetVariable<StateVerificationEngine>("StateVerificationEngine");
+            if (verificationEngine != null)
+            {
+                return await verificationEngine.VerifyStateDeltaAsync(
+                    async () => await _captureState(context),
+                    _evaluateDelta, ct);
+            }
+            return false;
+        }
+
+        var afterState = await _captureState(context);
+        return _evaluateDelta(beforeState, afterState);
+    }
+}

@@ -1,10 +1,10 @@
 # Engram State
 
-**Status:** Existential Validation Era (D1-D5) — Completed Phase: D1 (Reality Hardening), Next Phase: D2 (Human Coexistence Validation)
+**Status:** Existential Validation Era (D1-D5) — Completed Phase: D2 (Human Coexistence Validation), Next Phase: D3 (Long-Horizon Soak Operation)
 **Last Activity:** 2026-05-24
 **Branch:** `master`
-**Tests:** 1618 store tests + 88 API tests passing (1706/1706 total tests green)
-**Latest Commit:** (completed — Phase 12 implementation)
+**Tests:** 1629 store tests + 88 API tests passing (1717/1717 total tests green)
+**Latest Commit:** (completed — Phase D2 implementation)
 
 ## What Engram Is
 
@@ -223,8 +223,9 @@ GET  /api/governance/audit           Get safety constitution audit log
 - Phase 10 (Unified Semantic World Model) completed, featuring a Unified Entity Graph, Cross-Modal Identity Resolution, Temporal World Fusion, Attention & Salience Unification, Semantic Scene Construction, Cross-System Memory Propagation, and Global Consistency Engine.
 - Phase 11 (Human Trust & Coexistence) completed, featuring an Explainability narrative layer, Memory Sovereignty with deletion envelopes and propagation reconciliation, trust calibration, cognitive boundaries, ambient restraint, transparency/dispute resolution, and a safety constitution with an isolated state machine and immutable audit log.
 - Phase 12 (Cognitive Homeostasis & Longitudinal Endurance) completed, featuring metabolic resource-awareness, dynamic cognitive priority stack triage, startup WAL causal reconciler self-healing, metadata daily ZIP backups, token-bucket pacing, and friction-scaled alert silence thresholds.
-- Active development started for Phase D1 (Reality Hardening) of the Existential Validation Era (D1-D5).
-- 1597/1597 Store tests passing (10 new Phase 12 tests, full regression green) + 88/88 API integration tests passing (1685/1685 total tests green)
+- Phase D1 (Reality Hardening) completed, focusing on installer robustness, multi-monitor/DPI edge cases, wake/sleep OS cycles, and Playwright driver fallbacks.
+- Phase D2 (Human Coexistence Validation) completed, featuring graded progressive containment states, deferred mutation queueing, action outcome semantic OCR/state verifiers, friction quiet windows, Yield-to-Focus multitasking gating with cognitive debt, capability warmups, and trust regression.
+- 1629/1629 Store tests passing (11 new Phase D2 tests, full regression green) + 88/88 API integration tests passing (1717/1717 total tests green)
 
 ## Tests: 1597/1597 (Engram.Store.Tests)
 

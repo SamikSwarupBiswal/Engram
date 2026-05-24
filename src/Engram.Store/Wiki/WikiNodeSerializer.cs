@@ -24,6 +24,16 @@ public class WikiNodeSerializer
             sb.AppendLine("edges: " + System.Text.Json.JsonSerializer.Serialize(node.Edges));
         if (node.Claims.Count > 0)
             sb.AppendLine("claims: " + System.Text.Json.JsonSerializer.Serialize(node.Claims));
+        if (!string.IsNullOrEmpty(node.ProvenanceWorkflowId))
+            sb.AppendLine("provenance_workflow_id: " + Safe(node.ProvenanceWorkflowId));
+        sb.AppendLine("provenance_confidence: " + node.ProvenanceConfidence.ToString("F2"));
+        if (!string.IsNullOrEmpty(node.ProvenanceDegradationState))
+            sb.AppendLine("provenance_degradation_state: " + Safe(node.ProvenanceDegradationState));
+        if (!string.IsNullOrEmpty(node.ProvenanceAutonomyMode))
+            sb.AppendLine("provenance_autonomy_mode: " + Safe(node.ProvenanceAutonomyMode));
+        sb.AppendLine("provenance_environmental_reliability: " + node.ProvenanceEnvironmentalReliability.ToString("F2"));
+        if (!string.IsNullOrEmpty(node.ProvenanceApprovalSource))
+            sb.AppendLine("provenance_approval_source: " + Safe(node.ProvenanceApprovalSource));
         sb.AppendLine("---");
         sb.AppendLine();
         sb.AppendLine("# " + node.Title);
@@ -119,6 +129,12 @@ public class WikiNodeSerializer
                         node.Claims = System.Text.Json.JsonSerializer.Deserialize<List<SemanticClaim>>(val) ?? new();
                     } catch { }
                     break;
+                case "provenance_workflow_id": node.ProvenanceWorkflowId = val; break;
+                case "provenance_confidence": if (double.TryParse(val, out var pc)) node.ProvenanceConfidence = pc; break;
+                case "provenance_degradation_state": node.ProvenanceDegradationState = val; break;
+                case "provenance_autonomy_mode": node.ProvenanceAutonomyMode = val; break;
+                case "provenance_environmental_reliability": if (double.TryParse(val, out var per)) node.ProvenanceEnvironmentalReliability = per; break;
+                case "provenance_approval_source": node.ProvenanceApprovalSource = val; break;
             }
         }
         if (string.IsNullOrEmpty(node.NodeId) || string.IsNullOrEmpty(node.Title)) return null;
