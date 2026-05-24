@@ -38,17 +38,18 @@
   - [x] **Phase 12E: Multi-Month Runtime Survival** — Implement corruption recovery, graph reconciliation, replay validation, causal continuity repair, and operational archaeology integrity.
   - [x] **Phase 12F: Cognitive Homeostasis** — Implement dynamic stabilization, equilibrium enforcement, semantic load balancing, emotional neutrality preservation, and activation damping.
   - [x] **Phase 12G: Longitudinal Human Adaptation** — Enable calmer, non-intrusive operations and learning restraint patterns without accumulating overconfidence.
-- [x] **Deployment Era (D1-D5)** [CRITICAL]
+- [x] **Deployment Era (D1-D6)** [CRITICAL]
   - [x] **Phase D1: Reality Hardening** — Installer resilience, Windows dynamic environments, sleep/wake, driver fallbacks, anti-virus.
   - [x] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
   - [x] **Phase D3: Long-Horizon Soak Operation** — Virtual 30-day time-warp simulation, auto-expiry of active contradictions, protected islands archival shield, and ecological health telemetry metrics — 2026-05-24
   - [x] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
-  - [x] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
+  - [ ] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
+  - [x] **Phase D6: Real Human Coexistence & Field Validation** — Dynamic autonomy modulation, decay engine, domain ceilings, neutral failure narratives, and psychology telemetry.
 
 
 ## Current State
 
-- Phases 1-12 and D1-D5 implemented and verified
+- Phases 1-12, D1-D4, and D6 implemented and verified
 - Active development completed for Phase D5 (Productization)
 - 1663 store tests + 88 API tests passing (1751/1751 total tests green)
 - 97 API endpoints, all connected to frontend

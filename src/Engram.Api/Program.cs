@@ -13,6 +13,7 @@ using Engram.Store.Security;
 using Engram.Store.Perception;
 using System.Text.Json;
 using Engram.Store.Governance;
+using Engram.Store.Metabolism;
 
 
 
@@ -85,7 +86,7 @@ var briefGenerator = new BriefGenerator(nodeStore);
 var identityStore = new IdentityStore(paths);
 var salienceScorer = new SalienceScorer();
 var driftAlertStore = new DriftAlertStore(paths);
-var governance = new GovernanceCoordinator(nodeStore, paths, driftAlertStore);
+// governance initialized later after eventBus
 
 var archiveManager = new ArchiveManager(nodeStore, salienceScorer, paths);
 var discoverySOP = new DiscoverySOP(identityStore);
@@ -115,17 +116,25 @@ lifecycle.Configure(gpuDetector, modelManager, localEngine, inferenceRouter,
 var tokenBudget = new TokenBudget(paths.Config);
 var gwsManager = new GoogleWorkspaceManager(paths.Config);
 var researchAgent = new ResearchAgent(paths.Config);
-var permissionGate = new PermissionGate(paths);
+var eventBus = new Engram.Store.Events.InMemoryEventBus();
+var governance = new GovernanceCoordinator(nodeStore, paths, driftAlertStore, eventBus);
+var permissionGate = new PermissionGate(paths, governance.Config);
+var failureNarrativeRecorder = new FailureNarrativeRecorder(paths.Root);
+var recoveryLegibilityEngine = new RecoveryLegibilityEngine();
+var silenceQualityTracker = new SilenceQualityTracker();
+var authorityPressureMonitor = new AuthorityPressureMonitor();
+var cognitiveResidueTracker = new CognitiveResidueTracker();
+var recoveryComfortAnalyzer = new RecoveryComfortAnalyzer();
+var contextualAutonomyModulator = new ContextualAutonomyModulator(governance.Config);
+var autonomyDecayEngine = new AutonomyDecayEngine(governance.Config);
 var actionExecutor = new ActionExecutor();
 var keyManager = new KeyManager(paths.Config);
 var dataExport = new DataExport(paths.Root);
 var dataDelete = new DataDelete(paths.Root);
 var screenCapture = new ScreenCaptureService();
-var actionRuntime = new ActionRuntime(actionExecutor, permissionGate);
+var actionRuntime = new ActionRuntime(actionExecutor, permissionGate, failureNarrativeRecorder: failureNarrativeRecorder, recoveryLegibilityEngine: recoveryLegibilityEngine);
 var taskPlanner = new TaskPlanner(localEngine);
 var cognitiveActionLoop = new CognitiveActionLoop(taskPlanner, actionRuntime, localEngine);
-
-var eventBus = new Engram.Store.Events.InMemoryEventBus();
 
 // ── Phase 8 Services ──
 var worldModel = new OperationalWorldModel(eventBus);
@@ -178,12 +187,53 @@ var taskRouter = new Engram.Store.Orchestration.TaskRouter(
 // ── Background Metabolism (the brain) ──
 var deduplicator = new Engram.Store.Metabolism.SemanticDeduplicator(nodeStore);
 var contradictionDetector = new Engram.Store.Metabolism.ContradictionDetector(nodeStore, identityStore);
-var interventionGenerator = new Engram.Store.Metabolism.InterventionGenerator(identityStore, eventBus);
+var cognitiveRestraintEngine = new CognitiveRestraintEngine(config: governance.Config);
+var interventionGenerator = new Engram.Store.Metabolism.InterventionGenerator(identityStore, eventBus, cognitiveRestraintEngine, governance.Friction);
 var interventionStore = new Engram.Store.Metabolism.InterventionStore(paths);
 var contradictionHistoryStore = new Engram.Store.Metabolism.ContradictionHistoryStore(paths);
 var resolutionDetector = new Engram.Store.Metabolism.ContradictionResolutionDetector(contradictionHistoryStore, nodeStore);
 var resourceGovernor = new Engram.Store.Metabolism.ResourceBudgetGovernor();
 var thermalLayer = new Engram.Store.Metabolism.ThermalProtectionLayer();
+
+eventBus.SubscribeAll(envelope =>
+{
+    if (envelope.EventType == EventTypes.FrictionUserDismissed ||
+        envelope.EventType == EventTypes.FrictionActionCancelled ||
+        envelope.EventType == EventTypes.FrictionTrustOverride)
+    {
+        autonomyDecayEngine.RecordFriction(1.0);
+        silenceQualityTracker.RecordInterruption();
+        cognitiveResidueTracker.RecordInterruption();
+        cognitiveResidueTracker.RecordUserResponse(dismissedOrCancelled: true);
+        recoveryComfortAnalyzer.RecordUserFrustrationAfterFailure();
+    }
+    else if (envelope.EventType == "perception.active_window_changed")
+    {
+        authorityPressureMonitor.RecordUserActivity();
+        cognitiveResidueTracker.RecordContextSwitchAfterInterruption();
+    }
+    else if (envelope.EventType == "intervention.generated")
+    {
+        authorityPressureMonitor.RecordPrompt();
+        silenceQualityTracker.RecordInterruption();
+    }
+    else if (envelope.EventType == EventTypes.AutomationExecuted)
+    {
+        autonomyDecayEngine.RecordSuccess();
+        cognitiveResidueTracker.RecordUserResponse(dismissedOrCancelled: false);
+    }
+    else if (envelope.EventType == EventTypes.AutomationFailed)
+    {
+        autonomyDecayEngine.RecordFriction(0.5);
+        recoveryComfortAnalyzer.RecordFailure(recoveredSilently: false);
+    }
+    
+    // Dynamically modulate and decay active autonomy
+    var velocity = interventionGenerator.GetCurrentMultitaskingVelocity();
+    var modulated = contextualAutonomyModulator.DetermineModulatedAutonomy(velocity);
+    var active = autonomyDecayEngine.DetermineDecayedAutonomy(modulated);
+    governance.Config.ActiveAutonomy = active;
+});
 
 var backgroundMetabolism = new Engram.Store.Metabolism.BackgroundMetabolismService(
     nodeStore, wikiMetabolizer, salienceScorer, driftDetector,
@@ -1737,6 +1787,39 @@ app.MapGet("/api/cognitive/tensions/clusters", () =>
 });
 
 // ── Phase 11: Trust, Governance & Coexistence Endpoints ──
+app.MapGet("/api/governance/coexistence/summary", () =>
+{
+    var summary = new
+    {
+        baselineAutonomy = governance.Config.BaselineAutonomy.ToString(),
+        activeAutonomy = governance.Config.ActiveAutonomy.ToString(),
+        cognitiveResidue = cognitiveResidueTracker.CurrentScore,
+        silenceQuality = silenceQualityTracker.CalculateSilenceQualityScore(),
+        justificationRatio = silenceQualityTracker.GetJustificationRatio(),
+        authorityPressure = authorityPressureMonitor.CalculatePressureScore(),
+        recoveryComfort = recoveryComfortAnalyzer.CalculateRecoveryComfortScore(),
+        frictionScore = autonomyDecayEngine.FrictionScore
+    };
+    return Results.Ok(summary);
+});
+
+app.MapPost("/api/governance/autonomy", (AutonomyUpdateRequest request) =>
+{
+    if (Enum.TryParse<AutonomyLevel>(request.AutonomyLevel, true, out var level))
+    {
+        governance.Config.BaselineAutonomy = level;
+        governance.Config.ActiveAutonomy = level;
+        return Results.Ok(new { success = true, baseline = level.ToString() });
+    }
+    return Results.BadRequest(new { error = "Invalid AutonomyLevel. Use 'Low', 'Medium', or 'Aggressive'." });
+});
+
+app.MapGet("/api/governance/failures/narratives", async () =>
+{
+    var narratives = await failureNarrativeRecorder.GetNarrativesAsync();
+    return Results.Ok(narratives);
+});
+
 app.MapGet("/api/governance/activity", () =>
     Results.Ok(governance.Observability.GetActivityFeed()));
 
@@ -1940,6 +2023,7 @@ record CollaborationResponseRequest(string RequestId, string Response, bool Appr
 record ForgetRequest(string NodeId);
 record DisputeRequest(string NodeId, string ClaimId, string CorrectedValue);
 record RecoveryRequest(string ResolutionDetail);
+record AutonomyUpdateRequest(string AutonomyLevel);
 
 record UpgradePreflightRequest(string TargetSystemVersion, int TargetSchemaVersion);
 record UpgradeExecuteRequest(string TargetSystemVersion, int TargetSchemaVersion);

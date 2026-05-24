@@ -439,6 +439,28 @@ public class ActionRuntime : IDisposable
 
                         _logger?.LogError(lastError, "Step '{StepId}' execution or recovery failed. Initiating rollback.", step.Id);
                         _permissionGate.RecordFailure(resolvedAction, wasCancelled: lastError is OperationCanceledException || _state == RuntimeState.Aborted);
+                         
+                         if (_failureNarrativeRecorder != null && _recoveryLegibilityEngine != null)
+                         {
+                             var activeAutonomy = context.GetVariable<string>("ActiveAutonomy") ?? "Medium";
+                             var legibleExplanation = _recoveryLegibilityEngine.TranslateFailure(lastError?.Message ?? string.Empty, lastError?.ToString() ?? string.Empty);
+                             var recoveryExplanation = _recoveryLegibilityEngine.TranslateRecovery(false);
+                             var narrative = new FailureNarrative
+                             {
+                                 WorkflowId = plan.PlanId,
+                                 Goal = plan.Goal,
+                                 FailedStepId = step.Id,
+                                 StepDescription = step.Action.Description,
+                                 TechnicalDetails = lastError?.ToString() ?? string.Empty,
+                                 LegibleExplanation = legibleExplanation,
+                                 AutonomyLevel = activeAutonomy,
+                                 RecoveryAttempted = step.RecoveryPolicy != null,
+                                 RecoverySucceeded = false,
+                                 RecoveryExplanation = recoveryExplanation
+                             };
+                             _ = _failureNarrativeRecorder.RecordFailureNarrativeAsync(narrative);
+                         }
+
                         await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
                         throw new InvalidOperationException($"Step '{step.Id}' failed: {lastError?.Message}", lastError);
                     }
