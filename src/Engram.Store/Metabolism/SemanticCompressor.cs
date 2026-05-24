@@ -139,6 +139,7 @@ public class SemanticCompressor
     {
         // Prune: stale + low salience + few facts + no relations
         return nodes.Where(n =>
+            !SemanticCompactor.IsProtectedNode(n) &&
             n.Salience < MinSalienceForRetention &&
             n.Facts.Count <= MinFactsForRetention &&
             n.Links.Count == 0 &&
@@ -156,6 +157,8 @@ public class SemanticCompressor
         {
             for (int j = i + 1; j < nodeList.Count; j++)
             {
+                if (SemanticCompactor.IsProtectedNode(nodeList[i]) || SemanticCompactor.IsProtectedNode(nodeList[j])) continue;
+
                 var similarity = ComputeSimilarity(nodeList[i], nodeList[j]);
                 if (similarity > 0.7 && nodeList[i].NodeType == nodeList[j].NodeType)
                 {
@@ -171,6 +174,7 @@ public class SemanticCompressor
     {
         // Archive: old activity + low salience (but not as extreme as prune candidates)
         return nodes.Where(n =>
+            !SemanticCompactor.IsProtectedNode(n) &&
             n.Salience < 0.2 &&
             (DateTimeOffset.UtcNow - n.LastTouchedAt).TotalDays > 21 &&
             n.NodeType != WikiNodeType.Goal) // Don't archive goals

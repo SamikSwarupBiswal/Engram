@@ -42,7 +42,7 @@ Engram is a **desktop app**, not a web app. Tauri v2 (Rust) shell auto-spawns a 
 | UI | React 19 + TypeScript + Tailwind CSS |
 | Backend | .NET 8 ASP.NET Minimal API (sidecar) |
 | Local Store | .engram/ directory (JSON + Markdown) |
-| Tests | xUnit (1685 tests total: 1597 Store, 88 API) |
+| Tests | xUnit (1721 tests total: 1633 Store, 88 API) |
 | Build | Vite 6, cargo, dotnet publish |
 
 ## Onboarding Flow
@@ -103,9 +103,9 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## Current State
 
-- Phases 1-12 implemented and verified
-- Active development completed for Phase 12 (Cognitive Homeostasis & Longitudinal Endurance)
-- 1597 store tests + 88 API tests passing (1685/1685 total tests green)
+- Phases 1-12, D1, D2, and D3 implemented and verified
+- Active development completed for Phase D3 (Long-Horizon Soak Operation)
+- 1633 store tests + 88 API tests passing (1721/1721 total tests green)
 - 97 API endpoints (all connected to frontend)
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -126,10 +126,16 @@ BackgroundMetabolismService (every 5 minutes)
 - **Metabolic priority stack manages triage under load and runs deferred tasks (cognitive debt) when idle**
 - **Token-bucket pacing controls intervention rates, scaling silence limits as user friction increases**
 - **Causal startup reconciler repairs WAL sequence fractures to recover uncommitted writes**
+- **Progressive containment states (D2) queue deferred mutations and back off when user activity is detected**
+- **Yield-to-Focus multitasking gating (D2) prevents interruptions during deep work periods**
+- **Virtual temporal simulation (D3) runs multi-week soak tests using configurable time providers**
+- **Contradiction auto-expiry (D3) auto-suppresses contradictions older than 14 days**
+- **Protected islands archival shield (D3) exempts core user identities and goal nodes from pruning**
+- **Ecological health telemetry (D3) tracks metrics like annoyance, autonomy drift, and cognitive debt backlog**
 
 ## What's Next
 
-1. **Existential Validation Era (D1-D5)** — Shift focus entirely from capability expansion to operational consolidation, hardening, coexistence validation, soak operations, task execution validation, and productization. Active phase: **D1 (Reality Hardening)**.
+1. **Existential Validation Era (D1-D5)** — Shift focus entirely from capability expansion to operational consolidation, hardening, coexistence validation, soak operations, task execution validation, and productization. Active phase: **D4 (Real Task Execution Validation)**.
 
 ## Anti-Patterns (DO NOT BUILD)
 

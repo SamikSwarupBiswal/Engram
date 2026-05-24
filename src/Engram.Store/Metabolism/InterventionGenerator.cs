@@ -26,6 +26,7 @@ public class InterventionGenerator
     private readonly ILogger<InterventionGenerator>? _logger;
     private readonly CognitiveRestraintEngine? _restraintEngine;
     private readonly FrictionTracker? _frictionTracker;
+    public FrictionTracker? FrictionTracker => _frictionTracker;
     private readonly List<DateTimeOffset> _switchTimestamps = new();
     private readonly List<Intervention> _cognitiveDebt = new();
     private readonly IDisposable? _windowSub;

@@ -110,8 +110,19 @@ public class CognitiveTelemetry
     private long _ambiguousObservations;
     private long _unknownClassifications;
 
+    // ── Ecological Health ──
+    private double _redundancyRatio;
+    private double _autonomyDriftIndex;
+    private double _annoyanceAccumulation;
+    private double _interventionCadence;
+    private double _contradictionRecurrenceRate;
+    private long _debtBacklogCount;
+    private long _freezeFrequency;
+    private double _pathologyPersistenceSeconds;
+
     // ── System ──
     private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
+    public DateTimeOffset StartedAt => _startedAt;
 
     // ═══════════════════════════════════════════
     // MEMORY PIPELINE
@@ -548,6 +559,30 @@ public class CognitiveTelemetry
         UnknownClassifications = Interlocked.Read(ref _unknownClassifications)
     };
 
+    public void RecordEcologicalMetrics(double redundancy, double autonomyDrift, double annoyance, double cadence, double recurrence, int debtBacklog, int freezeCount, double pathologySeconds)
+    {
+        _redundancyRatio = redundancy;
+        _autonomyDriftIndex = autonomyDrift;
+        _annoyanceAccumulation = annoyance;
+        _interventionCadence = cadence;
+        _contradictionRecurrenceRate = recurrence;
+        Interlocked.Exchange(ref _debtBacklogCount, debtBacklog);
+        Interlocked.Exchange(ref _freezeFrequency, freezeCount);
+        _pathologyPersistenceSeconds = pathologySeconds;
+    }
+
+    public EcologicalMetrics GetEcologicalMetrics() => new()
+    {
+        RedundancyRatio = _redundancyRatio,
+        AutonomyDriftIndex = _autonomyDriftIndex,
+        AnnoyanceAccumulation = _annoyanceAccumulation,
+        InterventionCadence = _interventionCadence,
+        ContradictionRecurrenceRate = _contradictionRecurrenceRate,
+        DebtBacklogCount = (int)Interlocked.Read(ref _debtBacklogCount),
+        FreezeFrequency = (int)Interlocked.Read(ref _freezeFrequency),
+        PathologyPersistenceDurationSeconds = _pathologyPersistenceSeconds
+    };
+
     // ═══════════════════════════════════════════
     // FULL DIAGNOSTICS SNAPSHOT
     // ═══════════════════════════════════════════
@@ -570,7 +605,8 @@ public class CognitiveTelemetry
         Automation = GetAutomationMetrics(),
         Perception = GetPerceptionMetrics(),
         Phase7 = GetPhase7Metrics(),
-        Phase8 = GetPhase8Metrics()
+        Phase8 = GetPhase8Metrics(),
+        Ecological = GetEcologicalMetrics()
     };
 }
 
@@ -593,6 +629,19 @@ public class CognitiveDiagnosticsSnapshot
     public PerceptionMetrics Perception { get; set; } = new();
     public Phase7Metrics Phase7 { get; set; } = new();
     public Phase8Metrics Phase8 { get; set; } = new();
+    public EcologicalMetrics Ecological { get; set; } = new();
+}
+
+public class EcologicalMetrics
+{
+    public double RedundancyRatio { get; set; }
+    public double AutonomyDriftIndex { get; set; }
+    public double AnnoyanceAccumulation { get; set; }
+    public double InterventionCadence { get; set; }
+    public double ContradictionRecurrenceRate { get; set; }
+    public int DebtBacklogCount { get; set; }
+    public int FreezeFrequency { get; set; }
+    public double PathologyPersistenceDurationSeconds { get; set; }
 }
 
 public class MemoryPipelineMetrics

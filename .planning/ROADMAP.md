@@ -41,16 +41,16 @@
 - [ ] **Deployment Era (D1-D5)** [CRITICAL]
   - [x] **Phase D1: Reality Hardening** — Installer resilience, Windows dynamic environments, sleep/wake, driver fallbacks, anti-virus.
   - [x] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
-  - [ ] **Phase D3: Long-Horizon Soak Operation** — Weeks-long run, graph growth, semantic entropy, propagation sludge, cognitive debt accumulation, trust drift.
+  - [x] **Phase D3: Long-Horizon Soak Operation** — Virtual 30-day time-warp simulation, auto-expiry of active contradictions, protected islands archival shield, and ecological health telemetry metrics — 2026-05-24
   - [ ] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
   - [ ] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
 
 
 ## Current State
 
-- Phases 1-12 and Phase D1 implemented and verified
-- Active development completed for Phase D1 (Reality Hardening)
-- 1618 store tests + 88 API tests passing (1706/1706 total tests green)
+- Phases 1-12, D1, D2, and D3 implemented and verified
+- Active development completed for Phase D3 (Long-Horizon Soak Operation)
+- 1633 store tests + 88 API tests passing (1721/1721 total tests green)
 - 97 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -113,23 +113,23 @@ Autonomous Execution (Phase 8):
 
 All remaining roadmap work is focused on robustness, coexistence, endurance, execution validation, and productization to ensure Engram survives real-world Windows environments and users.
 
-### Phase D1: Reality Hardening (Active)
+### Phase D1: Reality Hardening (Completed)
 1. **Installer Resilience** — Handle Windows path variables, administrator/standard privileges, and user profile variations.
 2. **Windows Edge Cases** — Multi-monitor configurations, DPI scaling, registry access errors.
 3. **OS State Transitions** — Handle system sleep, hibernation, wake cycles, and unexpected power loss.
 4. **Environment Divergence** — Browser profiling, anti-virus interference, permissions chaos, and fallback execution strategies.
 
-### Phase D2: Human Coexistence Validation
+### Phase D2: Human Coexistence Validation (Completed)
 1. **Intervention Fatigue** — Gauge frequency of passive/active intervention dispatches and refine the friction-scaled restraint thresholds.
 2. **Annoyance Archaeology** — Monitor Swift cancels and UI dismissals to track user annoyance and trust drift.
 3. **Autonomy Discomfort** — Verify pacing constraints to ensure Engram does not context-switch or alert the user aggressively.
 
-### Phase D3: Long-Horizon Soak Operation
+### Phase D3: Long-Horizon Soak Operation (Completed)
 1. **Long-Horizon Run** — Weeks-long continuous background operational simulation.
 2. **Semantic Accumulation** — Analyze entity graph scaling, link density decay, and WAL propagation sludge over time.
 3. **Homeostasis Maintenance** — Validate priority stacks and metabolic resource triage under prolonged low-to-high activity cycles.
 
-### Phase D4: Real Task Execution Validation
+### Phase D4: Real Task Execution Validation (Active)
 1. **Task Robustness** — Ensure end-to-end task completion (e.g., generating research reports, browser data extraction, file curation) on messy desktops.
 2. **Interruption Recovery** — Gracefully pause automation steps when users hijack input or focus and resume safely.
 
@@ -170,6 +170,9 @@ All remaining roadmap work is focused on robustness, coexistence, endurance, exe
 - D-092: SandboxManager path whitelist enforced at dispatch time, not at file operation time
 - D-093: AgentOrchestrator uses per-agent mutex to prevent overlapping task dispatch
 - D-094: CollaborationEngine creates pending query entries surfaced via Minimal API for human resolution
+- D-095: Virtual Time Providers (`Func<DateTimeOffset>` clocks) enable temporal simulation testing without physical sleep delays
+- D-096: Contradiction Expiry enforces auto-suppression of behavioral contradiction entries older than 14 days
+- D-097: Protected Islands Archival Shield prevents system-level archival/decay of critical User Identity, Goal, and Project nodes
 
 ## Anti-Patterns (DO NOT BUILD)
 

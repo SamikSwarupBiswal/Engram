@@ -15,6 +15,9 @@ High-level architecture overview for the Engram personal semantic operating laye
 9. **Psychologically sustainable:** Tone regulation, positive evidence, curiosity, user agency protection.
 10. **Privacy-first perception:** Maximum semantic usefulness with minimum invasiveness.
 11. **Truth-preserving cognition:** Interpretations must be verifiable, correctable, and restrained.
+12. **Behavioral Coexistence:** Graded containment states and Yield-to-Focus multitasking gates preserve user focus and control.
+13. **Temporal Cognition:** Clock abstraction and virtual time providers enable deterministic, longitudinal time-warp testing.
+14. **Protected Islands:** Core identity, goal, and project nodes are shielded from decay/archival to protect personal context over month-scale horizons.
 
 ## Layer Architecture
 
@@ -184,10 +187,11 @@ Cycle:
    - PriorityDrift (declared priorities not reflected in behavior)
    - AbandonedCommitment (no follow-through)
    - IdentityBehaviorGap (identity claims not supported by behavior)
-7. ArchiveManager → archive stale nodes (salience < 0.1)
-8. Generate tension reports
-9. InterventionGenerator → proactive guidance
-10. EventBus → emit events
+7. ContradictionHistoryStore → auto-suppress unaddressed contradictions older than 14 days
+8. ArchiveManager → archive stale nodes (salience < 0.1, shielding protected islands like Person/Goal/Project)
+9. Generate tension reports and capture ecological health telemetry
+10. InterventionGenerator → proactive guidance
+11. EventBus → emit events
 ```
 
 ## Local Store Layout (.engram/)

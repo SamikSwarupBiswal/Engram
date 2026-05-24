@@ -22,6 +22,15 @@ public sealed class DegradationTracker
     private const double DistrustDecayConstant = 0.005; // Distrust decay factor lambda per second
     private static readonly TimeSpan HysteresisCooldown = TimeSpan.FromMinutes(5);
 
+    private int _freezeFrequency;
+    public int FreezeFrequency
+    {
+        get { lock (_lock) return _freezeFrequency; }
+        set { lock (_lock) _freezeFrequency = value; }
+    }
+
+    public Func<DateTime> TimeProvider { get; set; } = () => DateTime.UtcNow;
+
     private readonly object _lock = new();
 
     public DegradationTracker()
@@ -44,7 +53,7 @@ public sealed class DegradationTracker
                 }
                 // When entering degradation, set initial distrust to 1.0 (maximum caution)
                 _distrustLevels[key] = 1.0;
-                _lastFailureTimes[key] = DateTime.UtcNow;
+                _lastFailureTimes[key] = TimeProvider();
                 _recoveryCooldowns.TryRemove(key, out _);
             }
             else
@@ -54,7 +63,7 @@ public sealed class DegradationTracker
                 {
                     if (!_recoveryCooldowns.ContainsKey(key))
                     {
-                        _recoveryCooldowns[key] = DateTime.UtcNow.Add(HysteresisCooldown);
+                        _recoveryCooldowns[key] = TimeProvider().Add(HysteresisCooldown);
                     }
                 }
             }
@@ -89,7 +98,7 @@ public sealed class DegradationTracker
                 // If in cooldown, check if the hysteresis timer has elapsed
                 if (_recoveryCooldowns.TryGetValue(key, out var end))
                 {
-                    if (DateTime.UtcNow >= end)
+                    if (TimeProvider() >= end)
                     {
                         _activeDegradations.TryRemove(key, out _);
                         _capabilityDetails.TryRemove(key, out _);
@@ -115,7 +124,7 @@ public sealed class DegradationTracker
         if (!_distrustLevels.TryGetValue(key, out var d0))
             return 0.0;
 
-        var elapsedSeconds = (DateTime.UtcNow - lastFailureTime).TotalSeconds;
+        var elapsedSeconds = (TimeProvider() - lastFailureTime).TotalSeconds;
         if (elapsedSeconds < 0) return d0;
 
         var currentDistrust = d0 * Math.Exp(-DistrustDecayConstant * elapsedSeconds);
@@ -195,5 +204,30 @@ public sealed class DegradationTracker
             _distrustLevels.TryRemove(key, out _);
             _lastFailureTimes.TryRemove(key, out _);
         }
+    }
+
+    /// <summary>
+    /// Checks active capability failures and returns the maximum elapsed seconds since their failure times.
+    /// </summary>
+    public double GetPathologyPersistenceDurationSeconds()
+    {
+        double maxSeconds = 0.0;
+        var now = TimeProvider();
+        var keys = _activeDegradations.Keys;
+        foreach (var key in keys)
+        {
+            if (IsDegraded(key))
+            {
+                if (_lastFailureTimes.TryGetValue(key, out var failureTime))
+                {
+                    var elapsed = (now - failureTime).TotalSeconds;
+                    if (elapsed > maxSeconds)
+                    {
+                        maxSeconds = elapsed;
+                    }
+                }
+            }
+        }
+        return maxSeconds;
     }
 }

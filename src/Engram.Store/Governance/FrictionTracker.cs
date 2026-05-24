@@ -20,6 +20,8 @@ public class FrictionTracker : IDisposable
     private DateTimeOffset _silencedUntil = DateTimeOffset.MinValue;
     private readonly IDisposable? _subscription;
 
+    public Func<DateTimeOffset> TimeProvider { get; set; } = () => DateTimeOffset.UtcNow;
+
     public int ConsecutiveFrictionCount
     {
         get { lock (_lock) return _consecutiveFrictionCount; }
@@ -27,12 +29,22 @@ public class FrictionTracker : IDisposable
 
     public bool IsSilenced
     {
-        get { lock (_lock) return DateTimeOffset.UtcNow < _silencedUntil; }
+        get { lock (_lock) return TimeProvider() < _silencedUntil; }
     }
 
     public DateTimeOffset SilencedUntil
     {
         get { lock (_lock) return _silencedUntil; }
+    }
+
+    public double AnnoyanceScore
+    {
+        get { lock (_lock) return _trustModel.AnnoyanceScore; }
+    }
+
+    public double HistoricalTrustIndex
+    {
+        get { lock (_lock) return _trustModel.HistoricalTrustIndex; }
     }
 
     public FrictionTracker(GovernanceConfig config, LongitudinalTrustModel trustModel, IEventBus? eventBus = null)
@@ -75,7 +87,7 @@ public class FrictionTracker : IDisposable
             // Scale up silence threshold (MinConfidenceToEscalate) dynamically by 0.05 per consecutive friction, up to a max of 0.95
             _config.MinConfidenceToEscalate = Math.Min(0.95, _config.MinConfidenceToEscalate + (intensity * 0.05));
 
-            var now = DateTimeOffset.UtcNow;
+            var now = TimeProvider();
             _frictionTimestamps.Add(now);
 
             // Keep only the last 24 hours of timestamps

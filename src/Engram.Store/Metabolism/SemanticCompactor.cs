@@ -81,6 +81,7 @@ public class SemanticCompactor
             for (int j = i + 1; j < list.Count; j++)
             {
                 if (list[i].NodeType != list[j].NodeType) continue;
+                if (IsProtectedNode(list[i]) || IsProtectedNode(list[j])) continue;
 
                 var similarity = ComputeJaccardSimilarity(list[i].Title, list[j].Title);
                 if (similarity >= threshold)
@@ -91,6 +92,32 @@ public class SemanticCompactor
         }
 
         return pairs;
+    }
+
+    /// <summary>
+    /// Check if a node is protected from semantic compaction (Protected Semantic Islands).
+    /// </summary>
+    public static bool IsProtectedNode(WikiNode node)
+    {
+        // 1. Identity nodes (Person)
+        if (node.NodeType == WikiNodeType.Person) return true;
+
+        // 2. Persistent projects and long-term goals
+        if (node.NodeType == WikiNodeType.Project || node.NodeType == WikiNodeType.Goal) return true;
+
+        // 3. Constitutional memories or trust boundaries
+        var titleLower = node.Title.ToLowerInvariant();
+        if (titleLower.Contains("constitution") || titleLower.Contains("trust") || titleLower.Contains("governance")) return true;
+
+        // 4. Explicit user assertions or manual overrides
+        if (node.ProvenanceApprovalSource?.ToLowerInvariant() == "user" || 
+            node.ProvenanceApprovalSource?.ToLowerInvariant() == "manual" ||
+            node.ProvenanceAutonomyMode?.ToLowerInvariant() == "manual") return true;
+
+        // 5. Claims sourced from the user
+        if (node.Claims != null && node.Claims.Any(c => c.Source?.ToLowerInvariant() == "user")) return true;
+
+        return false;
     }
 
     private double ComputeJaccardSimilarity(string titleA, string titleB)

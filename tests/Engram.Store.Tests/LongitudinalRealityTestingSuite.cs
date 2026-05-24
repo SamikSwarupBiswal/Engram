@@ -1,3 +1,4 @@
+using Engram.Store.Inference;
 using Engram.Store.Metabolism;
 using Engram.Store.Perception;
 using Engram.Store.Wiki;
@@ -558,5 +559,88 @@ public class LongitudinalRealityTestingSuite : IDisposable
                 new() { Narrative = "decompression", Plausibility = 0.25 }
             });
         Assert.True(assessment.IsAmbiguous);
+    }
+
+    [Fact]
+    public void Integration_PruneExpiredContradictions_UpdatesStore()
+    {
+        var store = _harness.ContradictionHistoryStore;
+        var contradiction = new BehavioralContradiction
+        {
+            Type = ContradictionType.GoalActivityGap,
+            DeclaredIntent = "Deep Work",
+            ObservedBehavior = "Browsing YouTube",
+            Description = "Gap between work goals and YouTube activity",
+            Severity = ContradictionSeverity.High,
+            RelatedNodeIds = new List<string>()
+        };
+
+        store.Record(contradiction);
+
+        var filePath = Path.Combine(_harness.Paths.Config, "contradiction_history.json");
+        Assert.True(File.Exists(filePath));
+
+        var json = File.ReadAllText(filePath);
+        var history = System.Text.Json.JsonSerializer.Deserialize<List<ContradictionHistoryEntry>>(
+            json,
+            new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower }
+        );
+
+        Assert.NotNull(history);
+        Assert.Single(history);
+        history[0].LastSeenAt = DateTimeOffset.UtcNow.AddDays(-15);
+
+        var updatedJson = System.Text.Json.JsonSerializer.Serialize(
+            history,
+            new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower, WriteIndented = true }
+        );
+        File.WriteAllText(filePath, updatedJson);
+
+        int prunedCount = store.PruneExpiredContradictions(TimeSpan.FromDays(14));
+        Assert.Equal(1, prunedCount);
+
+        var reloaded = store.LoadAll();
+        Assert.Single(reloaded);
+        Assert.Equal(ContradictionStatus.Suppressed, reloaded[0].Status);
+    }
+
+    [Fact]
+    public void Integration_GetPathologyPersistenceDurationSeconds_ReturnsMaxElapsed()
+    {
+        var tracker = DegradationTracker.Instance;
+        
+        tracker.ResetDegradation("SafeModeActive");
+        tracker.ResetDegradation("QuarantineActive");
+
+        Assert.Equal(0.0, tracker.GetPathologyPersistenceDurationSeconds());
+
+        tracker.SetDegradation("SafeModeActive", true, "testing");
+        
+        double seconds = tracker.GetPathologyPersistenceDurationSeconds();
+        Assert.True(seconds >= 0.0);
+
+        tracker.ResetDegradation("SafeModeActive");
+    }
+
+    [Fact]
+    public async Task Integration_MetabolismCycle_CalculatesEcologicalMetrics()
+    {
+        _harness.InjectNode(new WikiNode
+        {
+            NodeId = "n1",
+            Title = "Compaction Node",
+            NodeType = WikiNodeType.Concept,
+            Salience = 1.0
+        });
+
+        var result = await _harness.RunMetabolismCycle();
+        Assert.True(result.Success);
+
+        var snapshot = _harness.Telemetry.GetDiagnosticsSnapshot();
+        Assert.NotNull(snapshot.Ecological);
+
+        Assert.Equal(0.0, snapshot.Ecological.RedundancyRatio);
+        Assert.Equal(0.0, snapshot.Ecological.AutonomyDriftIndex);
+        Assert.Equal(0.0, snapshot.Ecological.AnnoyanceAccumulation);
     }
 }

@@ -46,6 +46,8 @@ public class BackgroundMetabolismService : BackgroundService
     private readonly CognitiveTelemetry? _telemetry;
     private readonly ILogger<BackgroundMetabolismService>? _logger;
 
+
+
     /// <summary>How often the metabolism cycle runs.</summary>
     public TimeSpan CycleInterval { get; set; } = TimeSpan.FromMinutes(5);
 
@@ -54,6 +56,12 @@ public class BackgroundMetabolismService : BackgroundService
 
     /// <summary>Salience threshold below which nodes are archived.</summary>
     public double ArchiveThreshold { get; set; } = 0.1;
+
+    /// <summary>Node count threshold above which active compaction is triggered.</summary>
+    public int CompactionTriggerThreshold { get; set; } = 2000;
+
+    /// <summary>Age threshold after which active unaddressed contradictions are auto-expired.</summary>
+    public TimeSpan ContradictionExpiryAgeLimit { get; set; } = TimeSpan.FromDays(14);
 
     /// <summary>Whether the service is currently running a cycle.</summary>
     public bool IsProcessing { get; private set; }
@@ -174,6 +182,20 @@ public class BackgroundMetabolismService : BackgroundService
             // Step 3: Reload after dedup
             nodes = _nodeStore.LoadAll();
 
+            // Compaction: Check if node count exceeds trigger threshold
+            if (nodes.Count > CompactionTriggerThreshold)
+            {
+                _logger?.LogInformation("Graph size ({Count}) exceeds compaction threshold ({Threshold}). Triggering semantic compactor...", nodes.Count, CompactionTriggerThreshold);
+                var compactor = new SemanticCompactor(_nodeStore, null, null);
+                int compactionMerges = await compactor.CompactGraphAsync(0.70, ct);
+                result.MergesPerformed += compactionMerges;
+
+                if (compactionMerges > 0)
+                {
+                    nodes = _nodeStore.LoadAll();
+                }
+            }
+
             // Step 4: Recompute salience for all nodes
             var salienceUpdated = RecomputeSalience(nodes);
             result.SalienceUpdated = salienceUpdated;
@@ -214,6 +236,12 @@ public class BackgroundMetabolismService : BackgroundService
                 result.ContradictionsResolved = resolutions.Count;
             }
 
+            // Step 6e: Prune/expire stale unaddressed contradictions older than configured age limit
+            if (_contradictionHistoryStore != null)
+            {
+                _contradictionHistoryStore.PruneExpiredContradictions(ContradictionExpiryAgeLimit);
+            }
+
             // Step 4: Archive stale nodes
             var archived = ArchiveStaleNodes(nodes);
             result.NodesArchived = archived;
@@ -225,13 +253,53 @@ public class BackgroundMetabolismService : BackgroundService
             // Step 7: Emit events
             EmitCycleEvents(result, contradictions, tensions);
 
+            result.Success = true;
+            result.Duration = sw.Elapsed;
+
             // Step 8: Report telemetry
             _telemetry?.RecordMetabolismCycle(result);
             _telemetry?.RecordDeduplication(dedupResult);
             _telemetry?.RecordContradictionDetection(contradictions.Count, behavioralContradictions.Count);
 
-            result.Success = true;
-            result.Duration = sw.Elapsed;
+            if (_telemetry != null)
+            {
+                double redundancy = (double)result.MergesPerformed / Math.Max(1, result.NodesAnalyzed);
+                var frictionTracker = _interventionGenerator?.FrictionTracker;
+                double autonomyDrift = 1.0 - (frictionTracker?.HistoricalTrustIndex ?? 1.0);
+                double annoyance = frictionTracker?.AnnoyanceScore ?? 0.0;
+
+                double uptimeDays = Math.Max(1.0 / 86400.0, (DateTimeOffset.UtcNow - _telemetry.StartedAt).TotalDays);
+                double totalInterventions = _telemetry.GetInterventionMetrics().TotalGenerated;
+                double cadence = totalInterventions / uptimeDays;
+
+                double recurrence = 0.0;
+                if (_contradictionHistoryStore != null)
+                {
+                    var activeContradictions = _contradictionHistoryStore.LoadActive();
+                    if (activeContradictions.Count > 0)
+                    {
+                        var recurringOrWorsening = activeContradictions.Count(c =>
+                            c.Trend == ContradictionTrend.Recurring || c.Trend == ContradictionTrend.Worsening);
+                        recurrence = (double)recurringOrWorsening / activeContradictions.Count;
+                    }
+                }
+
+                int debtBacklog = _interventionGenerator?.GetCognitiveDebt().Count ?? 0;
+                int freezeCount = DegradationTracker.Instance.FreezeFrequency;
+                double pathologySeconds = DegradationTracker.Instance.GetPathologyPersistenceDurationSeconds();
+
+                _telemetry.RecordEcologicalMetrics(
+                    redundancy,
+                    autonomyDrift,
+                    annoyance,
+                    cadence,
+                    recurrence,
+                    debtBacklog,
+                    freezeCount,
+                    pathologySeconds
+                );
+            }
+
             LastCycleResult = result;
             CyclesCompleted++;
             LastCycleAt = DateTimeOffset.UtcNow;
@@ -385,6 +453,8 @@ public class BackgroundMetabolismService : BackgroundService
 
         foreach (var node in nodes)
         {
+            if (SemanticCompactor.IsProtectedNode(node)) continue;
+
             if (_salienceScorer.ShouldArchive(node, ArchiveThreshold))
             {
                 try

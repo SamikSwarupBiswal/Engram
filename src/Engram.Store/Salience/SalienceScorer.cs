@@ -19,6 +19,8 @@ public class SalienceScorer
         _lambda = lambda;
     }
 
+    public Func<DateTimeOffset> TimeProvider { get; set; } = () => DateTimeOffset.UtcNow;
+
     /// <summary>
     /// Compute current salience for a node based on its last_touched_at.
     /// </summary>
@@ -32,7 +34,7 @@ public class SalienceScorer
     /// </summary>
     public double Compute(double initialSalience, DateTimeOffset lastTouchedAt)
     {
-        var daysSinceTouch = (DateTimeOffset.UtcNow - lastTouchedAt).TotalDays;
+        var daysSinceTouch = (TimeProvider() - lastTouchedAt).TotalDays;
         if (daysSinceTouch < 0) daysSinceTouch = 0;
 
         return initialSalience * Math.Exp(-_lambda * daysSinceTouch);

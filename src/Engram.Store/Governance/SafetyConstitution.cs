@@ -211,6 +211,14 @@ public class ConstitutionalStateMachine
                 CurrentState = nextState;
                 SaveState();
 
+                // Increment freeze frequency when transitioning to restricted levels
+                if (CurrentState == ConstitutionalState.Frozen ||
+                    CurrentState == ConstitutionalState.Quarantine ||
+                    CurrentState == ConstitutionalState.Degraded)
+                {
+                    Engram.Store.Inference.DegradationTracker.Instance.FreezeFrequency++;
+                }
+
                 // Propagate to DegradationTracker
                 if (CurrentState == ConstitutionalState.Frozen)
                 {

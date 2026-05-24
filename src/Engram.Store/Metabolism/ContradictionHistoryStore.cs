@@ -21,6 +21,8 @@ public class ContradictionHistoryStore : IDisposable
     private readonly object _lock = new();
     private bool _disposed;
 
+    public Func<DateTimeOffset> TimeProvider { get; set; } = () => DateTimeOffset.UtcNow;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -51,12 +53,12 @@ public class ContradictionHistoryStore : IDisposable
                 // Update existing record
                 existing.Observations.Add(new ContradictionObservation
                 {
-                    ObservedAt = DateTimeOffset.UtcNow,
+                    ObservedAt = TimeProvider(),
                     Severity = contradiction.Severity,
                     ObservedBehavior = contradiction.ObservedBehavior,
                     Description = contradiction.Description
                 });
-                existing.LastSeenAt = DateTimeOffset.UtcNow;
+                existing.LastSeenAt = TimeProvider();
                 existing.ObservationCount++;
                 existing.CurrentSeverity = contradiction.Severity;
 
@@ -71,8 +73,8 @@ public class ContradictionHistoryStore : IDisposable
                     ContradictionId = Guid.NewGuid().ToString("n")[..12],
                     Type = contradiction.Type,
                     DeclaredIntent = contradiction.DeclaredIntent,
-                    FirstSeenAt = DateTimeOffset.UtcNow,
-                    LastSeenAt = DateTimeOffset.UtcNow,
+                    FirstSeenAt = TimeProvider(),
+                    LastSeenAt = TimeProvider(),
                     ObservationCount = 1,
                     CurrentSeverity = contradiction.Severity,
                     Trend = ContradictionTrend.Stable,
@@ -82,7 +84,7 @@ public class ContradictionHistoryStore : IDisposable
                     {
                         new()
                         {
-                            ObservedAt = DateTimeOffset.UtcNow,
+                            ObservedAt = TimeProvider(),
                             Severity = contradiction.Severity,
                             ObservedBehavior = contradiction.ObservedBehavior,
                             Description = contradiction.Description
@@ -144,13 +146,47 @@ public class ContradictionHistoryStore : IDisposable
             if (record != null)
             {
                 record.Status = ContradictionStatus.Resolved;
-                record.ResolvedAt = DateTimeOffset.UtcNow;
+                record.ResolvedAt = TimeProvider();
                 record.Resolution = resolution;
                 SaveAll(history);
                 _logger?.LogInformation("Contradiction resolved: {Id}", contradictionId);
             }
         }
     }
+
+    /// <summary>
+    /// Prunes/suppresses active contradictions that haven't been updated/seen for a long time.
+    /// </summary>
+    public int PruneExpiredContradictions(TimeSpan ageLimit)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_lock)
+        {
+            var history = LoadAllInternal();
+            var threshold = TimeProvider() - ageLimit;
+            int count = 0;
+
+            foreach (var record in history)
+            {
+                if (record.Status == ContradictionStatus.Active && record.LastSeenAt < threshold)
+                {
+                    record.Status = ContradictionStatus.Suppressed;
+                    record.ResolvedAt = TimeProvider();
+                    record.Resolution = $"Auto-expired after {ageLimit.TotalDays:F0} days of inactivity.";
+                    count++;
+                }
+            }
+
+            if (count > 0)
+            {
+                SaveAll(history);
+                _logger?.LogInformation("Expired {Count} unaddressed contradictions older than {Days} days", count, ageLimit.TotalDays);
+            }
+
+            return count;
+        }
+    }
+
 
     /// <summary>
     /// Get statistics about contradiction history.
