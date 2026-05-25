@@ -80,6 +80,7 @@ public class ActionRuntime : IDisposable
     public ExternalPropagationLedger PropagationLedger { get; set; } = new ExternalPropagationLedger();
     public EnvironmentalDriftCorrelationEngine DriftCorrelationEngine { get; set; } = new EnvironmentalDriftCorrelationEngine();
     public EnvironmentSynchronizationEngine? SynchronizationEngine { get; set; }
+    public Func<string, Task>? OnRequestCheckpoint { get; set; }
 
     public ActionRuntime(
         ActionExecutor executor, 
@@ -119,6 +120,14 @@ public class ActionRuntime : IDisposable
         _failureTopologyGraph = new FailureTopologyGraph();
         _experienceStore = new ProceduralExperienceStore();
         _driftDetector = new ProceduralDriftDetector(_experienceStore);
+
+        _stateMachine.OnTransition += (oldState, newState) =>
+        {
+            if (newState == WorkflowState.Suspended)
+            {
+                _activeContext?.SetVariable("SuspendedAt", DateTimeOffset.UtcNow.ToString("o"));
+            }
+        };
     }
 
     public void Pause()
@@ -221,6 +230,28 @@ public class ActionRuntime : IDisposable
                     }
                 }
 
+                // Determine phase-relative narrative context
+                string narrativePhase = "Research";
+                if (_stateMachine.CurrentState == WorkflowState.Recovering)
+                {
+                    narrativePhase = "Recovery";
+                }
+                else if (step.Action.Type == ActionType.Click || step.Action.Type == ActionType.Type)
+                {
+                    var desc = (step.Action.Description ?? "").ToLowerInvariant();
+                    var val = (step.Action.Value ?? "").ToLowerInvariant();
+                    if (desc.Contains("pay") || desc.Contains("purchase") || desc.Contains("submit") || desc.Contains("checkout") || desc.Contains("buy") || desc.Contains("transfer") ||
+                        val.Contains("pay") || val.Contains("purchase") || val.Contains("submit") || val.Contains("checkout") || val.Contains("buy") || val.Contains("transfer"))
+                    {
+                        narrativePhase = "Payment";
+                    }
+                    else
+                    {
+                        narrativePhase = "Mutation";
+                    }
+                }
+                context.SetVariable("WorkflowNarrativePhase", narrativePhase);
+
                 // ── D7 Environment Synchronization Gating ──
                 if (SynchronizationEngine != null)
                 {
@@ -249,6 +280,7 @@ public class ActionRuntime : IDisposable
                     }
                 }
 
+                double currentFatigueIndex = 1.0;
                 // ── D7 Epistemic Fatigue / Debt Gating ──
                 if (_temporalDegradationModel != null)
                 {
@@ -277,12 +309,12 @@ public class ActionRuntime : IDisposable
                         driftIndex
                     );
 
-                    double fatigueIndex = fatigueVector.GetAggregateFatigueIndex();
-                    if (fatigueIndex < 0.3)
+                    currentFatigueIndex = fatigueVector.GetAggregateFatigueIndex();
+                    if (currentFatigueIndex < 0.3)
                     {
                         _stateMachine.ForceState(WorkflowState.RealityUncertain);
                         _stateMachine.TransitionTo(WorkflowState.Suspended);
-                        throw new InvalidOperationException($"Execution halted: Extreme epistemic fatigue (decay factor: {fatigueIndex:F2}). Yielding to prevent cumulative drift errors.");
+                        throw new InvalidOperationException($"Execution halted: Extreme epistemic fatigue (decay factor: {currentFatigueIndex:F2}). Yielding to prevent cumulative drift errors.");
                     }
                 }
 
@@ -307,6 +339,34 @@ public class ActionRuntime : IDisposable
                         Y = step.Action.Target.Y
                     } : null
                 };
+
+                // ── D7 Adaptive Cognitive Compression ──
+                if (currentFatigueIndex < 0.6)
+                {
+                    _logger?.LogWarning("Cognitive compression active: fatigue index {FatigueIndex:F2} is below 0.6.", currentFatigueIndex);
+                    context.SetVariable("CheckpointRequested", true);
+
+                    if (OnRequestCheckpoint != null)
+                    {
+                        await OnRequestCheckpoint("Cognitive Compression Checkpoint");
+                    }
+
+                    // Force physical stabilization wait
+                    if (_temporalStabilizer != null)
+                    {
+                        await _temporalStabilizer.WaitForStabilizationAsync(MutationType.TabOpened, string.Empty, null, linkedToken);
+                    }
+
+                    // Restrict autonomy: block unapproved external propagation or irreversible actions
+                    var isIrreversible = _reversibilityEvaluator != null && _reversibilityEvaluator.IsIrreversible(resolvedAction);
+                    var isExternal = step.Semantics?.IsExternallyPropagated ?? (resolvedAction.Type == ActionType.Download || resolvedAction.Type == ActionType.Upload);
+                    if ((isExternal || isIrreversible) && resolvedAction.Permission != ActionPermission.Approved)
+                    {
+                        _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                        _stateMachine.TransitionTo(WorkflowState.Suspended);
+                        throw new InvalidOperationException($"Cognitive Compression: Blocked unapproved {(isExternal ? "external" : "irreversible")} action '{step.Id}' due to fatigue ({currentFatigueIndex:F2}).");
+                    }
+                }
 
                 // Generate and log semantic summary
                 var semanticSummary = _semanticSummarizer.Summarize(resolvedAction);

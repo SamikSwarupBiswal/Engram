@@ -24,6 +24,8 @@ public class ExecutionStateMachine
     private WorkflowState _currentState = WorkflowState.Pending;
     public WorkflowState CurrentState => _currentState;
 
+    public event Action<WorkflowState, WorkflowState>? OnTransition;
+
     private static readonly Dictionary<WorkflowState, HashSet<WorkflowState>> AllowedTransitions = new()
     {
         {
@@ -80,7 +82,9 @@ public class ExecutionStateMachine
     {
         if (CanTransitionTo(newState))
         {
+            var oldState = _currentState;
             _currentState = newState;
+            OnTransition?.Invoke(oldState, newState);
         }
         else
         {
@@ -96,6 +100,8 @@ public class ExecutionStateMachine
 
     public void ForceState(WorkflowState state)
     {
+        var oldState = _currentState;
         _currentState = state;
+        OnTransition?.Invoke(oldState, state);
     }
 }

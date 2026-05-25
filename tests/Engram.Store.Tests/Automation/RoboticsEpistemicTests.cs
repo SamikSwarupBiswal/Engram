@@ -496,4 +496,168 @@ public class RoboticsEpistemicTests : IDisposable
         Assert.Equal("Propagated", record.Status);
         Assert.Contains("Reconciled via filesystem check", record.CompensationDetails);
     }
+
+    [Fact]
+    public async Task AdaptiveCognitiveCompression_ShouldBlockUnapprovedExternalAction_WhenFatigued()
+    {
+        // Arrange
+        using var runtime = new ActionRuntime(_executor, _permissionGate);
+        runtime.PropagationLedger = new ExternalPropagationLedger(_tempDir);
+        
+        var plan = new ExecutionPlan { PlanId = "fatigue_test", Goal = "Test Cognitive Compression" };
+        var step1 = new ExecutionStep
+        {
+            Id = "step1",
+            Action = new AutomationAction { ActionId = "act1", Type = ActionType.Upload, Value = "file.txt", Permission = ActionPermission.AutoApproved },
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-60)
+        };
+        plan.Steps[step1.Id] = step1;
+
+        var context = new ExecutionContext();
+        context.SetVariable("HumanCollisionCount", 5);
+
+        // Setup workflow identity envelope with uncertainty count to trigger fatigue decay index < 0.6
+        runtime.IdentityEnvelope = new WorkflowIdentityEnvelope
+        {
+            WorkflowId = "fatigue_test"
+        };
+        for (int i = 0; i < 7; i++)
+        {
+            runtime.IdentityEnvelope.UncertaintyLog.Add(new UncertaintyEvent
+            {
+                Level = UncertaintyLevel.U1_Observational,
+                Reason = "Verification mismatch"
+            });
+        }
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.ExecutePlanAsync(plan, context));
+        Assert.Contains("Blocked unapproved external action", ex.Message);
+        Assert.Equal(WorkflowState.Suspended, runtime.StateMachine.CurrentState);
+    }
+
+    [Fact]
+    public void PhaseRelativeDivergence_ShouldClassifyBenignInResearchButHostileInPayment()
+    {
+        // Arrange
+        var interpreter = new EnvironmentalDivergenceInterpreter();
+        var div = new EnvironmentDivergence
+        {
+            Source = "workflow",
+            Expected = "tab1",
+            Actual = "tab2"
+        };
+
+        // Act & Assert 1: Research Phase (Downgraded to Instability)
+        var contextResearch = new ExecutionContext();
+        contextResearch.SetVariable("WorkflowNarrativePhase", "Research");
+        var res1 = interpreter.Interpret(div, contextResearch);
+        Assert.Equal(DivergenceInterpretation.Instability, res1);
+
+        // Act & Assert 2: Payment Phase (Maintained Sovereignty)
+        var contextPayment = new ExecutionContext();
+        contextPayment.SetVariable("WorkflowNarrativePhase", "Payment");
+        var res2 = interpreter.Interpret(div, contextPayment);
+        Assert.Equal(DivergenceInterpretation.Sovereignty, res2);
+    }
+
+    [Fact]
+    public async Task ProgressiveExplainability_ShouldGenerateFourTierReport()
+    {
+        // Arrange
+        var engine = new RecoveryLegibilityEngine();
+        using var runtime = new ActionRuntime(_executor, _permissionGate);
+        
+        var plan = new ExecutionPlan { PlanId = "exp_test", Goal = "Test Explainability" };
+        var step1 = new ExecutionStep
+        {
+            Id = "step1",
+            Action = new AutomationAction { ActionId = "act1", Type = ActionType.Wait, Value = "10", Permission = ActionPermission.AutoApproved }
+        };
+        plan.Steps[step1.Id] = step1;
+        
+        var context = new ExecutionContext();
+        runtime.IdentityEnvelope = new WorkflowIdentityEnvelope { WorkflowId = "exp_test" };
+        
+        // Populate plan/context into runtime
+        try { await runtime.ExecutePlanAsync(plan, context); } catch { }
+
+        // Act
+        var report = engine.GenerateReport("Critical environment desynchronization (Sovereignty)", "Exception details here", runtime);
+
+        // Assert
+        Assert.NotNull(report);
+        Assert.Equal("The task paused because the expected application state could no longer be confirmed.", report.CalmSummary);
+        Assert.Contains("Divergence detected", report.OperationalDetail);
+        Assert.Contains("Critical environment desynchronization", report.CausalTrace);
+        Assert.Contains("TemporalEntropy", report.FullEpistemicGraph);
+    }
+
+    [Fact]
+    public async Task IntentValidityReassessment_ShouldFail_WhenFinalStepAlreadyVerified()
+    {
+        // Arrange
+        var persistenceStore = new WorkflowPersistenceStore(_tempDir);
+        using var runtime = new ActionRuntime(_executor, _permissionGate);
+        var eventBus = new InMemoryEventBus();
+        var worldModel = new OperationalWorldModel(eventBus);
+        var wr = new WorkflowRuntime(persistenceStore, runtime, worldModel);
+        
+        var plan = new ExecutionPlan { PlanId = "intent_test1", Goal = "Test Obsolete" };
+        var step1 = new ExecutionStep
+        {
+            Id = "step1",
+            Action = new AutomationAction { ActionId = "act1", Type = ActionType.Wait, Value = "10", Permission = ActionPermission.Approved },
+            Verifier = new MockVerifier { Result = true } // Report success immediately
+        };
+        plan.Steps[step1.Id] = step1;
+
+        var context = new ExecutionContext();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Run to save initial checkpoint
+        await Assert.ThrowsAnyAsync<Exception>(() => wr.StartWorkflowAsync("intent_test1", plan, context, cts.Token));
+
+        // Restore: Intent Validity Reassessment should check final step, see it's satisfied, and throw
+        var newContext = new ExecutionContext();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => wr.RestoreWorkflowAsync("intent_test1", newContext, CancellationToken.None));
+        Assert.Contains("Goal already satisfied manually", ex.Message);
+        Assert.Equal("Goal already satisfied", newContext.GetVariable<string>("IntentValidityObsolete"));
+    }
+
+    [Fact]
+    public async Task IntentValidityReassessment_ShouldFail_WhenSuspendedTooLong()
+    {
+        // Arrange
+        var persistenceStore = new WorkflowPersistenceStore(_tempDir);
+        using var runtime = new ActionRuntime(_executor, _permissionGate);
+        var eventBus = new InMemoryEventBus();
+        var worldModel = new OperationalWorldModel(eventBus);
+        var wr = new WorkflowRuntime(persistenceStore, runtime, worldModel);
+        
+        var plan = new ExecutionPlan { PlanId = "intent_test2", Goal = "Test Long Suspension" };
+        var step1 = new ExecutionStep
+        {
+            Id = "step1",
+            Action = new AutomationAction { ActionId = "act1", Type = ActionType.Wait, Value = "10", Permission = ActionPermission.Approved }
+        };
+        plan.Steps[step1.Id] = step1;
+
+        var context = new ExecutionContext();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Run to save initial checkpoint
+        await Assert.ThrowsAnyAsync<Exception>(() => wr.StartWorkflowAsync("intent_test2", plan, context, cts.Token));
+
+        // Mark SuspendedAt as 5 hours ago in context
+        var newContext = new ExecutionContext();
+        newContext.SetVariable("SuspendedAt", DateTimeOffset.UtcNow.AddHours(-5).ToString("o"));
+
+        // Restore: should throw due to suspension timeout
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => wr.RestoreWorkflowAsync("intent_test2", newContext, CancellationToken.None));
+        Assert.Contains("suspended for too long", ex.Message);
+        Assert.Equal("Suspended for too long", newContext.GetVariable<string>("IntentValidityObsolete"));
+    }
 }

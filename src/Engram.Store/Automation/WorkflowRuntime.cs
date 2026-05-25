@@ -35,6 +35,8 @@ public class WorkflowRuntime
         _actionRuntime = actionRuntime ?? throw new ArgumentNullException(nameof(actionRuntime));
         _worldModel = worldModel ?? throw new ArgumentNullException(nameof(worldModel));
         _logger = logger;
+
+        _actionRuntime.OnRequestCheckpoint = async (reason) => await CreateCheckpointAsync(reason);
     }
 
     public async Task StartWorkflowAsync(string workflowId, ExecutionPlan plan, ExecutionContext context, CancellationToken ct = default)
@@ -176,12 +178,38 @@ public class WorkflowRuntime
         foreach (var stepDto in planDto.Steps)
         {
             var actionType = Enum.TryParse<ActionType>(stepDto.ActionType, out var type) ? type : ActionType.Wait;
+            IStepVerifier? verifier = null;
+            if (!string.IsNullOrEmpty(stepDto.VerifierType) && !string.IsNullOrEmpty(stepDto.VerifierData))
+            {
+                var verType = Type.GetType(stepDto.VerifierType);
+                if (verType == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        verType = asm.GetType(stepDto.VerifierType);
+                        if (verType != null) break;
+                    }
+                }
+                if (verType != null)
+                {
+                    try
+                    {
+                        verifier = JsonSerializer.Deserialize(stepDto.VerifierData, verType) as IStepVerifier;
+                    }
+                    catch
+                    {
+                        // Ignore deserialization errors
+                    }
+                }
+            }
+
             var step = new ExecutionStep
             {
                 Id = stepDto.Id,
                 DependsOn = stepDto.DependsOn ?? new List<string>(),
                 Status = Enum.TryParse<StepStatus>(stepDto.Status, out var stat) ? stat : StepStatus.Pending,
                 Error = stepDto.Error,
+                Verifier = verifier,
                 Action = new AutomationAction
                 {
                     ActionId = stepDto.ActionId,
@@ -264,8 +292,43 @@ public class WorkflowRuntime
             }
         }
 
+        // 4. Intent Validity Reassessment
+        if (_activePlan != null && context != null)
+        {
+            // A. Check if the final step of the plan is already verified/completed
+            var lastStep = _activePlan.Steps.Values.OrderBy(s => s.Id).LastOrDefault();
+            if (lastStep != null && lastStep.Status != StepStatus.Completed && lastStep.Verifier != null)
+            {
+                try
+                {
+                    bool finalVerified = await lastStep.Verifier.VerifyAsync(context, ct);
+                    if (finalVerified)
+                    {
+                        _logger?.LogWarning("Intent Validity Reassessment: Final step verifier reports success. Workflow is already complete.");
+                        context.SetVariable("IntentValidityObsolete", "Goal already satisfied");
+                        throw new InvalidOperationException("Workflow intent is obsolete: Goal already satisfied manually or elsewhere.");
+                    }
+                }
+                catch (Exception ex) when (ex is not InvalidOperationException)
+                {
+                    // Ignore verifier exceptions during pre-check unless it's the obsolete throw we did above
+                }
+            }
+
+            // B. Check elapsed suspension time
+            var suspendedAtStr = context.GetVariable<string>("SuspendedAt");
+            if (!string.IsNullOrEmpty(suspendedAtStr) && DateTimeOffset.TryParse(suspendedAtStr, out var suspendedAt))
+            {
+                if (DateTimeOffset.UtcNow - suspendedAt > TimeSpan.FromHours(4))
+                {
+                    _logger?.LogWarning("Intent Validity Reassessment: Workflow was suspended for too long.");
+                    context.SetVariable("IntentValidityObsolete", "Suspended for too long");
+                    throw new InvalidOperationException("Workflow intent is obsolete: Workflow was suspended for too long (exceeding 4 hours).");
+                }
+            }
+        }
+
         _logger?.LogInformation("Recovery Reconciliation Protocol successfully completed.");
-        await Task.CompletedTask;
     }
 
     public async Task CreateCheckpointAsync(string reason)
@@ -301,6 +364,14 @@ public class WorkflowRuntime
                 currentIdx = i;
             }
 
+            string? verifierType = null;
+            string? verifierData = null;
+            if (step.Verifier != null)
+            {
+                verifierType = step.Verifier.GetType().FullName;
+                verifierData = JsonSerializer.Serialize(step.Verifier, step.Verifier.GetType());
+            }
+
             planDto.Steps.Add(new ExecutionStepDto
             {
                 Id = step.Id,
@@ -315,7 +386,9 @@ public class WorkflowRuntime
                 TargetSelector = step.Action.Target?.Selector,
                 TargetX = step.Action.Target?.X,
                 TargetY = step.Action.Target?.Y,
-                Error = step.Error
+                Error = step.Error,
+                VerifierType = verifierType,
+                VerifierData = verifierData
             });
         }
 
@@ -368,5 +441,7 @@ public class WorkflowRuntime
         public int? TargetX { get; set; }
         public int? TargetY { get; set; }
         public string? Error { get; set; }
+        public string? VerifierType { get; set; }
+        public string? VerifierData { get; set; }
     }
 }
