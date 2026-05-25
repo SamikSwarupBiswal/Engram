@@ -1,10 +1,10 @@
 # Engram State
 
 **Status:** Existential Validation Era — Active Phase: D7 (Execution Reality Validation & Operational Robustness) [~45-55% Complete]
-**Last Activity:** 2026-05-24
+**Last Activity:** 2026-05-25
 **Branch:** `master`
-**Tests:** 1699 store tests + 88 API tests passing (1787/1787 total tests green)
-**Latest Commit:** (completed — Phase D7 implementation and state transition verification fixes)
+**Tests:** 1718 store tests + 88 API tests passing (1806/1806 total tests green)
+**Latest Commit:** `1539746` (feat(D7): Implement and verify multi-dimensional fatigue and reality sync gating)
 
 ## What Engram Is
 
@@ -229,9 +229,9 @@ GET  /api/governance/audit           Get safety constitution audit log
 - Phase D4 (Real Task Execution Validation) completed, featuring cooperative control transfer (yield-first, abort-second), intent confidence hysteresis, silent pause defaults, layered verification cascade, context binder, and coexistence telemetry.
 - Phase D6 (Real Human Coexistence & Field Validation) completed, featuring dynamic autonomy modulation, decay engine, domain ceilings, neutral failure narratives, and psychology telemetry.
 - Phase D7 (Execution Reality Validation & Operational Robustness) in progress (~45-55% complete). Core substrate stabilization (focus verification, layout stability guard, debouncer, reality consensus, false completion detection, chaos injection, compensation boundaries, systemic drift, identity envelope) is complete. Full operational validation (300-1000 workflow corpus, chaos ecology, fatigue models, distributed sync, explainability, human field testing) is active.
-- 1699/1699 Store tests passing (36 new Phase D6 and D7 tests, full regression green) + 88/88 API integration tests passing (1787/1787 total tests green)
+- 1718/1718 Store tests passing (55 new Phase D6 and D7 tests, full regression green) + 88/88 API integration tests passing (1806/1806 total tests green)
 
-## Tests: 1699/1699 (Engram.Store.Tests)
+## Tests: 1718/1718 (Engram.Store.Tests)
 
 | Category | Count |
 |----------| ------|
@@ -451,13 +451,44 @@ Teaches Engram to say "I don't know":
 2. **Vulkan on clean machines** — BackendProbe + VerdictStore handle graceful CPU fallback.
 3. **Frontend system prompt awareness** — The frontend doesn't show what context the model has about the user.
 
-## Decisions (68+)
+## Decisions (101)
 
-D-001..D-063: Earlier phases
-D-088: OperationalWorldModel as central live state with event-driven change propagation
-D-089: WorkflowCheckpoint serialized to JSON for durable pause/restore across process restarts
-D-090: ActionRuntime.Pause() cancels active token to exit execution loop cleanly (no blocking wait)
-D-091: ProceduralMemoryEngine persisted to .engram/automation/procedural_memory.json
-D-092: SandboxManager path whitelist enforced at dispatch time, not at file operation time
-D-093: AgentOrchestrator uses per-agent mutex to prevent overlapping task dispatch
-D-094: CollaborationEngine creates pending query entries surfaced via Minimal API for human resolution
+- D-001..D-063: Earlier phases
+- D-064: Intent classification via regex/heuristic (no LLM dependency)
+- D-065: TaskRouter as central nervous system
+- D-066: ConversationMemoryPipeline as fire-and-forget
+- D-067: EventBus as in-memory pub/sub (no external dependencies)
+- D-068: BackgroundMetabolismService as IHostedService (5min cycle)
+- D-069: SemanticDeduplicator with 0.7 similarity threshold
+- D-070: ContradictionDetector for behavioral intelligence
+- D-071: RetrievalBudgetManager with 2000 token budget
+- D-072: InterventionGenerator with configurable threshold
+- D-073: IBehavioralModeStrategy for injectable mode detection
+- D-074: PerceptionSnapshot as immutable record (input + interpretation + sequence)
+- D-075: CognitiveRestraintEngine with 9 restraint gates
+- D-076: TruthCalibrationStore for persistent human corrections
+- D-077: FalsePatternDetector for anti-overinterpretation
+- D-078: TimelineSemanticsEngine for sessions/arcs/momentum/regressions
+- D-079: NarrativeDriftAuditor for weekly self-model reality check
+- D-080: InterventionFatigueTracker for user response measurement
+- D-081: AmbiguityToleranceEngine for 'I don't know' infrastructure
+- D-082: SemanticCompressor analyze-only mode (report, don't modify)
+- D-083: Action Graph DAG representation for deterministic, cycle-free task steps
+- D-084: Win32 SendInput simulator with strict bounds and failsafe mechanisms
+- D-085: IBrowserDriver abstraction using Playwright for web environment operations
+- D-086: LIFO recovery and rollback cascade for step-wise environment cleanup
+- D-087: Host-level ExecutionSafetyManager for process and URL domain blacklisting
+- D-088: OperationalWorldModel as central live state with event-driven change propagation
+- D-089: WorkflowCheckpoint serialized to JSON for durable pause/restore across process restarts
+- D-090: ActionRuntime.Pause() cancels active token to exit execution loop cleanly (no blocking wait)
+- D-091: ProceduralMemoryEngine persisted to .engram/automation/procedural_memory.json
+- D-092: SandboxManager path whitelist enforced at dispatch time, not at file operation time
+- D-093: AgentOrchestrator uses per-agent mutex to prevent overlapping task dispatch
+- D-094: CollaborationEngine creates pending query entries surfaced via Minimal API for human resolution
+- D-095: Virtual Time Providers (`Func<DateTimeOffset>` clocks) enable temporal simulation testing without physical sleep delays
+- D-096: Contradiction Expiry enforces auto-suppression of behavioral contradiction entries older than 14 days
+- D-097: Protected Islands Archival Shield prevents system-level archival/decay of critical User Identity, Goal, and Project nodes
+- D-098: EpistemicFatigueVector represents multi-dimensional decay across six independent vectors (Temporal, Verification, Environmental, Propagation, Collision, and Drift) rather than a single scalar decay factor.
+- D-099: EnvironmentalDivergenceInterpreter dynamically classifies desynchronizations into Benign, Sovereignty, Instability, Propagation, Semantic, and Hostile categories to govern yielding decisions.
+- D-100: RecoveryLegibilityEngine explainability compression translates complex execution fatigue and desynchronization conditions into simple, non-anthropomorphic, calm statements.
+- D-101: Recovery Reconciliation Protocol runs filesystem, uncertainty, and propagation validation before workflow resumption.

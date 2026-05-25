@@ -53,7 +53,7 @@
 
 - Phases 1-12, D1-D4, and D6-D7 implemented and verified
 - Active development completed for Phase D5 (Productization)
-- 1699 store tests + 88 API tests passing (1787/1787 total tests green)
+- 1718 store tests + 88 API tests passing (1806/1806 total tests green)
 - 97 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -134,6 +134,14 @@ We track progress across 6 key battlefields:
 5. **Operational Explainability/Legibility**: Ensure the internal complexity of recovery, suspension, and compensation is fully legible to humans so they do not psychologically detach.
 6. **Real Human Field Testing**: Evaluate on real desktops with real users, capturing actual interruptions, frustrations, and misuse.
 
+## D7-D8 Future Strategic Objectives (Real-World Human Ecology & Mitigation)
+To prevent "validation theater" and keep the organism both usable and safe under sustained real-world entropy, the transition from Phase D7 to D8 must focus on:
+1. **Adaptive Cognitive Compression**: Under rising epistemic fatigue, rather than proceeding until hard suspension, the runtime must compress its execution footprint (e.g. simplifying steps, reducing concurrency, increasing checkpoint density, using highly structured verification, and reducing autonomy).
+2. **Phase-Relative Divergence Context**: The interpretation of environment desynchronization must be context-relative (e.g. closing an application is benign during user-driven research but critical/hostile during sensitive payment or final mutation steps).
+3. **Progressive Explainability Layers**: In addition to calm, non-anthropomorphic summaries for daily users, the legibility engine must support progressive detail tiers (Calm Summary, Operational Detail, Causal Trace, and Full Epistemic Graph) for developers and debugging.
+4. **Intent Validity Reassessment**: Recovery reconciliation must assess semantic obsolete risk (e.g. overnight suspension) by re-verifying whether the original intent and goals still align with active user context.
+5. **Human Ecology over Synthetic Tests**: The final validation of Phase D7 must be evaluated through human psychology telemetry (irritation thresholds, annoyance archaeology, and intervention pacing equilibrium) under real-world multitasking and distraction.
+
 ## Key Decisions
 
 - D-064: Intent classification via regex/heuristic (no LLM dependency)
@@ -170,6 +178,10 @@ We track progress across 6 key battlefields:
 - D-095: Virtual Time Providers (`Func<DateTimeOffset>` clocks) enable temporal simulation testing without physical sleep delays
 - D-096: Contradiction Expiry enforces auto-suppression of behavioral contradiction entries older than 14 days
 - D-097: Protected Islands Archival Shield prevents system-level archival/decay of critical User Identity, Goal, and Project nodes
+- D-098: EpistemicFatigueVector represents multi-dimensional decay across six independent vectors (Temporal, Verification, Environmental, Propagation, Collision, and Drift) rather than a single scalar decay factor.
+- D-099: EnvironmentalDivergenceInterpreter dynamically classifies desynchronizations into Benign, Sovereignty, Instability, Propagation, Semantic, and Hostile categories to govern yielding decisions.
+- D-100: RecoveryLegibilityEngine explainability compression translates complex execution fatigue and desynchronization conditions into simple, non-anthropomorphic, calm statements.
+- D-101: Recovery Reconciliation Protocol runs filesystem, uncertainty, and propagation validation before workflow resumption.
 
 ## Anti-Patterns (DO NOT BUILD)
 
