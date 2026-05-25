@@ -8,6 +8,9 @@ public class MutationBoundarySemantics
     public bool IsReversible { get; set; } = true;
     public bool IsRecoverable { get; set; } = true;
     public bool IsIrreversible { get; set; }
+    public bool IsIrrecoverable { get; set; }
     public bool IsExternallyPropagated { get; set; }
+    public bool IsCompensatable { get; set; }
+    public ICompensationAction? CompensationAction { get; set; }
     public List<string> CausalDependencies { get; set; } = new();
 }

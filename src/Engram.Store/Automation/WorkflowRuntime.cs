@@ -47,6 +47,12 @@ public class WorkflowRuntime
         _activePlan = plan;
         _activeContext = context;
 
+        _actionRuntime.IdentityEnvelope = new WorkflowIdentityEnvelope
+        {
+            WorkflowId = workflowId,
+            IntentHistory = new List<string> { plan.Goal }
+        };
+
         _worldModel.ActiveWorkflow = workflowId;
         _worldModel.CurrentPhase = "ExecutingSteps";
         _worldModel.ExecutionConfidence = 0.95;
@@ -200,6 +206,8 @@ public class WorkflowRuntime
         _activePlan = plan;
         _activeContext = context;
 
+        _actionRuntime.IdentityEnvelope = checkpoint.IdentityEnvelope ?? new WorkflowIdentityEnvelope { WorkflowId = workflowId };
+
         _worldModel.ActiveWorkflow = workflowId;
         _worldModel.CurrentPhase = "Restored";
         _worldModel.ExecutionConfidence = 0.85;
@@ -278,6 +286,7 @@ public class WorkflowRuntime
             Variables = variablesMap,
             ExecutedStepIds = executedSteps,
             PlanJson = JsonSerializer.Serialize(planDto),
+            IdentityEnvelope = _actionRuntime.IdentityEnvelope,
             CheckpointTime = DateTimeOffset.UtcNow
         };
 

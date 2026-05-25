@@ -40,6 +40,7 @@ public class ExecutionStep
     public IStepRecovery? RecoveryPolicy { get; init; }
     
     public StepStatus Status { get; set; } = StepStatus.Pending;
+    public MutationBoundarySemantics? Semantics { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public string? Error { get; set; }

@@ -76,6 +76,10 @@ public class ActionRuntime : IDisposable
     public ProceduralExperienceStore? ExperienceStore { get => _experienceStore; set => _experienceStore = value; }
     public ProceduralDriftDetector? DriftDetector { get => _driftDetector; set => _driftDetector = value; }
 
+    public WorkflowIdentityEnvelope? IdentityEnvelope { get; set; }
+    public ExternalPropagationLedger PropagationLedger { get; set; } = new ExternalPropagationLedger();
+    public EnvironmentalDriftCorrelationEngine DriftCorrelationEngine { get; set; } = new EnvironmentalDriftCorrelationEngine();
+
     public ActionRuntime(
         ActionExecutor executor, 
         PermissionGate permissionGate, 
@@ -204,6 +208,18 @@ public class ActionRuntime : IDisposable
                     linkedToken.ThrowIfCancellationRequested();
                 }
 
+                var appScope = context.GetVariable<string>("AppName") ?? "Default";
+                if (DriftCorrelationEngine != null)
+                {
+                    double scopeConfidence = DriftCorrelationEngine.GetScopeConfidence(appScope);
+                    if (scopeConfidence < 0.5 || DriftCorrelationEngine.ShouldRecalibrate(appScope))
+                    {
+                        _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                        _stateMachine.TransitionTo(WorkflowState.Suspended);
+                        throw new InvalidOperationException($"Execution halted: Scope '{appScope}' has degraded confidence ({scopeConfidence:F2}) or requires recalibration due to systemic drift.");
+                    }
+                }
+
                 // Variable substitution for action values and selectors
                 var resolvedValue = SubstituteVariables(step.Action.Value, context);
                 var resolvedSelector = step.Action.Target != null ? SubstituteVariables(step.Action.Target.Selector, context) : null;
@@ -229,6 +245,11 @@ public class ActionRuntime : IDisposable
                 // Generate and log semantic summary
                 var semanticSummary = _semanticSummarizer.Summarize(resolvedAction);
                 _logger?.LogInformation("Semantic Intent: {Summary}", semanticSummary);
+
+                if (IdentityEnvelope != null)
+                {
+                    IdentityEnvelope.IntentHistory.Add(semanticSummary);
+                }
 
                 // ── D7 ROBOTICS SUBSTRATE ──
                 _stateMachine.ForceState(WorkflowState.AcquiringTarget);
@@ -345,6 +366,8 @@ public class ActionRuntime : IDisposable
                     step.Error = ex.Message;
                     _permissionGate.RecordFailure(resolvedAction, wasCancelled: false);
                     
+                    RecordFailureAndAssessDrift(step, context, ex);
+
                     if (_failureNarrativeRecorder != null && _recoveryLegibilityEngine != null)
                     {
                         var activeAutonomy = context.GetVariable<string>("ActiveAutonomy") ?? "Medium";
@@ -369,8 +392,27 @@ public class ActionRuntime : IDisposable
                     {
                         order[j].Status = StepStatus.Skipped;
                     }
-                    _stateMachine.TransitionTo(WorkflowState.FailedSafe);
-                    await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+
+                    bool shouldSuspend = step.Semantics?.IsIrrecoverable == true || completedSteps.Any(s => s.Semantics?.IsIrrecoverable == true);
+                    if (shouldSuspend)
+                    {
+                        _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                        _stateMachine.TransitionTo(WorkflowState.Suspended);
+                    }
+                    else
+                    {
+                        _stateMachine.TransitionTo(WorkflowState.FailedSafe);
+                        try
+                        {
+                            await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+                        }
+                        catch (Exception rollbackEx)
+                        {
+                            _logger?.LogError(rollbackEx, "Failed during rollback/compensation. Suspending workflow.");
+                            _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                            _stateMachine.TransitionTo(WorkflowState.Suspended);
+                        }
+                    }
                     throw;
                 }
 
@@ -435,15 +477,26 @@ public class ActionRuntime : IDisposable
                     _logger?.LogInformation("Executing step '{StepId}': {Description}", step.Id, step.Action.Description);
 
                     // Register step semantics and properties in FailureTopologyGraph
-                    if (_failureTopologyGraph != null)
+                    var semantics = step.Semantics;
+                    if (semantics == null)
                     {
                         var isIrreversible = _reversibilityEvaluator.IsIrreversible(resolvedAction);
-                        var semantics = new MutationBoundarySemantics
+                        semantics = new MutationBoundarySemantics
                         {
                             IsReversible = !isIrreversible,
                             IsIrreversible = isIrreversible,
                             IsExternallyPropagated = resolvedAction.Type == ActionType.Download || resolvedAction.Type == ActionType.Upload
                         };
+                        step.Semantics = semantics;
+                    }
+
+                    if (IdentityEnvelope != null)
+                    {
+                        IdentityEnvelope.MutationLog.Add($"{step.Id}: {resolvedAction.Type} on {resolvedAction.Target?.Selector ?? "no-target"}");
+                    }
+
+                    if (_failureTopologyGraph != null)
+                    {
                         _failureTopologyGraph.RegisterStepSemantics(step.Id, semantics);
 
                         if (semantics.IsExternallyPropagated)
@@ -457,7 +510,18 @@ public class ActionRuntime : IDisposable
                                 Timestamp = DateTimeOffset.UtcNow
                             };
                             _failureTopologyGraph.RegisterPropagation(step.Id, prop);
+                            IdentityEnvelope?.PropagationLog.Add(prop);
                         }
+                    }
+
+                    if (semantics.IsExternallyPropagated && PropagationLedger != null)
+                    {
+                        PropagationLedger.RecordPropagation(
+                            step.Id,
+                            resolvedAction.Type.ToString(),
+                            resolvedAction.Value ?? resolvedAction.Target?.Selector ?? string.Empty,
+                            "Uncertain"
+                        );
                     }
 
                     // Enforce modal safety laws and active window check before dispatching mouse/keyboard events
@@ -507,6 +571,7 @@ public class ActionRuntime : IDisposable
                         throw new InvalidOperationException($"False completion detected: Screen indicates error or occluding prompt.");
                     }
 
+
                     var signals = new VerificationSignals { StructuredApiVerified = true };
 
                     if (step.Verifier != null)
@@ -514,12 +579,27 @@ public class ActionRuntime : IDisposable
                         _logger?.LogDebug("Verifying step '{StepId}' with reality convergence", step.Id);
                         bool verified = await VerifyStepWithConvergenceAsync(step, context, linkedToken);
                         signals.StructuredApiVerified = verified;
+
+                        if (IdentityEnvelope != null)
+                        {
+                            IdentityEnvelope.VerificationLog.Add($"{step.Id}: Verified={verified} (Signals: StructuredApiVerified={verified})");
+                        }
+
                         if (!verified)
                         {
                             var uncertainty = UncertaintyLevel.U1_Observational;
                             if (_reversibilityEvaluator != null && _reversibilityEvaluator.IsIrreversible(resolvedAction))
                             {
                                 uncertainty = UncertaintyLevel.U3_Irreversible;
+                            }
+
+                            if (IdentityEnvelope != null)
+                            {
+                                IdentityEnvelope.UncertaintyLog.Add(new UncertaintyEvent
+                                {
+                                    Level = uncertainty,
+                                    Reason = $"Verification failed for step '{step.Id}'"
+                                });
                             }
 
                             if (uncertainty == UncertaintyLevel.U1_Observational)
@@ -540,6 +620,13 @@ public class ActionRuntime : IDisposable
                             }
                         }
                     }
+                    else
+                    {
+                        if (IdentityEnvelope != null)
+                        {
+                            IdentityEnvelope.VerificationLog.Add($"{step.Id}: Verified=True (No verifier defined)");
+                        }
+                    }
 
                     if (_verificationConsensusEngine != null && _verificationStrengthPolicy != null)
                     {
@@ -558,6 +645,15 @@ public class ActionRuntime : IDisposable
                         if (!meetsReqs || confidence < requiredCertainty)
                         {
                             throw new InvalidOperationException($"Epistemic verification failed: Consensus confidence {confidence:F2} is insufficient for step '{step.Id}' (Required: {requiredCertainty:F2}).");
+                        }
+                    }
+
+                    if (semantics.IsExternallyPropagated && PropagationLedger != null)
+                    {
+                        var records = PropagationLedger.GetRecords().Where(r => r.StepId.Equals(step.Id, StringComparison.OrdinalIgnoreCase));
+                        foreach (var record in records)
+                        {
+                            PropagationLedger.UpdateStatus(record.PropagationId, "Propagated");
                         }
                     }
 
@@ -597,6 +693,16 @@ public class ActionRuntime : IDisposable
                             if (drift != null)
                             {
                                 _logger?.LogWarning("Procedural Drift Detected on success: {Reason}. Uncertainty Level: {DriftLevel}", reason, drift);
+                                
+                                double driftVal = drift switch
+                                {
+                                    UncertaintyLevel.U1_Observational => 0.3,
+                                    UncertaintyLevel.U2_StateAmbiguity => 0.7,
+                                    UncertaintyLevel.U3_Irreversible => 1.0,
+                                    _ => 0.5
+                                };
+                                DriftCorrelationEngine?.RecordObservation(step.Id, appScope, DriftType.Environmental, driftVal);
+
                                 if (drift >= UncertaintyLevel.U2_StateAmbiguity)
                                 {
                                     _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
@@ -796,6 +902,20 @@ public class ActionRuntime : IDisposable
                         _logger?.LogError(lastError, "Step '{StepId}' execution or recovery failed. Initiating rollback.", step.Id);
                         _permissionGate.RecordFailure(resolvedAction, wasCancelled: lastError is OperationCanceledException || _state == RuntimeState.Aborted);
                          
+                        if (lastError != null)
+                        {
+                            RecordFailureAndAssessDrift(step, context, lastError);
+                        }
+
+                        if (step.Semantics != null && step.Semantics.IsExternallyPropagated && PropagationLedger != null)
+                        {
+                            var records = PropagationLedger.GetRecords().Where(r => r.StepId.Equals(step.Id, StringComparison.OrdinalIgnoreCase));
+                            foreach (var record in records)
+                            {
+                                PropagationLedger.UpdateStatus(record.PropagationId, "Failed", lastError?.Message ?? "Execution failed");
+                            }
+                        }
+
                          if (_failureNarrativeRecorder != null && _recoveryLegibilityEngine != null)
                          {
                              var activeAutonomy = context.GetVariable<string>("ActiveAutonomy") ?? "Medium";
@@ -817,19 +937,38 @@ public class ActionRuntime : IDisposable
                              _ = _failureNarrativeRecorder.RecordFailureNarrativeAsync(narrative);
                          }
 
-                         if (_stateMachine.CurrentState != WorkflowState.Recovering &&
-                             _stateMachine.CurrentState != WorkflowState.Suspended &&
-                             _stateMachine.CurrentState != WorkflowState.FailedSafe)
-                         {
-                             _stateMachine.TransitionTo(WorkflowState.Recovering);
-                         }
+                         bool shouldSuspend = (step.Semantics?.IsIrrecoverable == true) || completedSteps.Any(s => s.Semantics?.IsIrrecoverable == true);
 
-                         if (_stateMachine.CurrentState != WorkflowState.Suspended &&
-                             _stateMachine.CurrentState != WorkflowState.FailedSafe)
+                         if (shouldSuspend)
                          {
-                             _stateMachine.TransitionTo(WorkflowState.RolledBack);
-                             await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
-                             _stateMachine.TransitionTo(WorkflowState.FailedSafe);
+                             _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                             _stateMachine.TransitionTo(WorkflowState.Suspended);
+                         }
+                         else
+                         {
+                             if (_stateMachine.CurrentState != WorkflowState.Recovering &&
+                                 _stateMachine.CurrentState != WorkflowState.Suspended &&
+                                 _stateMachine.CurrentState != WorkflowState.FailedSafe)
+                             {
+                                 _stateMachine.TransitionTo(WorkflowState.Recovering);
+                             }
+
+                             if (_stateMachine.CurrentState != WorkflowState.Suspended &&
+                                 _stateMachine.CurrentState != WorkflowState.FailedSafe)
+                             {
+                                 _stateMachine.TransitionTo(WorkflowState.RolledBack);
+                                 try
+                                 {
+                                     await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+                                     _stateMachine.TransitionTo(WorkflowState.FailedSafe);
+                                 }
+                                 catch (Exception rollbackEx)
+                                 {
+                                     _logger?.LogError(rollbackEx, "Failed during rollback/compensation. Suspending workflow.");
+                                     _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                                     _stateMachine.TransitionTo(WorkflowState.Suspended);
+                                 }
+                             }
                          }
                          throw new InvalidOperationException($"Step '{step.Id}' failed: {lastError?.Message}", lastError);
                     }
@@ -882,12 +1021,43 @@ public class ActionRuntime : IDisposable
 
     private async Task RollbackCompletedStepsAsync(List<ExecutionStep> completedSteps, ExecutionContext context, CancellationToken ct)
     {
-        _logger?.LogWarning("Initiating reverse-order rollback for {Count} completed steps.", completedSteps.Count);
+        _logger?.LogWarning("Initiating reverse-order rollback/compensation for {Count} completed steps.", completedSteps.Count);
         for (int i = completedSteps.Count - 1; i >= 0; i--)
         {
             var step = completedSteps[i];
             step.Status = StepStatus.RolledBack;
-            if (step.RollbackHandler != null)
+            
+            var semantics = step.Semantics;
+            if (semantics != null && semantics.IsCompensatable && semantics.CompensationAction != null)
+            {
+                try
+                {
+                    _logger?.LogInformation("Executing compensation action for step '{StepId}'", step.Id);
+                    await semantics.CompensationAction.ExecuteCompensationAsync(context, ct);
+                    if (PropagationLedger != null)
+                    {
+                        var records = PropagationLedger.GetRecords().Where(r => r.StepId.Equals(step.Id, StringComparison.OrdinalIgnoreCase));
+                        foreach (var r in records)
+                        {
+                            PropagationLedger.UpdateStatus(r.PropagationId, "Compensated", "Compensation executed successfully.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Compensation failed for step '{StepId}' during rollback/compensation.", step.Id);
+                    if (PropagationLedger != null)
+                    {
+                        var records = PropagationLedger.GetRecords().Where(r => r.StepId.Equals(step.Id, StringComparison.OrdinalIgnoreCase));
+                        foreach (var r in records)
+                        {
+                            PropagationLedger.UpdateStatus(r.PropagationId, "Failed", $"Compensation failed: {ex.Message}");
+                        }
+                    }
+                    throw; // Bubble up compensation failure to trigger suspension
+                }
+            }
+            else if (step.RollbackHandler != null)
             {
                 try
                 {
@@ -937,6 +1107,49 @@ public class ActionRuntime : IDisposable
         }
 
         return await step.Verifier.VerifyAsync(context, ct);
+    }
+
+    private void RecordFailureAndAssessDrift(ExecutionStep step, ExecutionContext context, Exception ex)
+    {
+        var appScope = context.GetVariable<string>("AppName") ?? "Default";
+        var driftType = ClassifyDriftType(ex);
+        
+        DriftCorrelationEngine?.RecordObservation(step.Id, appScope, driftType, 1.0);
+        
+        if (IdentityEnvelope != null)
+        {
+            var uncertainty = driftType == DriftType.UserTurbulence ? UncertaintyLevel.U2_StateAmbiguity : UncertaintyLevel.U1_Observational;
+            IdentityEnvelope.UncertaintyLog.Add(new UncertaintyEvent
+            {
+                Level = uncertainty,
+                Reason = ex.Message
+            });
+        }
+    }
+
+    private DriftType ClassifyDriftType(Exception ex)
+    {
+        var msg = ex.Message ?? string.Empty;
+        if (msg.Contains("Focus ownership", StringComparison.OrdinalIgnoreCase) || 
+            msg.Contains("occluding", StringComparison.OrdinalIgnoreCase))
+        {
+            return DriftType.UserTurbulence;
+        }
+        if (msg.Contains("procedural drift", StringComparison.OrdinalIgnoreCase))
+        {
+            return DriftType.LocalProcedural;
+        }
+        if (msg.Contains("Epistemic verification failed", StringComparison.OrdinalIgnoreCase) || 
+            msg.Contains("Safety Violation", StringComparison.OrdinalIgnoreCase))
+        {
+            return DriftType.GovernanceCollapse;
+        }
+        if (msg.Contains("timing", StringComparison.OrdinalIgnoreCase) || 
+            msg.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+        {
+            return DriftType.Environmental;
+        }
+        return DriftType.LocalProcedural;
     }
 
     public void Dispose()

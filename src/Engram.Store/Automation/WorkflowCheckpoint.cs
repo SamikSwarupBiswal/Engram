@@ -16,5 +16,6 @@ public class WorkflowCheckpoint
     public Dictionary<string, string> Variables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> ExecutedStepIds { get; set; } = new();
     public string PlanJson { get; set; } = string.Empty;
+    public WorkflowIdentityEnvelope? IdentityEnvelope { get; set; }
     public DateTimeOffset CheckpointTime { get; set; } = DateTimeOffset.UtcNow;
 }
