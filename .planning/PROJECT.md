@@ -103,8 +103,8 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## Current State
 
-- Phases 1-12, D1-D4, and D6-D7 implemented and verified
-- Active development completed for Phase D7 (Execution Reality Validation & Operational Robustness)
+- Phases 1-12, D1-D4, and D6 implemented and verified. Phase D7 (Execution Reality Validation & Operational Robustness) is in progress (~45-55% complete).
+- Core substrate stabilization completed for Phase D7; currently undergoing full operational validation.
 - 1699 store tests + 88 API tests passing (1787/1787 total tests green)
 - 97 API endpoints (all connected to frontend)
 - 10 frontend views
@@ -135,7 +135,7 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## What's Next
 
-1. **Existential Validation Era (D1-D7)** — Shift focus entirely from capability expansion to operational consolidation, hardening, coexistence validation, soak operations, task execution validation, and productization. Active phase: **D5 (Productization)**.
+1. **Existential Validation Era (D1-D7)** — Shift focus entirely from capability expansion to operational validation, hardening, coexistence validation, soak operations, task execution validation, and productization. Active phase: **D7 (Execution Reality Validation & Operational Robustness)**, transitioning substrate stabilization to behaviorally trustworthy operational validation.
 
 ## Anti-Patterns (DO NOT BUILD)
 

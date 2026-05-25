@@ -38,14 +38,15 @@
   - [x] **Phase 12E: Multi-Month Runtime Survival** — Implement corruption recovery, graph reconciliation, replay validation, causal continuity repair, and operational archaeology integrity.
   - [x] **Phase 12F: Cognitive Homeostasis** — Implement dynamic stabilization, equilibrium enforcement, semantic load balancing, emotional neutrality preservation, and activation damping.
   - [x] **Phase 12G: Longitudinal Human Adaptation** — Enable calmer, non-intrusive operations and learning restraint patterns without accumulating overconfidence.
-- [x] **Deployment Era (D1-D7)** [CRITICAL]
+- [ ] **Deployment Era (D1-D8)** [CRITICAL]
   - [x] **Phase D1: Reality Hardening** — Installer resilience, Windows dynamic environments, sleep/wake, driver fallbacks, anti-virus.
   - [x] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
   - [x] **Phase D3: Long-Horizon Soak Operation** — Virtual 30-day time-warp simulation, auto-expiry of active contradictions, protected islands archival shield, and ecological health telemetry metrics — 2026-05-24
   - [x] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
   - [ ] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
   - [x] **Phase D6: Real Human Coexistence & Field Validation** — Dynamic autonomy modulation, decay engine, domain ceilings, neutral failure narratives, and psychology telemetry.
-  - [x] **Phase D7: Execution Reality Validation & Operational Robustness** — Focus foreground focus verification, layout shift stability guard, debouncer, weighted reality confidence score consensus, false completion detection, chaos injection, transaction boundaries, and rollback recovery context rehydration — 2026-05-24
+  - [/] **Phase D7: Execution Reality Validation & Operational Robustness** [45-55% Complete] — Focus foreground focus verification, layout shift stability guard, debouncer, weighted reality consensus, false completion detection, chaos injection, compensation boundary semantics, systemic drift correlation, and workflow identity envelopes.
+  - [ ] **Phase D8: Deployment-Scale Coexistence Ecology** — Onboarding ecology, multi-user deployment, long-term retention, privacy economics, fleet-wide pathology telemetry, fleet updates, supportability, and operational sociology. D8 starts ONLY when the organism behaves predictably, fails conservatively, and remains psychologically comprehensible under sustained real-world usage.
 
 
 ## Current State
@@ -111,33 +112,27 @@ Autonomous Execution (Phase 8):
   → AgentOrchestrator (multi-agent task routing)
 ```
 
-## What's Next: Existential Validation Era (D1-D5)
+## What's Next: Existential Validation & Productization Era (D5-D7)
 
 All remaining roadmap work is focused on robustness, coexistence, endurance, execution validation, and productization to ensure Engram survives real-world Windows environments and users.
-
-### Phase D1: Reality Hardening (Completed)
-1. **Installer Resilience** — Handle Windows path variables, administrator/standard privileges, and user profile variations.
-2. **Windows Edge Cases** — Multi-monitor configurations, DPI scaling, registry access errors.
-3. **OS State Transitions** — Handle system sleep, hibernation, wake cycles, and unexpected power loss.
-4. **Environment Divergence** — Browser profiling, anti-virus interference, permissions chaos, and fallback execution strategies.
-
-### Phase D2: Human Coexistence Validation (Completed)
-1. **Intervention Fatigue** — Gauge frequency of passive/active intervention dispatches and refine the friction-scaled restraint thresholds.
-2. **Annoyance Archaeology** — Monitor Swift cancels and UI dismissals to track user annoyance and trust drift.
-3. **Autonomy Discomfort** — Verify pacing constraints to ensure Engram does not context-switch or alert the user aggressively.
-
-### Phase D3: Long-Horizon Soak Operation (Completed)
-1. **Long-Horizon Run** — Weeks-long continuous background operational simulation.
-2. **Semantic Accumulation** — Analyze entity graph scaling, link density decay, and WAL propagation sludge over time.
-3. **Homeostasis Maintenance** — Validate priority stacks and metabolic resource triage under prolonged low-to-high activity cycles.
-
-### Phase D4: Real Task Execution Validation (Completed)
-1. **Task Robustness** — Ensure end-to-end task completion (e.g., generating research reports, browser data extraction, file curation) on messy desktops.
-2. **Interruption Recovery** — Gracefully pause automation steps when users hijack input or focus and resume safely.
 
 ### Phase D5: Productization
 1. **Packaging & Security** — Formally sign binaries, configure secure auto-update mechanisms, and enforce localized privacy walls.
 2. **Governance UI** — Expose permission dashboards, explainability traces, and correction interfaces to the user clearly.
+
+### Phase D6: Real Human Coexistence & Field Validation (Completed)
+1. **Dynamic Autonomy Modulation** — Scale autonomy limits based on user feedback and decay confidence dynamically.
+2. **Telemetry Audit** — Inspect psychology and fatigue feedback metrics.
+
+### Phase D7: Execution Reality Validation & Operational Robustness (In Progress: ~45-55% Complete)
+We must transition from *substrate stabilization* to *full operational validation*. Phase D7 will not be complete until execution reliability becomes behaviorally trustworthy and the organism ceases to fail catastrophically under sustained real-world entropy.
+We track progress across 6 key battlefields:
+1. **Large-Scale Workflow Corpus**: Validate 300–1000 real workflows across browser, Office, filesystem, dev tools, and multitasking, moving away from synthetic happy paths.
+2. **Chaos Ecology Validation**: Hardening under prolonged instability, weeks-long drift, updates, sleep/wake loops, filesystem corruption, and human keyboard/mouse collision storms. Success is defined by failing conservatively and calmly under sustained entropy.
+3. **Execution Fatigue Modeling**: Build and validate models for epistemic debt accumulation, long-duration confidence decay, and cumulative drift handling.
+4. **Distributed Reality Synchronization**: Manage cross-application causal truth, delayed consistency, and distributed uncertainty containment.
+5. **Operational Explainability/Legibility**: Ensure the internal complexity of recovery, suspension, and compensation is fully legible to humans so they do not psychologically detach.
+6. **Real Human Field Testing**: Evaluate on real desktops with real users, capturing actual interruptions, frustrations, and misuse.
 
 ## Key Decisions
 
