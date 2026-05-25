@@ -79,6 +79,7 @@ public class ActionRuntime : IDisposable
     public WorkflowIdentityEnvelope? IdentityEnvelope { get; set; }
     public ExternalPropagationLedger PropagationLedger { get; set; } = new ExternalPropagationLedger();
     public EnvironmentalDriftCorrelationEngine DriftCorrelationEngine { get; set; } = new EnvironmentalDriftCorrelationEngine();
+    public EnvironmentSynchronizationEngine? SynchronizationEngine { get; set; }
 
     public ActionRuntime(
         ActionExecutor executor, 
@@ -217,6 +218,71 @@ public class ActionRuntime : IDisposable
                         _stateMachine.ForceState(WorkflowState.RealityUncertain);
                         _stateMachine.TransitionTo(WorkflowState.Suspended);
                         throw new InvalidOperationException($"Execution halted: Scope '{appScope}' has degraded confidence ({scopeConfidence:F2}) or requires recalibration due to systemic drift.");
+                    }
+                }
+
+                // ── D7 Environment Synchronization Gating ──
+                if (SynchronizationEngine != null)
+                {
+                    var syncReport = SynchronizationEngine.CheckSynchronization(context);
+                    if (!syncReport.IsSynchronized)
+                    {
+                        var interpreter = new EnvironmentalDivergenceInterpreter();
+                        foreach (var div in syncReport.Divergences)
+                        {
+                            var interpretation = interpreter.Interpret(div, context);
+                            if (interpretation == DivergenceInterpretation.Hostile || 
+                                interpretation == DivergenceInterpretation.Sovereignty || 
+                                interpretation == DivergenceInterpretation.Propagation || 
+                                interpretation == DivergenceInterpretation.Semantic)
+                            {
+                                _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                                _stateMachine.TransitionTo(WorkflowState.Suspended);
+                                throw new InvalidOperationException($"Execution halted: Critical environment desynchronization ({interpretation}). Expected '{div.Expected}' but actual is '{div.Actual}' (Source: {div.Source}).");
+                            }
+
+                            if (interpretation == DivergenceInterpretation.Instability)
+                            {
+                                _logger?.LogWarning("Instability divergence detected (Transient). Continuing execution. Expected '{Expected}' but got '{Actual}'.", div.Expected, div.Actual);
+                            }
+                        }
+                    }
+                }
+
+                // ── D7 Epistemic Fatigue / Debt Gating ──
+                if (_temporalDegradationModel != null)
+                {
+                    var elapsedPlanTime = DateTimeOffset.UtcNow - plan.Steps.Values.Min(s => s.StartedAt ?? DateTimeOffset.UtcNow);
+                    int unresolvedPropagation = 0;
+                    if (PropagationLedger != null)
+                    {
+                        unresolvedPropagation = PropagationLedger.GetRecords().FindAll(r => r.Status == "Uncertain" || r.Status == "Failed").Count;
+                    }
+
+                    int humanCollisionCount = context.GetVariable<int>("HumanCollisionCount");
+
+                    double driftIndex = 0.0;
+                    if (DriftCorrelationEngine != null)
+                    {
+                        driftIndex = 1.0 - DriftCorrelationEngine.GetScopeConfidence(appScope);
+                    }
+
+                    var fatigueVector = _temporalDegradationModel.ComputeFatigueVector(
+                        plan.PlanId,
+                        elapsedPlanTime,
+                        completedSteps.Count,
+                        IdentityEnvelope?.UncertaintyLog,
+                        unresolvedPropagation,
+                        humanCollisionCount,
+                        driftIndex
+                    );
+
+                    double fatigueIndex = fatigueVector.GetAggregateFatigueIndex();
+                    if (fatigueIndex < 0.3)
+                    {
+                        _stateMachine.ForceState(WorkflowState.RealityUncertain);
+                        _stateMachine.TransitionTo(WorkflowState.Suspended);
+                        throw new InvalidOperationException($"Execution halted: Extreme epistemic fatigue (decay factor: {fatigueIndex:F2}). Yielding to prevent cumulative drift errors.");
                     }
                 }
 
@@ -637,7 +703,7 @@ public class ActionRuntime : IDisposable
                         if (_temporalDegradationModel != null)
                         {
                             var elapsedPlanTime = DateTimeOffset.UtcNow - plan.Steps.Values.Min(s => s.StartedAt ?? DateTimeOffset.UtcNow);
-                            double decayFactor = _temporalDegradationModel.ComputeTemporalDecayFactor(plan.PlanId, elapsedPlanTime, completedSteps.Count);
+                            double decayFactor = _temporalDegradationModel.ComputeTemporalDecayFactor(plan.PlanId, elapsedPlanTime, completedSteps.Count, IdentityEnvelope?.UncertaintyLog?.Count ?? 0);
                             // Raise threshold as elapsed plan time compounds
                             requiredCertainty += (1.0 - decayFactor) * (1.0 - requiredCertainty);
                         }

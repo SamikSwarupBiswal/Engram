@@ -208,12 +208,64 @@ public class WorkflowRuntime
 
         _actionRuntime.IdentityEnvelope = checkpoint.IdentityEnvelope ?? new WorkflowIdentityEnvelope { WorkflowId = workflowId };
 
+        // ── Recovery Reconciliation Protocol ──
+        _logger?.LogInformation("Executing Recovery Reconciliation Protocol for workflow '{WorkflowId}'...", workflowId);
+        await ReconcileSuspendedStateAsync(context, ct);
+
         _worldModel.ActiveWorkflow = workflowId;
         _worldModel.CurrentPhase = "Restored";
         _worldModel.ExecutionConfidence = 0.85;
 
         _logger?.LogInformation("Workflow '{WorkflowId}' restored. Resuming execution...", workflowId);
         await ResumeWorkflowAsync(ct);
+    }
+
+    private async Task ReconcileSuspendedStateAsync(ExecutionContext context, CancellationToken ct)
+    {
+        // 1. Re-verify environment preconditions
+        if (_actionRuntime.SynchronizationEngine != null)
+        {
+            var syncReport = _actionRuntime.SynchronizationEngine.CheckSynchronization(context);
+            if (!syncReport.IsSynchronized)
+            {
+                var interpreter = new EnvironmentalDivergenceInterpreter();
+                foreach (var div in syncReport.Divergences)
+                {
+                    var interpretation = interpreter.Interpret(div, context);
+                    if (interpretation == DivergenceInterpretation.Hostile || interpretation == DivergenceInterpretation.Propagation)
+                    {
+                        throw new InvalidOperationException($"Reconciliation failed: Unresolved {interpretation} divergence. Expected '{div.Expected}' (Actual: '{div.Actual}').");
+                    }
+                }
+            }
+        }
+
+        // 2. Reassess uncertainty lineage
+        var envelope = _actionRuntime.IdentityEnvelope;
+        if (envelope != null)
+        {
+            _worldModel.ExecutionConfidence = 0.90; // Start with decent confidence after clean reconciliation
+        }
+
+        // 3. Reconcile propagation state
+        if (_actionRuntime.PropagationLedger != null)
+        {
+            var unresolved = _actionRuntime.PropagationLedger.GetRecords();
+            foreach (var record in unresolved)
+            {
+                if (record.Status == "Uncertain" || record.Status == "Failed")
+                {
+                    string filePath = record.DestinationValue;
+                    if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+                    {
+                        _actionRuntime.PropagationLedger.UpdateStatus(record.PropagationId, "Propagated", "Reconciled via filesystem check.");
+                    }
+                }
+            }
+        }
+
+        _logger?.LogInformation("Recovery Reconciliation Protocol successfully completed.");
+        await Task.CompletedTask;
     }
 
     public async Task CreateCheckpointAsync(string reason)

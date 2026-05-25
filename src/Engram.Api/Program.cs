@@ -163,6 +163,7 @@ var priorityGraph = new OperationalPriorityGraph(worldModel, confidenceEngine, i
 var replayEngine = new ExecutionReplayEngine(operationalTimeline, workflowStore);
 var workflowConsolidator = new WorkflowConsolidator(proceduralMemory, telemetryEngine, paths.Root);
 var envSyncEngine = new EnvironmentSynchronizationEngine(worldModel, eventBus);
+actionRuntime.SynchronizationEngine = envSyncEngine;
 var escalationPolicy = new EscalationPolicyEngine(collaborationEngine, confidenceEngine, eventBus);
 var failureArchaeologyStore = new FailureArchaeologyStore(paths.Root);
 

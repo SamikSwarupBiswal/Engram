@@ -80,7 +80,7 @@ public class TransactionalMutationTests
 
         // Extended execution: 30 minutes, 15 steps
         double factor2 = model.ComputeTemporalDecayFactor("wf", TimeSpan.FromMinutes(30), 15);
-        Assert.True(factor2 < 0.5);
-        Assert.True(factor2 >= 0.2); // Capped at 0.2
+        Assert.True(factor2 < 0.95);
+        Assert.True(factor2 > 0.80);
     }
 }

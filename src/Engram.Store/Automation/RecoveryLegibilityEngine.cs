@@ -13,6 +13,26 @@ public class RecoveryLegibilityEngine
     {
         var msg = (errorMessage + " " + exceptionDetails).ToLowerInvariant();
 
+        if (msg.Contains("desynchronization") || msg.Contains("desynchronized"))
+        {
+            return "The task paused because the expected application state could no longer be confirmed.";
+        }
+
+        if (msg.Contains("fatigue") || msg.Contains("epistemic debt") || msg.Contains("decay factor"))
+        {
+            return "Too many verification mismatches accumulated during execution.";
+        }
+
+        if (msg.Contains("compensation") || msg.Contains("irrecoverable") || msg.Contains("propagation"))
+        {
+            return "The environment changed in a way that made the workflow unsafe to continue.";
+        }
+
+        if (msg.Contains("drift") || msg.Contains("recalibration") || msg.Contains("degraded confidence"))
+        {
+            return "Systemic platform drift prevented execution continuity.";
+        }
+
         if (msg.Contains("playwright") || msg.Contains("browser") || msg.Contains("page") || msg.Contains("selector"))
         {
             if (msg.Contains("timeout"))

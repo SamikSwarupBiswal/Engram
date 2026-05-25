@@ -343,4 +343,157 @@ public class RoboticsEpistemicTests : IDisposable
         await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.ExecutePlanAsync(plan, context));
         Assert.Equal(WorkflowState.Suspended, runtime.StateMachine.CurrentState);
     }
+
+    [Fact]
+    public async Task Synchronization_ShouldSuspend_WhenCriticalDesynchronization()
+    {
+        // Arrange
+        using var runtime = new ActionRuntime(_executor, _permissionGate);
+        var eventBus = new InMemoryEventBus();
+        var worldModel = new OperationalWorldModel(eventBus);
+        var syncEngine = new EnvironmentSynchronizationEngine(worldModel, eventBus);
+        runtime.SynchronizationEngine = syncEngine;
+
+        var plan = new ExecutionPlan { PlanId = "sync_test", Goal = "Test Synchronization Gating" };
+        var step1 = new ExecutionStep
+        {
+            Id = "step1",
+            Action = new AutomationAction { ActionId = "act1", Type = ActionType.Wait, Value = "10", Permission = ActionPermission.AutoApproved }
+        };
+        plan.Steps[step1.Id] = step1;
+
+        var context = new ExecutionContext();
+        // Network offline is a Critical desynchronization precondition
+        context.SetVariable("requires_network_online", true);
+        worldModel.SetEnvironmentalConstraint("network_offline", "True");
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.ExecutePlanAsync(plan, context));
+        Assert.Contains("Critical environment desynchronization", ex.Message);
+        Assert.Equal(WorkflowState.Suspended, runtime.StateMachine.CurrentState);
+    }
+
+    [Fact]
+    public async Task FatigueGating_ShouldSuspend_WhenEpistemicFatigueExceeded()
+    {
+        // Arrange
+        using var runtime = new ActionRuntime(_executor, _permissionGate);
+        
+        var plan = new ExecutionPlan { PlanId = "fatigue_test", Goal = "Test Epistemic Fatigue" };
+        var step1 = new ExecutionStep
+        {
+            Id = "step1",
+            Action = new AutomationAction { ActionId = "act1", Type = ActionType.Wait, Value = "10", Permission = ActionPermission.AutoApproved },
+            StartedAt = DateTimeOffset.UtcNow.AddMinutes(-60)
+        };
+        plan.Steps[step1.Id] = step1;
+
+        var context = new ExecutionContext();
+        context.SetVariable("HumanCollisionCount", 5);
+
+        runtime.PropagationLedger = new ExternalPropagationLedger(_tempDir);
+        runtime.PropagationLedger.RecordPropagation("step1", "Download", "file1.txt", "Uncertain");
+        runtime.PropagationLedger.RecordPropagation("step1", "Download", "file2.txt", "Uncertain");
+        runtime.PropagationLedger.RecordPropagation("step1", "Download", "file3.txt", "Uncertain");
+        runtime.PropagationLedger.RecordPropagation("step1", "Download", "file4.txt", "Uncertain");
+
+        // Setup workflow identity envelope with high uncertainty count to trigger fatigue decay index < 0.3
+        runtime.IdentityEnvelope = new WorkflowIdentityEnvelope
+        {
+            WorkflowId = "fatigue_test"
+        };
+        for (int i = 0; i < 7; i++)
+        {
+            runtime.IdentityEnvelope.UncertaintyLog.Add(new UncertaintyEvent
+            {
+                Level = UncertaintyLevel.U1_Observational,
+                Reason = "Verification mismatch"
+            });
+        }
+        for (int i = 0; i < 5; i++)
+        {
+            runtime.IdentityEnvelope.UncertaintyLog.Add(new UncertaintyEvent
+            {
+                Level = UncertaintyLevel.U1_Observational,
+                Reason = "unexpected modal interrupt"
+            });
+        }
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.ExecutePlanAsync(plan, context));
+        Assert.Contains("Extreme epistemic fatigue", ex.Message);
+        Assert.Equal(WorkflowState.Suspended, runtime.StateMachine.CurrentState);
+    }
+
+    [Fact]
+    public void ExplainabilityCompression_ShouldTranslateEpistemicFailureToCalmNeutralStatement()
+    {
+        // Arrange
+        var engine = new RecoveryLegibilityEngine();
+
+        // Act & Assert 1: Desynchronization
+        var desc1 = engine.TranslateFailure("Critical environment desynchronization (Sovereignty)", "");
+        Assert.Equal("The task paused because the expected application state could no longer be confirmed.", desc1);
+
+        // Act & Assert 2: Epistemic fatigue
+        var desc2 = engine.TranslateFailure("Extreme epistemic fatigue (decay factor: 0.25)", "");
+        Assert.Equal("Too many verification mismatches accumulated during execution.", desc2);
+
+        // Act & Assert 3: Compensation/Irrecoverable
+        var desc3 = engine.TranslateFailure("Compensation failed or is irrecoverable", "");
+        Assert.Equal("The environment changed in a way that made the workflow unsafe to continue.", desc3);
+
+        // Act & Assert 4: Drift
+        var desc4 = engine.TranslateFailure("Systemic platform drift detected", "");
+        Assert.Equal("Systemic platform drift prevented execution continuity.", desc4);
+    }
+
+    [Fact]
+    public async Task RecoveryReconciliation_ShouldReassessAndResolvePropagation()
+    {
+        // Arrange
+        var persistenceStore = new WorkflowPersistenceStore(_tempDir);
+        using var runtime = new ActionRuntime(_executor, _permissionGate);
+        var eventBus = new InMemoryEventBus();
+        var worldModel = new OperationalWorldModel(eventBus);
+        var wr = new WorkflowRuntime(persistenceStore, runtime, worldModel);
+        
+        var plan = new ExecutionPlan { PlanId = "recon_test", Goal = "Test Reconciliation" };
+        var step1 = new ExecutionStep
+        {
+            Id = "step1",
+            Action = new AutomationAction { ActionId = "act1", Type = ActionType.Wait, Value = "10", Permission = ActionPermission.AutoApproved }
+        };
+        plan.Steps[step1.Id] = step1;
+
+        var context = new ExecutionContext();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Run to save initial checkpoint
+        await Assert.ThrowsAnyAsync<Exception>(() => wr.StartWorkflowAsync("recon_test", plan, context, cts.Token));
+
+        // Mark a propagation record as Uncertain
+        runtime.PropagationLedger.RecordPropagation("step1", "Download", "temp_file.txt", "Uncertain");
+
+        // Set up synchronization engine
+        var syncEngine = new EnvironmentSynchronizationEngine(worldModel, eventBus);
+        runtime.SynchronizationEngine = syncEngine;
+
+        // Restore using Recovery Reconciliation Protocol
+        var newContext = new ExecutionContext();
+        
+        // Create a temporary file to reconcile the download propagation
+        string filePath = Path.Combine(_tempDir, "temp_file.txt");
+        File.WriteAllText(filePath, "test content");
+        
+        runtime.PropagationLedger.RecordPropagation("step1", "Download", filePath, "Uncertain");
+
+        await Assert.ThrowsAnyAsync<Exception>(() => wr.RestoreWorkflowAsync("recon_test", newContext, cts.Token));
+
+        var record = runtime.PropagationLedger.GetRecords().FirstOrDefault(r => r.DestinationValue == filePath);
+        Assert.NotNull(record);
+        Assert.Equal("Propagated", record.Status);
+        Assert.Contains("Reconciled via filesystem check", record.CompensationDetails);
+    }
 }
