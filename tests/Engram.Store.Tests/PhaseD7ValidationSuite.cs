@@ -9,7 +9,7 @@ using Engram.Store.Automation;
 using Engram.Store.Events;
 using ExecutionContext = Engram.Store.Automation.ExecutionContext;
 
-namespace Engram.Store.Tests.Automation;
+namespace Engram.Store.Tests;
 
 public class MockCompensationAction : ICompensationAction
 {
@@ -48,13 +48,13 @@ public class MockVerifier : IStepVerifier
     }
 }
 
-public class RoboticsEpistemicTests : IDisposable
+public class PhaseD7ValidationSuite : IDisposable
 {
     private readonly string _tempDir;
     private readonly ActionExecutor _executor;
     private readonly PermissionGate _permissionGate;
 
-    public RoboticsEpistemicTests()
+    public PhaseD7ValidationSuite()
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "engram_epistemic_tests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
