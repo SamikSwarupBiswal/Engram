@@ -44,6 +44,13 @@ public class ActionRuntime : IDisposable
     private ExternalImpactGate? _externalImpactGate;
     private TemporalExecutionDegradationModel? _temporalDegradationModel;
 
+    private RealityConvergenceTracker? _realityConvergenceTracker;
+    private VerificationTemporalStabilizer? _temporalStabilizer;
+    private EnvironmentalInterruptGraph? _environmentalInterruptGraph;
+    private FailureTopologyGraph? _failureTopologyGraph;
+    private ProceduralExperienceStore? _experienceStore;
+    private ProceduralDriftDetector? _driftDetector;
+
     public RuntimeState State => _state;
     public ExecutionPlan? ActivePlan => _activePlan;
     public ExecutionContext? ActiveContext => _activeContext;
@@ -61,6 +68,13 @@ public class ActionRuntime : IDisposable
     public ChaosInjectionHarness? ChaosHarness { get => _chaosHarness; set => _chaosHarness = value; }
     public ExternalImpactGate? ExternalImpactGate { get => _externalImpactGate; set => _externalImpactGate = value; }
     public TemporalExecutionDegradationModel? TemporalDegradationModel { get => _temporalDegradationModel; set => _temporalDegradationModel = value; }
+
+    public RealityConvergenceTracker? RealityConvergenceTracker { get => _realityConvergenceTracker; set => _realityConvergenceTracker = value; }
+    public VerificationTemporalStabilizer? TemporalStabilizer { get => _temporalStabilizer; set => _temporalStabilizer = value; }
+    public EnvironmentalInterruptGraph? EnvironmentalInterruptGraph { get => _environmentalInterruptGraph; set => _environmentalInterruptGraph = value; }
+    public FailureTopologyGraph? FailureTopologyGraph { get => _failureTopologyGraph; set => _failureTopologyGraph = value; }
+    public ProceduralExperienceStore? ExperienceStore { get => _experienceStore; set => _experienceStore = value; }
+    public ProceduralDriftDetector? DriftDetector { get => _driftDetector; set => _driftDetector = value; }
 
     public ActionRuntime(
         ActionExecutor executor, 
@@ -93,6 +107,13 @@ public class ActionRuntime : IDisposable
         _chaosHarness = new ChaosInjectionHarness();
         _externalImpactGate = new ExternalImpactGate();
         _temporalDegradationModel = new TemporalExecutionDegradationModel();
+
+        _realityConvergenceTracker = new RealityConvergenceTracker();
+        _temporalStabilizer = new VerificationTemporalStabilizer(defaultUi, null, _realityConvergenceTracker);
+        _environmentalInterruptGraph = new EnvironmentalInterruptGraph();
+        _failureTopologyGraph = new FailureTopologyGraph();
+        _experienceStore = new ProceduralExperienceStore();
+        _driftDetector = new ProceduralDriftDetector(_experienceStore);
     }
 
     public void Pause()
@@ -220,6 +241,10 @@ public class ActionRuntime : IDisposable
                 // Re-initialize managers with active provider
                 _focusOwnershipManager = new FocusOwnershipManager(embodimentProvider);
                 _falseCompletionDetector = new FalseCompletionDetector(embodimentProvider);
+                _temporalStabilizer = new VerificationTemporalStabilizer(
+                    embodimentProvider,
+                    null,
+                    _realityConvergenceTracker);
 
                 // Debounce check
                 if (_debounceEngine != null && _debounceEngine.RecordActionAndCheckDebounce(resolvedAction))
@@ -408,6 +433,57 @@ public class ActionRuntime : IDisposable
                 try
                 {
                     _logger?.LogInformation("Executing step '{StepId}': {Description}", step.Id, step.Action.Description);
+
+                    // Register step semantics and properties in FailureTopologyGraph
+                    if (_failureTopologyGraph != null)
+                    {
+                        var isIrreversible = _reversibilityEvaluator.IsIrreversible(resolvedAction);
+                        var semantics = new MutationBoundarySemantics
+                        {
+                            IsReversible = !isIrreversible,
+                            IsIrreversible = isIrreversible,
+                            IsExternallyPropagated = resolvedAction.Type == ActionType.Download || resolvedAction.Type == ActionType.Upload
+                        };
+                        _failureTopologyGraph.RegisterStepSemantics(step.Id, semantics);
+
+                        if (semantics.IsExternallyPropagated)
+                        {
+                            var prop = new TrackedPropagation
+                            {
+                                WorkflowId = plan.PlanId,
+                                StepId = step.Id,
+                                DestinationType = resolvedAction.Type.ToString(),
+                                DestinationValue = resolvedAction.Value ?? resolvedAction.Target?.Selector ?? string.Empty,
+                                Timestamp = DateTimeOffset.UtcNow
+                            };
+                            _failureTopologyGraph.RegisterPropagation(step.Id, prop);
+                        }
+                    }
+
+                    // Enforce modal safety laws and active window check before dispatching mouse/keyboard events
+                    if (_environmentalInterruptGraph != null)
+                    {
+                        var (activeProc, activeTitle) = await embodimentProvider.GetActiveWindowAsync(linkedToken);
+                        var expectedProc = context.GetVariable<string>("ExpectedProcessName");
+                        bool isUnexpectedProc = !string.IsNullOrEmpty(expectedProc) && !activeProc.Equals(expectedProc, StringComparison.OrdinalIgnoreCase);
+
+                        bool isOverlayOrModal = isUnexpectedProc || 
+                                                activeProc.Contains("consent", StringComparison.OrdinalIgnoreCase) ||
+                                                activeProc.Contains("CredentialUIBroker", StringComparison.OrdinalIgnoreCase) ||
+                                                activeProc.Contains("pinflow", StringComparison.OrdinalIgnoreCase) ||
+                                                EnvironmentalInterruptGraph.ForbiddenKeywords.Any(k => activeTitle.Contains(k, StringComparison.OrdinalIgnoreCase));
+
+                        if (isOverlayOrModal)
+                        {
+                            bool handled = await _environmentalInterruptGraph.AssessAndHandleInterruptAsync(activeProc, activeTitle, context, linkedToken);
+                            if (!handled)
+                            {
+                                _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                                _stateMachine.TransitionTo(WorkflowState.Suspended);
+                                throw new InvalidOperationException($"Safety Violation: Forbidden or unknown modal '{activeTitle}' (Process: '{activeProc}') detected. Sovereignty yielded to human.");
+                            }
+                        }
+                    }
                     
                     string result = await embodimentProvider.ExecuteActionAsync(resolvedAction, linkedToken);
 
@@ -435,12 +511,33 @@ public class ActionRuntime : IDisposable
 
                     if (step.Verifier != null)
                     {
-                        _logger?.LogDebug("Verifying step '{StepId}'", step.Id);
-                        bool verified = await step.Verifier.VerifyAsync(context, linkedToken);
+                        _logger?.LogDebug("Verifying step '{StepId}' with reality convergence", step.Id);
+                        bool verified = await VerifyStepWithConvergenceAsync(step, context, linkedToken);
                         signals.StructuredApiVerified = verified;
                         if (!verified)
                         {
-                            throw new InvalidOperationException($"Verification failed for step '{step.Id}'");
+                            var uncertainty = UncertaintyLevel.U1_Observational;
+                            if (_reversibilityEvaluator != null && _reversibilityEvaluator.IsIrreversible(resolvedAction))
+                            {
+                                uncertainty = UncertaintyLevel.U3_Irreversible;
+                            }
+
+                            if (uncertainty == UncertaintyLevel.U1_Observational)
+                            {
+                                throw new InvalidOperationException($"Verification failed for step '{step.Id}'");
+                            }
+                            else if (uncertainty == UncertaintyLevel.U2_StateAmbiguity)
+                            {
+                                _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                                _stateMachine.TransitionTo(WorkflowState.Suspended);
+                                throw new InvalidOperationException($"Verification failed: Reality is uncertain (Uncertainty: U2_StateAmbiguity). Halt to preserve trust.");
+                            }
+                            else
+                            {
+                                _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                                _stateMachine.TransitionTo(WorkflowState.FailedSafe);
+                                throw new InvalidOperationException($"Critical verification safety violation (Uncertainty: {uncertainty}). Full immediate halt.");
+                            }
                         }
                     }
 
@@ -448,9 +545,19 @@ public class ActionRuntime : IDisposable
                     {
                         double confidence = _verificationConsensusEngine.CalculateRealityConfidence(signals);
                         bool meetsReqs = _verificationStrengthPolicy.MeetsVerificationRequirements(RiskLevel.MediumRisk, confidence, signals);
-                        if (!meetsReqs)
+                        
+                        double requiredCertainty = _verificationStrengthPolicy.GetRequiredCertainty(RiskLevel.MediumRisk);
+                        if (_temporalDegradationModel != null)
                         {
-                            throw new InvalidOperationException($"Epistemic verification failed: Consensus confidence {confidence:F2} is insufficient for step '{step.Id}'.");
+                            var elapsedPlanTime = DateTimeOffset.UtcNow - plan.Steps.Values.Min(s => s.StartedAt ?? DateTimeOffset.UtcNow);
+                            double decayFactor = _temporalDegradationModel.ComputeTemporalDecayFactor(plan.PlanId, elapsedPlanTime, completedSteps.Count);
+                            // Raise threshold as elapsed plan time compounds
+                            requiredCertainty += (1.0 - decayFactor) * (1.0 - requiredCertainty);
+                        }
+
+                        if (!meetsReqs || confidence < requiredCertainty)
+                        {
+                            throw new InvalidOperationException($"Epistemic verification failed: Consensus confidence {confidence:F2} is insufficient for step '{step.Id}' (Required: {requiredCertainty:F2}).");
                         }
                     }
 
@@ -458,6 +565,46 @@ public class ActionRuntime : IDisposable
                     {
                         var elapsed = DateTimeOffset.UtcNow - (step.StartedAt ?? DateTimeOffset.UtcNow);
                         _temporalDegradationModel.ComputeTemporalDecayFactor(plan.PlanId, elapsed, completedSteps.Count);
+                    }
+
+                    // Record procedural experience on success
+                    var elapsedStepTime = DateTimeOffset.UtcNow - (step.StartedAt ?? DateTimeOffset.UtcNow);
+                    if (_experienceStore != null)
+                    {
+                        var appName = context.GetVariable<string>("AppName") ?? "DefaultApp";
+                        var appVersion = context.GetVariable<string>("AppVersion") ?? "1.0";
+                        var (curProc, curTitle) = await embodimentProvider.GetActiveWindowAsync(linkedToken);
+
+                        _experienceStore.RecordMetric(appName, appVersion, resolvedAction.Type, resolvedAction.Target?.Selector ?? string.Empty, elapsedStepTime, success: true);
+
+                        if (!string.IsNullOrEmpty(curTitle) && curTitle != "Desktop" && curTitle != "Windows")
+                        {
+                            _experienceStore.AddSeenModal(appName, appVersion, resolvedAction.Type, resolvedAction.Target?.Selector ?? string.Empty, curTitle);
+                        }
+
+                        if (_driftDetector != null)
+                        {
+                            var drift = _driftDetector.DetectDrift(
+                                appName,
+                                appVersion,
+                                resolvedAction.Type,
+                                resolvedAction.Target?.Selector ?? string.Empty,
+                                elapsedStepTime,
+                                success: true,
+                                curTitle,
+                                out var reason);
+
+                            if (drift != null)
+                            {
+                                _logger?.LogWarning("Procedural Drift Detected on success: {Reason}. Uncertainty Level: {DriftLevel}", reason, drift);
+                                if (drift >= UncertaintyLevel.U2_StateAmbiguity)
+                                {
+                                    _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                                    _stateMachine.TransitionTo(WorkflowState.Suspended);
+                                    throw new InvalidOperationException($"Halted execution due to procedural drift: {reason}");
+                                }
+                            }
+                        }
                     }
 
                     step.Status = StepStatus.Completed;
@@ -474,11 +621,70 @@ public class ActionRuntime : IDisposable
                         throw;
                     }
 
-                    _stateMachine.TransitionTo(WorkflowState.Recovering);
+                    // Record procedural experience on failure
+                    if (_experienceStore != null)
+                    {
+                        var appName = context.GetVariable<string>("AppName") ?? "DefaultApp";
+                        var appVersion = context.GetVariable<string>("AppVersion") ?? "1.0";
+                        var (curProc, curTitle) = await embodimentProvider.GetActiveWindowAsync(linkedToken);
+                        var elapsedFailureTime = DateTimeOffset.UtcNow - (step.StartedAt ?? DateTimeOffset.UtcNow);
+
+                        _experienceStore.RecordMetric(appName, appVersion, resolvedAction.Type, resolvedAction.Target?.Selector ?? string.Empty, elapsedFailureTime, success: false);
+
+                        if (_driftDetector != null)
+                        {
+                            var drift = _driftDetector.DetectDrift(
+                                appName,
+                                appVersion,
+                                resolvedAction.Type,
+                                resolvedAction.Target?.Selector ?? string.Empty,
+                                elapsedFailureTime,
+                                success: false,
+                                curTitle,
+                                out var reason);
+
+                            if (drift != null)
+                            {
+                                _logger?.LogWarning("Procedural Drift Detected on failure: {Reason}. Uncertainty Level: {DriftLevel}", reason, drift);
+                                if (drift >= UncertaintyLevel.U2_StateAmbiguity)
+                                {
+                                    _stateMachine.TransitionTo(WorkflowState.RealityUncertain);
+                                    _stateMachine.TransitionTo(WorkflowState.Suspended);
+                                    throw new InvalidOperationException($"Halted execution due to procedural drift on failure: {reason}", ex);
+                                }
+                            }
+                        }
+                    }
+
+                    // Assess failure impact using FailureTopologyGraph
+                    if (_failureTopologyGraph != null)
+                    {
+                        var impact = _failureTopologyGraph.AssessFailureImpact(step.Id, completedSteps);
+                        _logger?.LogWarning("Failure impact assessment: CanRollbackCleanly={CanRollback}, BlockedSteps={BlockedCount}, UncertainSteps={UncertainCount}",
+                            impact.CanRollbackCleanly, impact.BlockedSteps.Count, impact.UncertainSteps.Count);
+
+                        foreach (var blockedStepId in impact.BlockedSteps)
+                        {
+                            var blockedStep = order.Find(s => s.Id == blockedStepId);
+                            if (blockedStep != null)
+                            {
+                                blockedStep.Status = StepStatus.Skipped;
+                            }
+                        }
+                    }
+
+                    if (_stateMachine.CurrentState != WorkflowState.RealityUncertain && 
+                        _stateMachine.CurrentState != WorkflowState.Suspended && 
+                        _stateMachine.CurrentState != WorkflowState.FailedSafe)
+                    {
+                        _stateMachine.TransitionTo(WorkflowState.Recovering);
+                    }
                     bool recovered = false;
                     Exception? lastError = ex;
 
-                    if (step.RecoveryPolicy != null)
+                    if (step.RecoveryPolicy != null && 
+                        _stateMachine.CurrentState != WorkflowState.Suspended && 
+                        _stateMachine.CurrentState != WorkflowState.FailedSafe)
                     {
                         try
                         {
@@ -531,7 +737,7 @@ public class ActionRuntime : IDisposable
                                 if (step.Verifier != null)
                                 {
                                     _logger?.LogDebug("Verifying step '{StepId}' after recovery", step.Id);
-                                    bool verified = await step.Verifier.VerifyAsync(context, linkedToken);
+                                    bool verified = await VerifyStepWithConvergenceAsync(step, context, linkedToken);
                                     if (!verified)
                                     {
                                         throw new InvalidOperationException($"Verification failed for step '{step.Id}' after recovery.");
@@ -611,13 +817,20 @@ public class ActionRuntime : IDisposable
                              _ = _failureNarrativeRecorder.RecordFailureNarrativeAsync(narrative);
                          }
 
-                         if (_stateMachine.CurrentState != WorkflowState.Recovering)
+                         if (_stateMachine.CurrentState != WorkflowState.Recovering &&
+                             _stateMachine.CurrentState != WorkflowState.Suspended &&
+                             _stateMachine.CurrentState != WorkflowState.FailedSafe)
                          {
                              _stateMachine.TransitionTo(WorkflowState.Recovering);
                          }
-                         _stateMachine.TransitionTo(WorkflowState.RolledBack);
-                         await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
-                         _stateMachine.TransitionTo(WorkflowState.FailedSafe);
+
+                         if (_stateMachine.CurrentState != WorkflowState.Suspended &&
+                             _stateMachine.CurrentState != WorkflowState.FailedSafe)
+                         {
+                             _stateMachine.TransitionTo(WorkflowState.RolledBack);
+                             await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+                             _stateMachine.TransitionTo(WorkflowState.FailedSafe);
+                         }
                          throw new InvalidOperationException($"Step '{step.Id}' failed: {lastError?.Message}", lastError);
                     }
                 }
@@ -704,6 +917,26 @@ public class ActionRuntime : IDisposable
             }
         }
         return result;
+    }
+
+    private async Task<bool> VerifyStepWithConvergenceAsync(ExecutionStep step, ExecutionContext context, CancellationToken ct)
+    {
+        if (step.Verifier == null) return true;
+
+        if (_realityConvergenceTracker != null)
+        {
+            var totalTimeout = _temporalStabilizer?.MaxWaitTime ?? TimeSpan.FromSeconds(5);
+            var quietWindow = _temporalStabilizer?.QuietPeriod ?? TimeSpan.FromMilliseconds(500);
+
+            return await _realityConvergenceTracker.TrackConvergenceAsync(
+                async () => await step.Verifier.VerifyAsync(context, ct),
+                totalTimeout,
+                quietWindow,
+                ct
+            );
+        }
+
+        return await step.Verifier.VerifyAsync(context, ct);
     }
 
     public void Dispose()
