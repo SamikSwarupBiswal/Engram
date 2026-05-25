@@ -42,7 +42,7 @@ Engram is a **desktop app**, not a web app. Tauri v2 (Rust) shell auto-spawns a 
 | UI | React 19 + TypeScript + Tailwind CSS |
 | Backend | .NET 8 ASP.NET Minimal API (sidecar) |
 | Local Store | .engram/ directory (JSON + Markdown) |
-| Tests | xUnit (1721 tests total: 1633 Store, 88 API) |
+| Tests | xUnit (1811 tests total: 1723 Store, 88 API) |
 | Build | Vite 6, cargo, dotnet publish |
 
 ## Onboarding Flow
@@ -103,9 +103,9 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## Current State
 
-- Phases 1-12, D1-D4, and D6 implemented and verified. Phase D7 (Execution Reality Validation & Operational Robustness) is in progress (~45-55% complete).
-- Core substrate stabilization completed for Phase D7; currently undergoing full operational validation.
-- 1699 store tests + 88 API tests passing (1787/1787 total tests green)
+- Phases 1-12, D1-D7 implemented and verified. Phase D8 (Deployment-Scale Coexistence Ecology) is currently active.
+- Core substrate stabilization and full operational validation completed for Phase D7.
+- 1723 store tests + 88 API tests passing (1811/1811 total tests green)
 - 97 API endpoints (all connected to frontend)
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -135,7 +135,7 @@ BackgroundMetabolismService (every 5 minutes)
 
 ## What's Next
 
-1. **Existential Validation Era (D1-D7)** — Shift focus entirely from capability expansion to operational validation, hardening, coexistence validation, soak operations, task execution validation, and productization. Active phase: **D7 (Execution Reality Validation & Operational Robustness)**, transitioning substrate stabilization to behaviorally trustworthy operational validation.
+1. **Deployment-Scale Coexistence Ecology (D8)** — Shift focus to multi-user deployment, long-term retention, privacy economics, fleet-wide pathology telemetry, fleet updates, supportability, and operational sociology. Active phase: **D8 (Deployment-Scale Coexistence Ecology)**.
 
 ## Anti-Patterns (DO NOT BUILD)
 

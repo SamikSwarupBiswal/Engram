@@ -38,22 +38,22 @@
   - [x] **Phase 12E: Multi-Month Runtime Survival** — Implement corruption recovery, graph reconciliation, replay validation, causal continuity repair, and operational archaeology integrity.
   - [x] **Phase 12F: Cognitive Homeostasis** — Implement dynamic stabilization, equilibrium enforcement, semantic load balancing, emotional neutrality preservation, and activation damping.
   - [x] **Phase 12G: Longitudinal Human Adaptation** — Enable calmer, non-intrusive operations and learning restraint patterns without accumulating overconfidence.
-- [ ] **Deployment Era (D1-D8)** [CRITICAL]
+- [/] **Deployment Era (D1-D8)** [CRITICAL]
   - [x] **Phase D1: Reality Hardening** — Installer resilience, Windows dynamic environments, sleep/wake, driver fallbacks, anti-virus.
   - [x] **Phase D2: Human Coexistence Validation** — Intervention fatigue, trust pacing, annoyance archaeology, workflow frustration, autonomy discomfort, semantic creep.
   - [x] **Phase D3: Long-Horizon Soak Operation** — Virtual 30-day time-warp simulation, auto-expiry of active contradictions, protected islands archival shield, and ecological health telemetry metrics — 2026-05-24
   - [x] **Phase D4: Real Task Execution Validation** — Browser/desktop action resilience, coordination, recovery from interruption, chaotic desktop adaptation.
-  - [ ] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
+  - [x] **Phase D5: Productization** — Onboarding, UX, packaging, privacy, permission transparency.
   - [x] **Phase D6: Real Human Coexistence & Field Validation** — Dynamic autonomy modulation, decay engine, domain ceilings, neutral failure narratives, and psychology telemetry.
-  - [/] **Phase D7: Execution Reality Validation & Operational Robustness** [45-55% Complete] — Focus foreground focus verification, layout shift stability guard, debouncer, weighted reality consensus, false completion detection, chaos injection, compensation boundary semantics, systemic drift correlation, and workflow identity envelopes.
-  - [ ] **Phase D8: Deployment-Scale Coexistence Ecology** — Onboarding ecology, multi-user deployment, long-term retention, privacy economics, fleet-wide pathology telemetry, fleet updates, supportability, and operational sociology. D8 starts ONLY when the organism behaves predictably, fails conservatively, and remains psychologically comprehensible under sustained real-world usage.
+  - [x] **Phase D7: Execution Reality Validation & Operational Robustness** — Focus foreground focus verification, layout shift stability guard, debouncer, weighted reality consensus, false completion detection, chaos injection, compensation boundary semantics, systemic drift correlation, and workflow identity envelopes — 2026-05-25
+  - [/] **Phase D8: Deployment-Scale Coexistence Ecology** [Active] — Onboarding ecology, multi-user deployment, long-term retention, privacy economics, fleet-wide pathology telemetry, fleet updates, supportability, and operational sociology. D8 starts ONLY when the organism behaves predictably, fails conservatively, and remains psychologically comprehensible under sustained real-world usage.
 
 
 ## Current State
 
-- Phases 1-12, D1-D4, and D6-D7 implemented and verified
+- Phases 1-12, D1-D7 implemented and verified
 - Active development completed for Phase D5 (Productization)
-- 1718 store tests + 88 API tests passing (1806/1806 total tests green)
+- 1723 store tests + 88 API tests passing (1811/1811 total tests green)
 - 97 API endpoints, all connected to frontend
 - 10 frontend views
 - Desktop app built (Tauri + React)
@@ -112,27 +112,13 @@ Autonomous Execution (Phase 8):
   → AgentOrchestrator (multi-agent task routing)
 ```
 
-## What's Next: Existential Validation & Productization Era (D5-D7)
+## What's Next: Deployment-Scale Coexistence Ecology (D8)
 
-All remaining roadmap work is focused on robustness, coexistence, endurance, execution validation, and productization to ensure Engram survives real-world Windows environments and users.
+All remaining roadmap work is focused on D8 multi-user deployment, long-term retention, privacy economics, fleet-wide pathology telemetry, fleet updates, supportability, and operational sociology.
 
-### Phase D5: Productization
-1. **Packaging & Security** — Formally sign binaries, configure secure auto-update mechanisms, and enforce localized privacy walls.
-2. **Governance UI** — Expose permission dashboards, explainability traces, and correction interfaces to the user clearly.
-
-### Phase D6: Real Human Coexistence & Field Validation (Completed)
-1. **Dynamic Autonomy Modulation** — Scale autonomy limits based on user feedback and decay confidence dynamically.
-2. **Telemetry Audit** — Inspect psychology and fatigue feedback metrics.
-
-### Phase D7: Execution Reality Validation & Operational Robustness (In Progress: ~45-55% Complete)
-We must transition from *substrate stabilization* to *full operational validation*. Phase D7 will not be complete until execution reliability becomes behaviorally trustworthy and the organism ceases to fail catastrophically under sustained real-world entropy.
-We track progress across 6 key battlefields:
-1. **Large-Scale Workflow Corpus**: Validate 300–1000 real workflows across browser, Office, filesystem, dev tools, and multitasking, moving away from synthetic happy paths.
-2. **Chaos Ecology Validation**: Hardening under prolonged instability, weeks-long drift, updates, sleep/wake loops, filesystem corruption, and human keyboard/mouse collision storms. Success is defined by failing conservatively and calmly under sustained entropy.
-3. **Execution Fatigue Modeling**: Build and validate models for epistemic debt accumulation, long-duration confidence decay, and cumulative drift handling.
-4. **Distributed Reality Synchronization**: Manage cross-application causal truth, delayed consistency, and distributed uncertainty containment.
-5. **Operational Explainability/Legibility**: Ensure the internal complexity of recovery, suspension, and compensation is fully legible to humans so they do not psychologically detach.
-6. **Real Human Field Testing**: Evaluate on real desktops with real users, capturing actual interruptions, frustrations, and misuse.
+### Phase D8: Deployment-Scale Coexistence Ecology
+1. **Onboarding Ecology**: Validate onboarding sequences and multi-user deployments.
+2. **Fleet-Wide Pathology Telemetry**: Monitor fleet-wide error dynamics and diagnostic patterns.
 
 ## D7-D8 Future Strategic Objectives (Real-World Human Ecology & Mitigation)
 To prevent "validation theater" and keep the organism both usable and safe under sustained real-world entropy, the transition from Phase D7 to D8 must focus on:
