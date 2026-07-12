@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-12T21:29:21.643Z",
+  "phase": "automation-acceptance",
+  "phase_name": "skill-driven-desktop-automation",
+  "phase_dir": ".planning",
+  "plan": 1,
+  "task": 8,
+  "total_tasks": 15,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Basic application launch", "status": "done", "commit": null},
+    {"id": 2, "name": "Exact keyboard input", "status": "done", "commit": null},
+    {"id": 3, "name": "Existing browser reuse", "status": "done", "commit": null},
+    {"id": 4, "name": "Multiple browser tabs", "status": "done", "commit": null},
+    {"id": 5, "name": "Research compilation", "status": "done", "commit": null},
+    {"id": 6, "name": "Full browser-to-Word workflow", "status": "done", "commit": null},
+    {"id": 7, "name": "Specific-source workflow", "status": "done", "commit": null},
+    {"id": 8, "name": "Excel automation", "status": "in_progress", "progress": "The plan contained the requested headers and four rows, but execution stopped at step 3 when the Windows Task Switching overlay became foreground and the safety policy treated it as an unexpected Explorer modal."}
+  ],
+  "remaining_tasks": [
+    {"id": 8, "name": "Excel automation: diagnose safely and rerun from the beginning", "status": "in_progress"},
+    {"id": 9, "name": "Cross-application workflow", "status": "not_started"},
+    {"id": 10, "name": "Generic mouse and keyboard control", "status": "not_started"},
+    {"id": 11, "name": "Recovery testing", "status": "not_started"},
+    {"id": 12, "name": "New-application discovery", "status": "not_started"},
+    {"id": 13, "name": "Safety confirmation", "status": "not_started"},
+    {"id": 14, "name": "Emergency-stop test", "status": "not_started"},
+    {"id": 15, "name": "Best complete-system test", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "Windows Task Switching became the foreground window during prompt 8. It must not be globally ignored because it may represent human input; resume by confirming the overlay is gone, reviewing the sovereignty path, and rerunning prompt 8 from the beginning.", "type": "technical", "workaround": "Reacquire Excel only after verifying stable foreground state and no user interaction; preserve safety yield semantics."},
+    {"description": "Execution is intentionally paused by the user.", "type": "human_action", "workaround": "Wait for an explicit resume instruction."}
+  ],
+  "human_actions_pending": [
+    {"action": "Explicitly request resume", "context": "The user paused all desktop input during the ordered acceptance run.", "blocking": true},
+    {"action": "Provide a concrete installed application name for prompt 12", "context": "The literal [APPLICATION NAME] placeholder cannot be meaningfully accepted.", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Use runtime-discovered Gemini models and a configured environment secret, never a prompt-specific hardcoded model or embedded API key.", "rationale": "Model availability changes and credentials must remain outside source control.", "phase": "automation-acceptance"},
+    {"decision": "Route research tasks through grounded browser workflows before synthesis.", "rationale": "The planner must not fabricate sources or citations.", "phase": "automation-acceptance"},
+    {"decision": "Keep unexpected foreground-window handling safety-first.", "rationale": "Ignoring Task Switching or Explorer globally could override real human interaction.", "phase": "automation-acceptance"}
+  ],
+  "uncommitted_files": [
+    "src/Engram.Api/Program.cs",
+    "src/Engram.Store/Agent/BrowserService.cs",
+    "src/Engram.Store/Agent/ResearchAutomationWorkflowService.cs",
+    "src/Engram.Store/Agent/ResearchCompilationService.cs",
+    "src/Engram.Store/Automation/ActionRuntime.cs",
+    "src/Engram.Store/Automation/TaskPlanner.cs",
+    "src/Engram.Store/Automation/Skills/",
+    "src/Engram.Store/Cloud/CloudCallPipeline.cs",
+    "src/Engram.Store/Cloud/GeminiModelResolver.cs",
+    "src/Engram.Store/Cloud/OpenAICompatibleProvider.cs",
+    "src/Engram.App/resources/skills/",
+    "tests/Engram.Store.Tests/DynamicAutomationTests.cs",
+    "tests/Engram.Store.Tests/GeminiAutomationIntegrationTests.cs",
+    "tests/Engram.Store.Tests/Phase8IntegrationTests.cs",
+    "tests/Engram.Store.Tests/SkillSystemTests.cs"
+  ],
+  "next_action": "After explicit user resume, read .planning/.continue-here.md, verify port 5000 remains stopped, inspect the prompt-8 foreground-window failure, run the focused regression tests, then restart the API and rerun prompt 8 from the beginning before prompt 9.",
+  "context_notes": "The repository had extensive pre-existing tracked and untracked changes before this session. Do not clean, reset, or broadly commit them. The API was aborted successfully and its dotnet listener on port 5000 was stopped. Word, Chrome, or Excel windows may remain open and must be treated as user-owned state. The Gemini environment key is configured outside source control; never print or commit it."
+}
