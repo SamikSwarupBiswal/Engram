@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace Engram.Store.Cloud;
@@ -16,12 +17,14 @@ public class OpenAICompatibleProvider : ICloudModelProvider
     private readonly ILogger<OpenAICompatibleProvider>? _logger;
     private readonly string _apiKey;
     private readonly string _baseUrl;
-    private readonly string _modelName;
+    private readonly IReadOnlyList<string> _modelNames;
     private readonly string _providerName;
+    private readonly int _maxTransientRetries;
+    private readonly TimeSpan _baseRetryDelay;
     private bool _disposed;
 
     public string ProviderName => _providerName;
-    public string ModelName => _modelName;
+    public string ModelName => _modelNames[0];
     public bool IsAvailable => !string.IsNullOrEmpty(_apiKey) || _baseUrl.Contains("localhost");
 
     /// <summary>
@@ -36,15 +39,27 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         string baseUrl,
         string modelName,
         string providerName = "custom",
-        ILogger<OpenAICompatibleProvider>? logger = null)
+        ILogger<OpenAICompatibleProvider>? logger = null,
+        HttpClient? httpClient = null,
+        int maxTransientRetries = 2,
+        TimeSpan? baseRetryDelay = null,
+        IEnumerable<string>? fallbackModelNames = null)
     {
         _apiKey = apiKey ?? "";
         _baseUrl = baseUrl?.TrimEnd('/') ?? "";
-        _modelName = modelName ?? "";
+        _modelNames = new[] { modelName ?? string.Empty }
+            .Concat(fallbackModelNames ?? Array.Empty<string>())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (_modelNames.Count == 0)
+            throw new ArgumentException("At least one model name is required.", nameof(modelName));
         _providerName = providerName;
         _logger = logger;
+        _maxTransientRetries = Math.Max(0, maxTransientRetries);
+        _baseRetryDelay = baseRetryDelay ?? TimeSpan.FromMilliseconds(750);
 
-        _http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
 
         if (!string.IsNullOrEmpty(_apiKey))
             _http.DefaultRequestHeaders.Authorization =
@@ -55,49 +70,131 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         CloudModelRequest request,
         CancellationToken cancellationToken = default)
     {
+        CloudModelResponse? lastResponse = null;
+        foreach (var modelName in _modelNames)
+        {
+            lastResponse = await SendWithModelAsync(request, modelName, cancellationToken);
+            if (lastResponse.Success || !IsModelFallbackEligible(lastResponse))
+                return lastResponse;
+
+            _logger?.LogWarning(
+                "Transient failures exhausted for {Provider}/{Model}; trying the next dynamically discovered model.",
+                _providerName, modelName);
+        }
+
+        return lastResponse ?? new CloudModelResponse
+        {
+            Success = false,
+            ErrorMessage = "No configured model could satisfy the request.",
+            Provider = _providerName,
+            Model = ModelName
+        };
+    }
+
+    private async Task<CloudModelResponse> SendWithModelAsync(
+        CloudModelRequest request,
+        string modelName,
+        CancellationToken cancellationToken)
+    {
         try
         {
             _logger?.LogInformation("Sending to {Provider}/{Model}: {Reason}",
-                _providerName, _modelName, request.Reason);
+                _providerName, modelName, request.Reason);
 
-            var payload = new
+            var messages = request.Messages.Count > 0
+                ? request.Messages.Select(message => new { role = message.Role, content = message.Content }).ToArray()
+                : new[] { new { role = "user", content = request.Payload } };
+            var payload = new Dictionary<string, object?>
             {
-                model = _modelName,
-                messages = new[]
-                {
-                    new { role = "user", content = request.Payload }
-                },
-                max_tokens = request.MaxTokens,
-                temperature = 0.7,
-                top_p = 0.9
+                ["model"] = modelName,
+                ["messages"] = messages,
+                ["temperature"] = 0.2,
+                ["top_p"] = 0.9
             };
-
-            var json = JsonSerializer.Serialize(payload);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var response = await _http.PostAsync($"{_baseUrl}/chat/completions", content, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
+            if (_providerName.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
             {
-                _logger?.LogError("API error {Status}: {Body}", response.StatusCode, responseBody[..Math.Min(200, responseBody.Length)]);
-                return new CloudModelResponse
+                payload["max_completion_tokens"] = request.MaxTokens;
+                payload["reasoning_effort"] = request.Metadata.TryGetValue("reasoning_effort", out var effort)
+                    ? effort
+                    : "low";
+            }
+            else
+            {
+                payload["max_tokens"] = request.MaxTokens;
+            }
+
+            if (request.Metadata.TryGetValue("response_json_schema", out var responseJsonSchema))
+            {
+                using var schema = JsonDocument.Parse(responseJsonSchema);
+                if (schema.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new JsonException("The response JSON schema must be an object.");
+
+                payload["response_format"] = new
                 {
-                    Success = false,
-                    ErrorMessage = $"API error {(int)response.StatusCode}: {responseBody[..Math.Min(200, responseBody.Length)]}",
-                    Provider = _providerName,
-                    Model = _modelName
+                    type = "json_schema",
+                    json_schema = new { name = "engram_response", strict = true, schema = schema.RootElement.Clone() }
                 };
             }
+
+            var json = JsonSerializer.Serialize(payload);
+            string responseBody = string.Empty;
+            HttpResponseMessage? response = null;
+            for (var attempt = 0; attempt <= _maxTransientRetries; attempt++)
+            {
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                response?.Dispose();
+                response = await _http.PostAsync($"{_baseUrl}/chat/completions", content, cancellationToken);
+                responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (response.IsSuccessStatusCode)
+                    break;
+
+                if (!IsTransient(response.StatusCode) || attempt >= _maxTransientRetries)
+                {
+                    _logger?.LogError("API error {Status}: {Body}", response.StatusCode, responseBody[..Math.Min(200, responseBody.Length)]);
+                    response.Dispose();
+                    return new CloudModelResponse
+                    {
+                        Success = false,
+                        ErrorMessage = $"API error {(int)response.StatusCode}: {responseBody[..Math.Min(200, responseBody.Length)]}",
+                        Provider = _providerName,
+                        Model = modelName
+                    };
+                }
+
+                var delay = GetRetryDelay(response, attempt);
+                _logger?.LogWarning(
+                    "Transient API error {Status}; retrying {Provider}/{Model} in {DelayMs} ms (attempt {Attempt}/{Total}).",
+                    response.StatusCode, _providerName, modelName, delay.TotalMilliseconds, attempt + 2, _maxTransientRetries + 1);
+                await Task.Delay(delay, cancellationToken);
+            }
+
+            response?.Dispose();
 
             var result = JsonSerializer.Deserialize<OpenAIResponse>(responseBody, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
 
-            var responseText = result?.Choices?.FirstOrDefault()?.Message?.Content ?? "";
+            var choice = result?.Choices?.FirstOrDefault();
+            var responseText = choice?.Message?.Content ?? "";
             var inputTokens = result?.Usage?.PromptTokens ?? request.Payload.Length / 4;
             var outputTokens = result?.Usage?.CompletionTokens ?? responseText.Length / 4;
+
+            if (string.IsNullOrWhiteSpace(responseText) ||
+                choice?.FinishReason?.Equals("length", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return new CloudModelResponse
+                {
+                    Success = false,
+                    ErrorMessage = choice?.FinishReason?.Equals("length", StringComparison.OrdinalIgnoreCase) == true
+                        ? "The model response exceeded its completion-token budget."
+                        : "The model returned an empty response.",
+                    Provider = _providerName,
+                    Model = modelName,
+                    InputTokens = inputTokens,
+                    OutputTokens = outputTokens
+                };
+            }
 
             _logger?.LogInformation("Response received: {Tokens} tokens",
                 inputTokens + outputTokens);
@@ -107,7 +204,7 @@ public class OpenAICompatibleProvider : ICloudModelProvider
                 Success = true,
                 Content = responseText,
                 Provider = _providerName,
-                Model = _modelName,
+                Model = string.IsNullOrWhiteSpace(result?.Model) ? modelName : result.Model,
                 InputTokens = inputTokens,
                 OutputTokens = outputTokens,
                 CostEstimate = EstimateCost(inputTokens, outputTokens)
@@ -115,15 +212,44 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Cloud call to {Provider} failed", _providerName);
+            _logger?.LogError(ex, "Cloud call to {Provider}/{Model} failed", _providerName, modelName);
             return new CloudModelResponse
             {
                 Success = false,
                 ErrorMessage = ex.Message,
                 Provider = _providerName,
-                Model = _modelName
+                Model = modelName
             };
         }
+    }
+
+    private static bool IsModelFallbackEligible(CloudModelResponse response)
+    {
+        if (response.Success || string.IsNullOrWhiteSpace(response.ErrorMessage)) return false;
+        return new[] { "API error 404:", "API error 408:", "API error 429:", "API error 500:", "API error 502:", "API error 503:", "API error 504:" }
+            .Any(prefix => response.ErrorMessage.StartsWith(prefix, StringComparison.Ordinal));
+    }
+
+    private static bool IsTransient(System.Net.HttpStatusCode statusCode) => statusCode is
+        System.Net.HttpStatusCode.RequestTimeout or
+        System.Net.HttpStatusCode.TooManyRequests or
+        System.Net.HttpStatusCode.InternalServerError or
+        System.Net.HttpStatusCode.BadGateway or
+        System.Net.HttpStatusCode.ServiceUnavailable or
+        System.Net.HttpStatusCode.GatewayTimeout;
+
+    private TimeSpan GetRetryDelay(HttpResponseMessage response, int attempt)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter?.Delta is { } delta && delta > TimeSpan.Zero)
+            return delta;
+        if (retryAfter?.Date is { } date)
+        {
+            var remaining = date - DateTimeOffset.UtcNow;
+            if (remaining > TimeSpan.Zero) return remaining;
+        }
+
+        return TimeSpan.FromMilliseconds(_baseRetryDelay.TotalMilliseconds * Math.Pow(2, attempt));
     }
 
     private decimal EstimateCost(int inputTokens, int outputTokens)
@@ -150,6 +276,7 @@ public class OpenAICompatibleProvider : ICloudModelProvider
     // OpenAI response format
     private class OpenAIResponse
     {
+        public string? Model { get; set; }
         public OpenAIChoice[]? Choices { get; set; }
         public OpenAIUsage? Usage { get; set; }
     }
@@ -157,6 +284,9 @@ public class OpenAICompatibleProvider : ICloudModelProvider
     private class OpenAIChoice
     {
         public OpenAIMessage? Message { get; set; }
+
+        [JsonPropertyName("finish_reason")]
+        public string? FinishReason { get; set; }
     }
 
     private class OpenAIMessage
@@ -166,7 +296,10 @@ public class OpenAICompatibleProvider : ICloudModelProvider
 
     private class OpenAIUsage
     {
+        [JsonPropertyName("prompt_tokens")]
         public int PromptTokens { get; set; }
+
+        [JsonPropertyName("completion_tokens")]
         public int CompletionTokens { get; set; }
     }
 }

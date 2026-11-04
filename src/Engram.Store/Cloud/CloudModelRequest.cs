@@ -15,6 +15,9 @@ public class CloudModelRequest
     /// <summary>Sanitized text payload. Must NOT contain private data.</summary>
     public string Payload { get; init; } = string.Empty;
 
+    /// <summary>Role-preserving sanitized messages when the caller is conversational.</summary>
+    public IReadOnlyList<CloudModelMessage> Messages { get; init; } = Array.Empty<CloudModelMessage>();
+
     /// <summary>Maximum tokens to generate.</summary>
     public int MaxTokens { get; init; } = 1024;
 
@@ -24,3 +27,5 @@ public class CloudModelRequest
     /// <summary>Metadata tags for routing and caching.</summary>
     public Dictionary<string, string> Metadata { get; init; } = new();
 }
+
+public sealed record CloudModelMessage(string Role, string Content);
