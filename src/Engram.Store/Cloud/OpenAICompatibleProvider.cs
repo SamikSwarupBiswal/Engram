@@ -14,6 +14,7 @@ namespace Engram.Store.Cloud;
 public class OpenAICompatibleProvider : ICloudModelProvider
 {
     private const string ClientTimeoutError = "The cloud model request timed out.";
+    private static readonly TimeSpan FallbackCandidateTimeout = TimeSpan.FromSeconds(18);
 
     private readonly HttpClient _http;
     private readonly ILogger<OpenAICompatibleProvider>? _logger;
@@ -98,8 +99,23 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         string modelName,
         CancellationToken cancellationToken)
     {
+        using var candidateDeadline = _modelNames.Count > 1
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : null;
+        if (candidateDeadline != null)
+        {
+            // Bound the entire candidate, including retries, so one model cannot consume
+            // the caller's planning window before other candidates can be tried.
+            var timeout = _http.Timeout;
+            candidateDeadline.CancelAfter(timeout == Timeout.InfiniteTimeSpan || timeout > FallbackCandidateTimeout
+                ? FallbackCandidateTimeout
+                : timeout);
+        }
+        var modelToken = candidateDeadline?.Token ?? cancellationToken;
+
         try
         {
+            modelToken.ThrowIfCancellationRequested();
             _logger?.LogInformation("Sending to {Provider}/{Model}: {Reason}",
                 _providerName, modelName, request.Reason);
 
@@ -140,20 +156,17 @@ public class OpenAICompatibleProvider : ICloudModelProvider
 
             var json = JsonSerializer.Serialize(payload);
             string responseBody = string.Empty;
-            HttpResponseMessage? response = null;
             for (var attempt = 0; attempt <= _maxTransientRetries; attempt++)
             {
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                response?.Dispose();
-                response = await _http.PostAsync($"{_baseUrl}/chat/completions", content, cancellationToken);
-                responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var response = await _http.PostAsync($"{_baseUrl}/chat/completions", content, modelToken);
+                responseBody = await response.Content.ReadAsStringAsync(modelToken);
                 if (response.IsSuccessStatusCode)
                     break;
 
                 if (!IsTransient(response.StatusCode) || attempt >= _maxTransientRetries)
                 {
                     _logger?.LogError("API error {Status}: {Body}", response.StatusCode, responseBody[..Math.Min(200, responseBody.Length)]);
-                    response.Dispose();
                     return new CloudModelResponse
                     {
                         Success = false,
@@ -167,11 +180,10 @@ public class OpenAICompatibleProvider : ICloudModelProvider
                 _logger?.LogWarning(
                     "Transient API error {Status}; retrying {Provider}/{Model} in {DelayMs} ms (attempt {Attempt}/{Total}).",
                     response.StatusCode, _providerName, modelName, delay.TotalMilliseconds, attempt + 2, _maxTransientRetries + 1);
-                await Task.Delay(delay, cancellationToken);
+                await Task.Delay(delay, modelToken);
             }
 
-            response?.Dispose();
-
+            modelToken.ThrowIfCancellationRequested();
             var result = JsonSerializer.Deserialize<OpenAIResponse>(responseBody, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -216,7 +228,8 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         {
             _logger?.LogError(ex, "Cloud call to {Provider}/{Model} failed", _providerName, modelName);
             var clientTimedOut = !cancellationToken.IsCancellationRequested &&
-                ex is OperationCanceledException { InnerException: TimeoutException };
+                ex is OperationCanceledException canceled &&
+                (candidateDeadline?.IsCancellationRequested == true || canceled.InnerException is TimeoutException);
             return new CloudModelResponse
             {
                 Success = false,
