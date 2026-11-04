@@ -13,6 +13,8 @@ namespace Engram.Store.Cloud;
 /// </summary>
 public class OpenAICompatibleProvider : ICloudModelProvider
 {
+    private const string ClientTimeoutError = "The cloud model request timed out.";
+
     private readonly HttpClient _http;
     private readonly ILogger<OpenAICompatibleProvider>? _logger;
     private readonly string _apiKey;
@@ -74,7 +76,7 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         foreach (var modelName in _modelNames)
         {
             lastResponse = await SendWithModelAsync(request, modelName, cancellationToken);
-            if (lastResponse.Success || !IsModelFallbackEligible(lastResponse))
+            if (lastResponse.Success || cancellationToken.IsCancellationRequested || !IsModelFallbackEligible(lastResponse))
                 return lastResponse;
 
             _logger?.LogWarning(
@@ -213,10 +215,12 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Cloud call to {Provider}/{Model} failed", _providerName, modelName);
+            var clientTimedOut = !cancellationToken.IsCancellationRequested &&
+                ex is OperationCanceledException { InnerException: TimeoutException };
             return new CloudModelResponse
             {
                 Success = false,
-                ErrorMessage = ex.Message,
+                ErrorMessage = clientTimedOut ? ClientTimeoutError : ex.Message,
                 Provider = _providerName,
                 Model = modelName
             };
@@ -226,7 +230,8 @@ public class OpenAICompatibleProvider : ICloudModelProvider
     private static bool IsModelFallbackEligible(CloudModelResponse response)
     {
         if (response.Success || string.IsNullOrWhiteSpace(response.ErrorMessage)) return false;
-        return new[] { "API error 404:", "API error 408:", "API error 429:", "API error 500:", "API error 502:", "API error 503:", "API error 504:" }
+        return response.ErrorMessage == ClientTimeoutError ||
+            new[] { "API error 404:", "API error 408:", "API error 429:", "API error 500:", "API error 502:", "API error 503:", "API error 504:" }
             .Any(prefix => response.ErrorMessage.StartsWith(prefix, StringComparison.Ordinal));
     }
 

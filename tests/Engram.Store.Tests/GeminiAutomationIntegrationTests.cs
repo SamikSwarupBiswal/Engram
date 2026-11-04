@@ -170,6 +170,39 @@ public sealed class GeminiAutomationIntegrationTests
         Assert.Contains("\"model\":\"fallback-flash\"", handler.RequestBodies[1]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OpenAiCompatibleProvider_OnlyFallsBackOnTimeoutWhileCallerIsActive(bool cancelCaller)
+    {
+        using var caller = new CancellationTokenSource();
+        var handler = new TimeoutThenSuccessHandler(() =>
+        {
+            if (cancelCaller)
+                caller.Cancel();
+        });
+        using var client = new HttpClient(handler);
+        var provider = new OpenAICompatibleProvider(
+            "key", "https://gemini.test/v1beta/openai", "primary-flash", "gemini-flash",
+            httpClient: client, maxTransientRetries: 0,
+            fallbackModelNames: new[] { "fallback-flash" });
+
+        var result = await provider.SendAsync(new CloudModelRequest { Payload = "test", MaxTokens = 32 }, caller.Token);
+
+        if (cancelCaller)
+        {
+            Assert.False(result.Success);
+            Assert.Equal("primary-flash", result.Model);
+            Assert.Equal(1, handler.CallCount);
+        }
+        else
+        {
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.Equal("fallback-flash", result.Model);
+            Assert.Equal(2, handler.CallCount);
+        }
+    }
+
     [Fact]
     public async Task OpenAiCompatibleProvider_SkipsAdvertisedButUnavailableModel()
     {
@@ -209,6 +242,27 @@ public sealed class GeminiAutomationIntegrationTests
             {
                 Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
             };
+        }
+    }
+
+    private sealed class TimeoutThenSuccessHandler(Action onTimeout) : HttpMessageHandler
+    {
+        public int CallCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (++CallCount == 1)
+            {
+                onTimeout();
+                throw new TaskCanceledException("HTTP request timed out.", new TimeoutException());
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"choices":[{"message":{"content":"FALLBACK_OK"},"finish_reason":"stop"}]}""",
+                    Encoding.UTF8, "application/json")
+            });
         }
     }
 
