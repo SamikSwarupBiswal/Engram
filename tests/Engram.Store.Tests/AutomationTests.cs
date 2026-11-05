@@ -388,7 +388,19 @@ public class AutomationTests : IDisposable
     [Fact]
     public void ActionType_HasAllExpectedValues()
     {
-        Assert.Equal(10, Enum.GetValues<ActionType>().Length);
+        Assert.Equal(24, Enum.GetValues<ActionType>().Length);
+        Assert.Contains(ActionType.MovePointer, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.DoubleClick, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.RightClick, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.Drag, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.LaunchApplication, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.FocusApplication, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.FileWrite, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.DeleteFile, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.MoveFile, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.RescanApplications, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.OrganizeFiles, Enum.GetValues<ActionType>());
+        Assert.Contains(ActionType.Calculate, Enum.GetValues<ActionType>());
     }
 
     [Fact]
