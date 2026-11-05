@@ -24,6 +24,7 @@ public class PermissionGate
     {
         ActionType.Screenshot,
         ActionType.Wait,
+        ActionType.RescanApplications,
     };
 
     /// <summary>Actions that are always blocked (dangerous).</summary>
@@ -31,6 +32,20 @@ public class PermissionGate
     {
         // Currently no permanently blocked actions — all require approval
     };
+
+    /// <summary>
+    /// Actions requiring explicit approval unless a validated automatic scope applies.
+    /// </summary>
+    private static readonly HashSet<ActionType> ExplicitApprovalActions = new()
+    {
+        ActionType.RunCommand,
+        ActionType.DeleteFile,
+        ActionType.Upload,
+        ActionType.OrganizeFiles,
+        ActionType.Calculate
+    };
+
+    public bool IsActiveAutomation { get; set; } = false;
 
     public PermissionGate(WorkspacePaths? paths = null, Governance.GovernanceConfig? config = null, ILogger<PermissionGate>? logger = null)
     {
@@ -63,6 +78,36 @@ public class PermissionGate
         {
             _logger?.LogWarning("Action blocked: {Type} - {Description}", action.Type, action.Description);
             return ActionPermission.Denied;
+        }
+
+        if (RequiresExplicitApproval(action))
+        {
+            _logger?.LogWarning("Action requires explicit approval: {Type} - {Description}", action.Type, action.Description);
+            return ActionPermission.Pending;
+        }
+
+        if (AutomationApprovalPolicy.IsAutomatic(action))
+            return ActionPermission.AutoApproved;
+
+        // When running active automation, auto-approve all non-destructive actions
+        if (IsActiveAutomation)
+        {
+            var desc = action.Description.ToLowerInvariant();
+            bool isDestructive = desc.Contains("delete") || desc.Contains("remove") || desc.Contains("wipe") ||
+                                 desc.Contains("format") || desc.Contains("purge");
+            bool isFinancial = desc.Contains("bank") || desc.Contains("pay") || desc.Contains("checkout") ||
+                               desc.Contains("buy") || desc.Contains("purchase") || desc.Contains("billing");
+
+            if (!isDestructive && !isFinancial)
+            {
+                _logger?.LogInformation("Action auto-approved (active automation mode): {Type} - {Description}", action.Type, action.Description);
+                return ActionPermission.AutoApproved;
+            }
+            else
+            {
+                _logger?.LogWarning("Action requires manual approval even in active automation (destructive/financial): {Description}", action.Description);
+                return ActionPermission.Pending;
+            }
         }
 
         string fp = CapabilityFingerprint.Compute(action);
@@ -116,6 +161,18 @@ public class PermissionGate
 
         _logger?.LogInformation("Action auto-approved after warmup ({WarmupCount}/{RequiredWarmup} runs for fingerprint '{Fingerprint}'): {Description}", warmupCount, requiredWarmup, fp, action.Description);
         return ActionPermission.AutoApproved;
+    }
+
+    public bool RequiresExplicitApproval(AutomationAction action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (action.Type is ActionType.RunCommand or ActionType.DeleteFile or ActionType.Upload)
+            return true;
+        if (action.AutomaticApprovalFingerprint != null && !AutomationApprovalPolicy.IsAutomatic(action))
+            return true;
+        return !AutomationApprovalPolicy.IsAutomatic(action) &&
+            (action.RiskLevel == AutomationRiskLevel.High || ExplicitApprovalActions.Contains(action.Type) ||
+             ExternalImpactGate.HasPotentialExternalEffect(action));
     }
 
     private Governance.AutonomyLevel GetDomainCeiling(AutomationAction action)

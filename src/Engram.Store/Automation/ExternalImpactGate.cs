@@ -15,6 +15,8 @@ public class ExternalImpactGate
     public async Task<bool> ValidateActionSafetyAsync(AutomationAction action, CancellationToken ct = default)
     {
         if (action == null) return false;
+        if (action.AutomaticApprovalFingerprint != null && !AutomationApprovalPolicy.IsAutomatic(action))
+            return false;
 
         // 1. Explicitly check type for Upload
         if (action.Type == ActionType.Upload)
@@ -22,29 +24,28 @@ public class ExternalImpactGate
             return false; // Force approval for file uploads
         }
 
-        // 2. Check value and description for impactful terms
-        if (!string.IsNullOrEmpty(action.Value) && ImpactRegex.IsMatch(action.Value))
-        {
-            return false;
-        }
+        if (AutomationApprovalPolicy.IsAutomatic(action))
+            return true;
 
-        if (!string.IsNullOrEmpty(action.Description) && ImpactRegex.IsMatch(action.Description))
-        {
-            return false;
-        }
+        return !HasPotentialExternalEffect(action);
+    }
 
-        if (action.Target != null)
+    internal static bool HasPotentialExternalEffect(AutomationAction action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (action.Type == ActionType.Upload) return true;
+        if (new[] { action.Value, action.Description, action.Target?.Selector, action.Target?.Text }
+            .Any(value => !string.IsNullOrEmpty(value) && ImpactRegex.IsMatch(value))) return true;
+        if (action.Type != ActionType.Navigate || action.Value == null) return false;
+        var decoded = action.Value;
+        for (var depth = 0; depth < 3; depth++)
         {
-            if (!string.IsNullOrEmpty(action.Target.Selector) && ImpactRegex.IsMatch(action.Target.Selector))
-            {
-                return false;
-            }
-            if (!string.IsNullOrEmpty(action.Target.Text) && ImpactRegex.IsMatch(action.Target.Text))
-            {
-                return false;
-            }
+            var next = Uri.UnescapeDataString(decoded);
+            if (next == decoded) return false;
+            if (ImpactRegex.IsMatch(next)) return true;
+            decoded = next;
         }
-
-        return true;
+        // Deeper nested escaping is ambiguous; do not automatically navigate it.
+        return Uri.UnescapeDataString(decoded) != decoded;
     }
 }

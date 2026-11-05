@@ -187,8 +187,9 @@ public class CoexistenceSaaSTests : IDisposable
                 gate.RecordSuccess(action);
             }
 
-            // Warmup (11) >= 10, so it should graduate to AutoApproved under Aggressive active autonomy
-            Assert.Equal(ActionPermission.AutoApproved, gate.CheckPermission(action));
+            // External delivery still requires approval after successful warmup.
+            Assert.Equal(domainCategory == "email" ? ActionPermission.Pending : ActionPermission.AutoApproved,
+                gate.CheckPermission(action));
         }
         else
         {

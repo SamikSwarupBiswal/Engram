@@ -5,6 +5,18 @@ using System.Threading.Tasks;
 
 namespace Engram.Store.Automation;
 
+public enum TransitionalState
+{
+    Stable,                  // Stable state (requires full process validation, UIA tree scanning, fingerprinting, and SLM)
+    StartMenuVisible,        // Windows Start Menu is visible / Search app active
+    LauncherSearchFocused,   // Launcher input is active/ready for typing
+    SearchResultsVisible,    // Search results are updating
+    AppLaunching,            // Intermediate state while process starts up
+    DocumentReady,           // A document editor surface is active and ready for input
+    DirectInput,             // Deterministic text entry into the verified active window
+    TransitionUncertain      // Transition verification failed or uncertain
+}
+
 public enum StepStatus
 {
     Pending,

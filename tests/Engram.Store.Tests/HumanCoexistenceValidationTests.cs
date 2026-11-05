@@ -150,8 +150,8 @@ public class HumanCoexistenceValidationTests : IDisposable
         var action = new AutomationAction
         {
             Type = ActionType.Click,
-            Target = new ActionTarget { Selector = ".submit-button" },
-            Description = "Click submit button"
+            Target = new ActionTarget { Selector = ".expand-details" },
+            Description = "Expand local details"
         };
 
         // Act & Assert 1 - Warmup < 10 requires approval

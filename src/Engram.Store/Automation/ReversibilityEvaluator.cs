@@ -1,4 +1,5 @@
 using System;
+using System.Text.RegularExpressions;
 
 namespace Engram.Store.Automation;
 
@@ -30,11 +31,24 @@ public class ReversibilityEvaluator
             return ReversibilityScore.Partially;
         }
 
+        if (AutomationApprovalPolicy.IsAutomatic(action))
+            return action.Type switch
+            {
+                ActionType.Wait or ActionType.Screenshot or ActionType.Scroll or ActionType.Navigate => ReversibilityScore.Reversible,
+                ActionType.Type or ActionType.KeyPress or ActionType.Select => ReversibilityScore.Mostly,
+                _ => ReversibilityScore.Maybe
+            };
+
         var description = action.Description ?? string.Empty;
         var value = action.Value ?? string.Empty;
 
         // Check for highly irreversible/destructive keywords
-        if (ContainsIrreversibleKeyword(description) || ContainsIrreversibleKeyword(value))
+        // Text entered into an editor is document data, not an instruction to Engram.
+        // Continue evaluating the action description, but do not reinterpret quoted
+        // user content (for example, prose containing "drop" or "send") as an
+        // irreversible automation command.
+        if (ContainsIrreversibleKeyword(description) ||
+            action.Type != ActionType.Type && ContainsIrreversibleKeyword(value))
         {
             return ReversibilityScore.No;
         }
@@ -71,16 +85,19 @@ public class ReversibilityEvaluator
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
 
+        // Use word boundaries \b for clean keyword matching, avoiding partial substring matches like "terraformation" or "information" for "format".
+        // Note: We trim trailing spaces from rm and kill so they function as whole word matches.
         string[] irreversibleKeywords = 
         { 
-            "delete", "remove", "rm ", "destroy", "format", "drop ", "purge", 
+            "delete", "remove", "rm", "destroy", "format", "drop", "purge",
             "uninstall", "send", "submit", "publish", "purchase", "buy", "pay", 
-            "terminate", "kill " 
+            "terminate", "kill"
         };
 
         foreach (var keyword in irreversibleKeywords)
         {
-            if (text.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            var pattern = $@"\b{Regex.Escape(keyword)}\b";
+            if (Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase))
             {
                 return true;
             }
