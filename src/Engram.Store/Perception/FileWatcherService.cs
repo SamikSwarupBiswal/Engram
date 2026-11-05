@@ -28,12 +28,15 @@ public class FileWatcherService : IDisposable
 
     private readonly List<string> _watchedPaths = new();
     private readonly List<FileSystemWatcher> _watchers = new();
-    private readonly HashSet<string> _recentEvents = new();
+    private readonly HashSet<string> _directories = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
     private volatile bool _disposed;
 
-    /// <summary>Minimum interval between duplicate events for the same file.</summary>
+    /// <summary>Legacy setting retained for callers. Lifecycle events are forwarded without dropping later edits.</summary>
     public TimeSpan DeduplicationWindow { get; set; } = TimeSpan.FromSeconds(5);
+    public Func<string, bool> PathFilter { get; set; } = _ => true;
+    public Func<string, string, bool> RenameFilter { get; set; } = (_, _) => true;
+    public bool ReconciliationRequired { get; private set; }
 
     public FileWatcherService(
         IEventBus eventBus,
@@ -48,6 +51,13 @@ public class FileWatcherService : IDisposable
     /// </summary>
     public void WatchPath(string path)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        path = Path.GetFullPath(path);
+        if (!PathFilter(path) || HasReparsePoint(path)) return;
+        lock (_lock)
+        {
+            if (_watchedPaths.Contains(path, StringComparer.OrdinalIgnoreCase)) return;
+        }
         if (!Directory.Exists(path))
         {
             _logger?.LogWarning("Watch path does not exist: {Path}", path);
@@ -67,9 +77,31 @@ public class FileWatcherService : IDisposable
         watcher.Deleted += OnFileDeleted;
         watcher.Error += OnWatcherError;
 
-        watcher.EnableRaisingEvents = true;
-        _watchers.Add(watcher);
-        _watchedPaths.Add(path);
+        lock (_lock)
+        {
+            if (_disposed || _watchedPaths.Contains(path, StringComparer.OrdinalIgnoreCase))
+            {
+                watcher.Dispose();
+                return;
+            }
+            _watchers.Add(watcher);
+            _watchedPaths.Add(path);
+            _directories.Add(path);
+            var scannedDirectories = 0;
+            foreach (var directory in Directory.EnumerateDirectories(path, "*", new EnumerationOptions
+                     { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true }).Take(10_001))
+            {
+                if (++scannedDirectories > 10_000) { ReconciliationRequired = true; break; }
+                if (PathFilter(directory)) _directories.Add(directory);
+            }
+            watcher.EnableRaisingEvents = true;
+            if (ReconciliationRequired)
+                _eventBus.Publish(new EventEnvelope
+                {
+                    EventType = "perception.file_coverage_uncertain", Source = "file_watcher_service",
+                    Payload = new { reason = "The directory discovery limit was reached. Reconcile file identities before capture continues." }
+                });
+        }
 
         _logger?.LogInformation("Watching path: {Path}", path);
     }
@@ -79,13 +111,17 @@ public class FileWatcherService : IDisposable
     /// </summary>
     public void StopAll()
     {
-        foreach (var watcher in _watchers)
+        lock (_lock)
         {
-            watcher.EnableRaisingEvents = false;
-            watcher.Dispose();
+            foreach (var watcher in _watchers)
+            {
+                watcher.EnableRaisingEvents = false;
+                watcher.Dispose();
+            }
+            _watchers.Clear();
+            _watchedPaths.Clear();
+            _directories.Clear();
         }
-        _watchers.Clear();
-        _watchedPaths.Clear();
 
         _logger?.LogInformation("Stopped all file watchers");
     }
@@ -95,7 +131,7 @@ public class FileWatcherService : IDisposable
     /// </summary>
     public IReadOnlyList<string> GetWatchedPaths()
     {
-        return _watchedPaths.AsReadOnly();
+        lock (_lock) return _watchedPaths.ToArray();
     }
 
     private void OnFileCreated(object sender, FileSystemEventArgs e)
@@ -110,7 +146,24 @@ public class FileWatcherService : IDisposable
 
     private void OnFileRenamed(object sender, RenamedEventArgs e)
     {
-        ProcessFileEvent(e.FullPath, "renamed");
+        lock (_lock)
+        {
+            if (_disposed || _watchedPaths.Count == 0) return;
+            // Directory moves do not produce child rename events. Suspend before
+            // file-level filters can hide a move through an excluded location.
+            var knownDirectory = _directories.Contains(e.OldFullPath);
+            if (knownDirectory || Directory.Exists(e.FullPath))
+            {
+                if (knownDirectory || PathFilter(e.FullPath))
+                {
+                    _directories.Remove(e.OldFullPath);
+                    OnWatcherError(this, new ErrorEventArgs(new IOException("A watched directory moved; file identities need reconciliation.")));
+                }
+                return;
+            }
+            if (!RenameFilter(e.OldFullPath, e.FullPath)) return;
+            ProcessFileEvent(e.FullPath, "renamed", e.OldFullPath);
+        }
     }
 
     private void OnFileDeleted(object sender, FileSystemEventArgs e)
@@ -118,42 +171,58 @@ public class FileWatcherService : IDisposable
         ProcessFileEvent(e.FullPath, "deleted");
     }
 
-    private void ProcessFileEvent(string filePath, string changeType)
+    private void ProcessFileEvent(string filePath, string changeType, string? oldFilePath = null)
     {
         if (_disposed) return;
-
-        // Deduplicate rapid events for the same file
-        var dedupeKey = $"{filePath}:{changeType}";
+        if (!PathFilter(filePath) || HasReparsePoint(filePath))
+        {
+            if (oldFilePath != null && PathFilter(oldFilePath) && !HasReparsePoint(oldFilePath))
+                ProcessFileEvent(oldFilePath, "deleted");
+            return;
+        }
+        if (oldFilePath != null && (!PathFilter(oldFilePath) || HasReparsePoint(oldFilePath)))
+        {
+            oldFilePath = null;
+            changeType = "created";
+        }
         lock (_lock)
         {
-            if (_disposed) return;
-            if (_recentEvents.Contains(dedupeKey)) return;
-            _recentEvents.Add(dedupeKey);
-
-            // Clean up old entries after deduplication window
-            _ = Task.Delay(DeduplicationWindow).ContinueWith(_ =>
+            if (_disposed || _watchedPaths.Count == 0) return;
+            var isKnownDirectory = _directories.Contains(oldFilePath ?? filePath);
+            if (Directory.Exists(filePath) || isKnownDirectory)
             {
-                lock (_lock)
+                if (changeType == "renamed" || changeType == "deleted")
                 {
-                    if (!_disposed) _recentEvents.Remove(dedupeKey);
+                    ReconciliationRequired = true;
+                    _directories.Remove(oldFilePath ?? filePath);
+                    _eventBus.Publish(new EventEnvelope
+                    {
+                        EventType = "perception.file_coverage_uncertain", Source = "file_watcher_service",
+                        Payload = new { reason = "A watched directory moved or was deleted. Reconcile contained file identities." }
+                    });
                 }
-            });
+                if (Directory.Exists(filePath)) _directories.Add(filePath);
+                return;
+            }
         }
 
         // Classify the file event semantically
         var semanticEvent = ClassifyFileEvent(filePath, changeType);
         if (semanticEvent != null)
         {
+            semanticEvent.OldFilePath = oldFilePath;
             try
             {
-                if (_disposed) return;
-
-                _eventBus.Publish(new EventEnvelope
+                lock (_lock)
                 {
-                    EventType = $"perception.file_{changeType}",
-                    Source = "file_watcher_service",
-                    Payload = semanticEvent
-                });
+                    if (_disposed || _watchedPaths.Count == 0) return;
+                    _eventBus.Publish(new EventEnvelope
+                    {
+                        EventType = $"perception.file_{changeType}",
+                        Source = "file_watcher_service",
+                        Payload = semanticEvent
+                    });
+                }
 
                 _logger?.LogDebug("File event: {Type} - {Path} ({Semantic})",
                     changeType, filePath, semanticEvent.Category);
@@ -267,8 +336,29 @@ public class FileWatcherService : IDisposable
 
     private void OnWatcherError(object sender, ErrorEventArgs e)
     {
-        _logger?.LogError(e.GetException(), "FileWatcher error — attempting recovery");
-        // Recovery logic would go here
+        lock (_lock)
+        {
+            if (_disposed || _watchedPaths.Count == 0) return;
+            ReconciliationRequired = true;
+            _logger?.LogError(e.GetException(), "File watcher coverage is uncertain; reconciliation is required");
+            _eventBus.Publish(new EventEnvelope
+            {
+                EventType = "perception.file_coverage_uncertain", Source = "file_watcher_service",
+                Payload = new { reason = "The file watcher lost events. Current file state must be reconciled." }
+            });
+        }
+    }
+
+    private static bool HasReparsePoint(string path)
+    {
+        try
+        {
+            for (var current = path; current != null; current = Path.GetDirectoryName(current))
+                if ((File.Exists(current) || Directory.Exists(current)) &&
+                    (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return true;
+            return false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
     }
 
     public void Dispose()
@@ -287,6 +377,7 @@ public class FileWatcherService : IDisposable
 public class SemanticFileEvent
 {
     public string FilePath { get; set; } = string.Empty;
+    public string? OldFilePath { get; set; }
     public string FileName { get; set; } = string.Empty;
     public string Extension { get; set; } = string.Empty;
     public string Directory { get; set; } = string.Empty;

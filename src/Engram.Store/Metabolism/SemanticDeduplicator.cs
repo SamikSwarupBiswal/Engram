@@ -41,7 +41,8 @@ public class SemanticDeduplicator
         result.NodesAnalyzed = nodes.Count;
 
         // Group by type for more accurate comparison
-        var groups = nodes.GroupBy(n => n.NodeType);
+        var groups = nodes.Where(n => !(n.NodeType == WikiNodeType.File &&
+            n.Claims.Any(claim => claim.Property == "file_identity_state"))).GroupBy(n => n.NodeType);
 
         foreach (var group in groups)
         {

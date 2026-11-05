@@ -99,6 +99,9 @@ public class SemanticCompactor
     /// </summary>
     public static bool IsProtectedNode(WikiNode node)
     {
+        // Logical file identities cannot be merged by title or content similarity.
+        if (node.NodeType == WikiNodeType.File && node.Claims.Any(claim => claim.Property == "file_identity_state")) return true;
+
         // 1. Identity nodes (Person)
         if (node.NodeType == WikiNodeType.Person) return true;
 
