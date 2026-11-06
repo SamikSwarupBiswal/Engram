@@ -3,11 +3,17 @@ using System.Collections.Generic;
 
 namespace Engram.Store.Automation;
 
+public sealed record ModelPlanningProvenance(string Model, string Provider, string Tool, bool FromCache)
+{
+    public string? DisclosureIdentity { get; init; }
+}
+
 public class ExecutionPlan
 {
     public string PlanId { get; init; } = Guid.NewGuid().ToString("N")[..12];
     public string Goal { get; init; } = string.Empty;
     public Dictionary<string, ExecutionStep> Steps { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    public ModelPlanningProvenance? Planning { get; set; }
 
     public void Validate()
     {

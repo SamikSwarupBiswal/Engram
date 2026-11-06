@@ -26,6 +26,8 @@ public class AutomationAction
     public string? ConfirmationReason { get; set; }
     [JsonIgnore]
     internal string? AutomaticApprovalFingerprint { get; set; }
+    [JsonIgnore]
+    internal TextFileOutputBinding? TextFileOutput { get; set; }
     /// <summary>
     /// Stable, provider-neutral capability requested by the planner. The plugin host
     /// resolves this identifier to a trusted implementation at execution time.
