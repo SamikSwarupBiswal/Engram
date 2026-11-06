@@ -41,6 +41,71 @@ public sealed class FileIdentityRegistryTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteAllClearsCachedIdentitiesBeforeWatchingIsEnabledAgain()
+    {
+        var enabled = true;
+        var registry = new FileIdentityRegistry(_paths, _writer, _nodes, _sovereignty, _ => enabled);
+        var path = Create();
+        var original = registry.Observe(new(path, "created", DateTimeOffset.UtcNow));
+        Assert.Equal(original.FileId, registry.FindCandidates("note").Single().FileId);
+        enabled = false;
+
+        registry.ResetForDeletion(() =>
+        {
+            var result = new Engram.Store.Security.DataDelete(_paths.Root).DeleteAll();
+            if (!result.Success) throw new IOException(string.Join("; ", result.Errors));
+        });
+
+        Assert.Empty(registry.FindCandidates("note"));
+        Assert.Null(await registry.RevalidateAsync(original.FileId));
+        enabled = true;
+        Assert.Empty(registry.FindCandidates("note"));
+        Assert.True(File.Exists(path));
+        var fresh = registry.Observe(new(path, "created", DateTimeOffset.UtcNow));
+        Assert.NotEqual(original.FileId, fresh.FileId);
+        Assert.Equal(fresh.FileId, registry.FindCandidates("note").Single().FileId);
+        Assert.Equal(fresh.FileId, NewRegistry().FindCandidates("note").Single().FileId);
+    }
+
+    [Fact]
+    public void SuccessfulDeletionClearsForgottenPathAndReconciliationCaches()
+    {
+        var path = Create();
+        var original = Observe(path);
+        _sovereignty.Forget(original.FileId);
+        _registry.SuspendCaptureForReconciliation();
+        Assert.True(_registry.IsKnownForgottenPath(path));
+
+        _registry.ResetForDeletion(() =>
+        {
+            var result = new Engram.Store.Security.DataDelete(_paths.Root).DeleteAll();
+            if (!result.Success) throw new IOException(string.Join("; ", result.Errors));
+        });
+
+        Assert.False(_registry.ReconciliationRequired);
+        Assert.False(_registry.IsKnownForgottenPath(path));
+        Assert.True(_registry.CanObservePath(path));
+        Assert.NotEqual(original.FileId, Observe(path).FileId);
+    }
+
+    [Fact]
+    public async Task FailedDeletionRetainsSourceIdentityAndBlocksFurtherCapture()
+    {
+        var path = Create();
+        var original = Observe(path);
+
+        Assert.Throws<IOException>(() => _registry.ResetForDeletion(() => throw new IOException("Deletion failed.")));
+
+        Assert.True(_registry.ReconciliationRequired);
+        Assert.False(_registry.CanObservePath(path));
+        Assert.Empty(_registry.FindCandidates("note"));
+        Assert.Throws<InvalidOperationException>(() => Observe(path, "changed"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _registry.RevalidateAsync(original.FileId));
+        Assert.NotNull(_nodes.Load(original.FileId));
+        Assert.Single(Directory.GetFiles(_paths.Raw, "file_identity_*.json", SearchOption.AllDirectories));
+    }
+
+    [Fact]
     public async Task ExternalCreateEditRenameDeleteRecreatePreservesDocumentHistory()
     {
         var path = Create();

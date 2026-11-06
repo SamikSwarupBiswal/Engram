@@ -44,6 +44,29 @@ public sealed class FileIdentityRegistry
         Restore();
     }
 
+    /// <summary>Serializes storage deletion with registry writes and clears cached identities
+    /// only after the deletion callback succeeds. Callers must throw for incomplete deletion.</summary>
+    public void ResetForDeletion(Action delete)
+    {
+        ArgumentNullException.ThrowIfNull(delete);
+        lock (_gate)
+        {
+            try { delete(); }
+            catch
+            {
+                // A partial delete cannot leave the old cache available for fresh capture.
+                _reconciliationRequired = true;
+                throw;
+            }
+            _files.Clear();
+            _byPath.Clear();
+            _historicalPaths.Clear();
+            _suppressedPathHashes.Clear();
+            _suppressionStateInvalid = false;
+            _reconciliationRequired = false;
+        }
+    }
+
     public FileMemoryReference Observe(FileObservation observation)
     {
         ArgumentNullException.ThrowIfNull(observation);
@@ -146,6 +169,20 @@ public sealed class FileIdentityRegistry
             catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 return false;
+            }
+        }
+    }
+
+    // Outcome replay must distinguish an absent watching grant from a durable
+    // forgetting decision, including snapshots created before a shared file ID existed.
+    internal bool IsKnownForgottenPath(string path)
+    {
+        lock (_gate)
+        {
+            try { return IsSuppressed(NormalizePath(path)); }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                return true;
             }
         }
     }
