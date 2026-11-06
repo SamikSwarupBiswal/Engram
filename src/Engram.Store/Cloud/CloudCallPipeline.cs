@@ -31,6 +31,7 @@ public class CloudCallPipeline
     private readonly CloudAuditLog _auditLog;
     private readonly CleanCache _cache;
     private readonly Dictionary<ComputeTarget, ICloudModelProvider> _providers;
+    private readonly IReadOnlyList<ICloudModelProvider> _availableProviders;
 
     public CloudCallPipeline(
         ModelRouter router,
@@ -52,7 +53,8 @@ public class CloudCallPipeline
 
         // Map providers by name for routing
         _providers = new Dictionary<ComputeTarget, ICloudModelProvider>();
-        foreach (var provider in providers ?? throw new ArgumentNullException(nameof(providers)))
+        _availableProviders = (providers ?? throw new ArgumentNullException(nameof(providers))).ToArray();
+        foreach (var provider in _availableProviders)
         {
             var target = provider.ProviderName switch
             {
@@ -62,6 +64,8 @@ public class CloudCallPipeline
                 _ => ComputeTarget.GeminiFlash
             };
             _providers[target] = provider;
+            if (provider.ProviderName is not ("gemini-flash" or "claude-sonnet" or "mock"))
+                _providers[ComputeTarget.ClaudeSonnet] = provider;
         }
     }
 
@@ -80,6 +84,30 @@ public class CloudCallPipeline
         if (!routing.IsCloud)
         {
             return PipelineResult.RoutedToLocal(routing.Reason);
+        }
+
+        // Resolve fallbacks before disclosing retrieved output to its original provider.
+        var provider = ResolveProvider(routing.Target);
+        if (provider == null)
+        {
+            AuditBlockedCall(callRequest, routing, $"No available cloud provider can satisfy {routing.Target}.");
+            return PipelineResult.Blocked($"No available cloud provider can satisfy {routing.Target}.");
+        }
+        var hasScopedMemory = callRequest.Messages.Any(message => message.MemoryProvider != null);
+        var disclosureIdentity = provider.DisclosureIdentity;
+        if (hasScopedMemory)
+        {
+            var messages = callRequest.Messages.Where(message => message.MemoryProvider == null ||
+                message.MemoryProvider != "local" && !string.IsNullOrWhiteSpace(disclosureIdentity) &&
+                string.Equals(message.MemoryProvider, disclosureIdentity, StringComparison.Ordinal)).ToArray();
+            // Rebuild Payload too: it may contain redundant copies of excluded messages.
+            callRequest = new CloudCallRequest
+            {
+                Reason = callRequest.Reason, Complexity = callRequest.Complexity,
+                Payload = string.Join("\n", messages.Select(message => $"{message.Role}: {message.Content}")),
+                Messages = messages, PrivacyClass = callRequest.PrivacyClass,
+                MaxTokens = callRequest.MaxTokens, Metadata = callRequest.Metadata
+            };
         }
 
         // Step 2: Filter/sanitize the payload
@@ -107,8 +135,11 @@ public class CloudCallPipeline
             return PipelineResult.Blocked(rateLimit.DenyReason!);
         }
 
+        // Resolve the actual provider before budgeting. A configured fallback (for example,
+        // Gemini handling a request initially classified as high complexity) must not be
+        // priced as a provider that is not installed.
         // Step 5: Budget check
-        var estimatedCost = EstimateCost(routing.Target, filterResult.FilteredPayload);
+        var estimatedCost = EstimateCost(provider, filterResult.FilteredPayload, callRequest.MaxTokens);
         var budgetCheck = _budgetManager.CheckBudget(estimatedCost);
         if (!budgetCheck.IsAllowed)
         {
@@ -117,8 +148,8 @@ public class CloudCallPipeline
         }
 
         // Step 6: Check cache
-        var cacheKey = ComputeCacheKey(callRequest);
-        if (_cache.TryGet(cacheKey, out var cachedEntry) && cachedEntry is not null)
+        var cacheKey = ComputeCacheKey(callRequest, provider);
+        if (!hasScopedMemory && _cache.TryGet(cacheKey, out var cachedEntry) && cachedEntry is not null)
         {
             // Record rate limiter hit for cache access too
             _rateLimiter.RecordCall();
@@ -133,25 +164,13 @@ public class CloudCallPipeline
                 InputTokens = 0,
                 OutputTokens = 0,
                 FromCache = true,
+                DisclosureIdentity = disclosureIdentity,
                 RoutingReason = routing.Reason,
                 FilterReason = filterResult.Reason
             };
         }
 
-        // Step 7: Find provider and execute cloud call
-        if (!_providers.TryGetValue(routing.Target, out var provider))
-        {
-            AuditBlockedCall(callRequest, routing, $"No provider configured for {routing.Target}.");
-            return PipelineResult.Blocked($"No provider configured for {routing.Target}.");
-        }
-
-        if (!provider.IsAvailable)
-        {
-            AuditBlockedCall(callRequest, routing, $"Provider {provider.ProviderName} is not available.");
-            return PipelineResult.Blocked($"Provider {provider.ProviderName} is not available.");
-        }
-
-        // Record the call for rate limiting
+        // Step 7: Execute the selected provider.
         _rateLimiter.RecordCall();
 
         var cloudRequest = new CloudModelRequest
@@ -159,8 +178,10 @@ public class CloudCallPipeline
             Reason = callRequest.Reason,
             Complexity = callRequest.Complexity,
             Payload = filterResult.FilteredPayload,
+            Messages = FilterMessages(callRequest.Messages, callRequest.PrivacyClass),
             MaxTokens = callRequest.MaxTokens,
             OriginalPrivacyClass = callRequest.PrivacyClass,
+            ContainsScopedMemory = hasScopedMemory,
             Metadata = callRequest.Metadata
         };
 
@@ -172,22 +193,23 @@ public class CloudCallPipeline
         catch (Exception ex)
         {
             // Log failed call
-            LogAuditEntry(callRequest, routing, provider, filterResult, 0, 0, 0, false, ex.Message);
-            return PipelineResult.Failed($"Cloud call failed: {ex.Message}");
+            LogAuditEntry(callRequest, routing, provider, filterResult, 0, 0, 0, false, ex.Message,
+                suppressPayload: hasScopedMemory);
+            return PipelineResult.Failed(hasScopedMemory ? "The cloud call with task context failed. Try again." : $"Cloud call failed: {ex.Message}");
         }
 
         // Step 8: Log to audit
         LogAuditEntry(callRequest, routing, provider, filterResult,
             response.InputTokens, response.OutputTokens, response.CostEstimate,
-            response.Success, response.ErrorMessage);
+            response.Success, response.ErrorMessage, response.Model, suppressPayload: hasScopedMemory);
 
         if (!response.Success)
         {
-            return PipelineResult.Failed(response.ErrorMessage ?? "Cloud call failed.");
+            return PipelineResult.Failed(hasScopedMemory ? "The cloud call with task context failed. Try again." : response.ErrorMessage ?? "Cloud call failed.");
         }
 
         // Cache successful response (if not private)
-        if (callRequest.PrivacyClass != PrivacyClass.Private &&
+        if (!hasScopedMemory && callRequest.PrivacyClass != PrivacyClass.Private &&
             callRequest.PrivacyClass != PrivacyClass.Sensitive)
         {
             _cache.Put(cacheKey, new CacheEntry
@@ -210,9 +232,29 @@ public class CloudCallPipeline
             InputTokens = response.InputTokens,
             OutputTokens = response.OutputTokens,
             FromCache = false,
+            DisclosureIdentity = disclosureIdentity,
             RoutingReason = routing.Reason,
             FilterReason = filterResult.Reason
         };
+    }
+
+    private ICloudModelProvider? ResolveProvider(ComputeTarget target)
+    {
+        if (_providers.TryGetValue(target, out var exact) && exact.IsAvailable) return exact;
+        return _availableProviders.FirstOrDefault(candidate => candidate.IsAvailable);
+    }
+
+    private IReadOnlyList<CloudModelMessage> FilterMessages(IReadOnlyList<CloudModelMessage> messages, PrivacyClass privacyClass)
+    {
+        if (messages.Count == 0) return Array.Empty<CloudModelMessage>();
+        var filtered = new List<CloudModelMessage>(messages.Count);
+        foreach (var message in messages)
+        {
+            var result = _filter.FilterText(message.Content, privacyClass);
+            if (!result.IsAllowed) return Array.Empty<CloudModelMessage>();
+            filtered.Add(new CloudModelMessage(message.Role, result.FilteredPayload));
+        }
+        return filtered;
     }
 
     private void AuditBlockedCall(CloudCallRequest request, RoutingDecision routing, string reason)
@@ -240,42 +282,48 @@ public class CloudCallPipeline
         int outputTokens,
         decimal cost,
         bool success,
-        string? errorMessage)
+        string? errorMessage,
+        string? responseModel = null,
+        bool suppressPayload = false)
     {
         _auditLog.Log(new CloudAuditEntry
         {
             Reason = request.Reason,
             Provider = provider.ProviderName,
-            Model = provider.ModelName,
-            PayloadSummary = filterResult.FilteredPayload.Length > 200
+            Model = string.IsNullOrWhiteSpace(responseModel) ? provider.ModelName : responseModel,
+            PayloadSummary = suppressPayload ? "[Provider-scoped task memory excluded from audit payload]" : filterResult.FilteredPayload.Length > 200
                 ? filterResult.FilteredPayload[..200] + "..."
                 : filterResult.FilteredPayload,
             InputTokens = inputTokens,
             OutputTokens = outputTokens,
             CostUsd = cost,
             Success = success,
-            ErrorMessage = errorMessage,
+            ErrorMessage = suppressPayload && errorMessage != null ? "Provider-scoped call failed; details omitted." : errorMessage,
             TaskComplexity = request.Complexity.ToString(),
             ComputeTarget = routing.Target.ToString()
         });
     }
 
-    private static decimal EstimateCost(ComputeTarget target, string payload)
+    private static decimal EstimateCost(ICloudModelProvider provider, string payload, int maximumOutputTokens)
     {
-        var inputTokens = payload.Length / 4; // rough estimate
-        return target switch
+        var inputTokens = Math.Max(1, payload.Length / 4);
+        var outputTokens = Math.Max(1, maximumOutputTokens);
+        return provider.ProviderName.ToLowerInvariant() switch
         {
-            ComputeTarget.GeminiFlash => (inputTokens * 0.000075m) + (200 * 0.0003m),
-            ComputeTarget.ClaudeSonnet => (inputTokens * 0.003m) + (500 * 0.015m),
-            _ => 0.001m
+            "gemini-flash" => (inputTokens * 0.000000075m) + (outputTokens * 0.0000003m),
+            "claude-sonnet" => (inputTokens * 0.000003m) + (outputTokens * 0.000015m),
+            _ => (inputTokens * 0.000001m) + (outputTokens * 0.000002m)
         };
     }
 
-    private static string ComputeCacheKey(CloudCallRequest request)
+    private static string ComputeCacheKey(CloudCallRequest request, ICloudModelProvider provider)
     {
-        // Simple cache key based on reason + payload hash
+        // Include provider/model and generation settings so a truncated response from an old
+        // token budget cannot poison a later planner request.
+        var settings = string.Join(";", request.Metadata.OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
         var hash = System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(request.Payload));
+            System.Text.Encoding.UTF8.GetBytes($"{provider.ProviderName}|{provider.DisclosureIdentity}|{provider.ModelName}|{request.MaxTokens}|{settings}|{request.Payload}"));
         return $"{request.Complexity}:{Convert.ToHexString(hash)[..16]}";
     }
 }
@@ -294,6 +342,9 @@ public class CloudCallRequest
 
     /// <summary>Raw payload — pipeline will filter before sending to cloud.</summary>
     public string Payload { get; init; } = string.Empty;
+
+    /// <summary>Optional role-preserving messages. The pipeline sanitizes each message before dispatch.</summary>
+    public IReadOnlyList<CloudModelMessage> Messages { get; init; } = Array.Empty<CloudModelMessage>();
 
     /// <summary>Privacy class of the payload data.</summary>
     public PrivacyClass PrivacyClass { get; init; } = PrivacyClass.Public;
@@ -318,6 +369,7 @@ public class PipelineResult
     public int InputTokens { get; init; }
     public int OutputTokens { get; init; }
     public bool FromCache { get; init; }
+    public string? DisclosureIdentity { get; init; }
     public string RoutingReason { get; init; } = string.Empty;
     public string FilterReason { get; init; } = string.Empty;
     public string? ErrorMessage { get; init; }

@@ -664,6 +664,8 @@ public class ChatMessage
 {
     public string Role { get; init; } = "user";
     public string Content { get; init; } = string.Empty;
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal string? MemoryProvider { get; init; }
 }
 
 public class InferenceResult
@@ -674,6 +676,9 @@ public class InferenceResult
     public int OutputTokens { get; init; }
     public string Model { get; init; } = string.Empty;
     public string Provider { get; init; } = "local";
+    public bool FromCache { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? DisclosureIdentity { get; init; }
     public string? ErrorMessage { get; init; }
     public InferenceSessionTelemetry? SessionTelemetry { get; init; }
     public double MemoryDeltaMb { get; init; }

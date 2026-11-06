@@ -28,6 +28,7 @@ public class OpenAICompatibleProvider : ICloudModelProvider
 
     public string ProviderName => _providerName;
     public string ModelName => _modelNames[0];
+    public string? DisclosureIdentity { get; }
     public bool IsAvailable => !string.IsNullOrEmpty(_apiKey) || _baseUrl.Contains("localhost");
 
     /// <summary>
@@ -58,6 +59,17 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         if (_modelNames.Count == 0)
             throw new ArgumentException("At least one model name is required.", nameof(modelName));
         _providerName = providerName;
+        if (Uri.TryCreate(_baseUrl, UriKind.Absolute, out var endpoint) && endpoint.Scheme is "http" or "https")
+        {
+            var accountHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_apiKey)));
+            var identity = JsonSerializer.Serialize(new
+            {
+                provider = _providerName,
+                endpoint = endpoint.GetComponents(UriComponents.HttpRequestUrl, UriFormat.UriEscaped).TrimEnd('/'),
+                account = accountHash
+            });
+            DisclosureIdentity = "cloud-v1-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+        }
         _logger = logger;
         _maxTransientRetries = Math.Max(0, maxTransientRetries);
         _baseRetryDelay = baseRetryDelay ?? TimeSpan.FromMilliseconds(750);
@@ -166,11 +178,13 @@ public class OpenAICompatibleProvider : ICloudModelProvider
 
                 if (!IsTransient(response.StatusCode) || attempt >= _maxTransientRetries)
                 {
-                    _logger?.LogError("API error {Status}: {Body}", response.StatusCode, responseBody[..Math.Min(200, responseBody.Length)]);
+                    var errorDetail = request.ContainsScopedMemory ? "Provider-scoped response details omitted."
+                        : responseBody[..Math.Min(200, responseBody.Length)];
+                    _logger?.LogError("API error {Status}: {Body}", response.StatusCode, errorDetail);
                     return new CloudModelResponse
                     {
                         Success = false,
-                        ErrorMessage = $"API error {(int)response.StatusCode}: {responseBody[..Math.Min(200, responseBody.Length)]}",
+                        ErrorMessage = $"API error {(int)response.StatusCode}: {errorDetail}",
                         Provider = _providerName,
                         Model = modelName
                     };
@@ -226,14 +240,17 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Cloud call to {Provider}/{Model} failed", _providerName, modelName);
+            if (request.ContainsScopedMemory)
+                _logger?.LogError("Cloud call to {Provider}/{Model} failed; provider-scoped details omitted.", _providerName, modelName);
+            else
+                _logger?.LogError(ex, "Cloud call to {Provider}/{Model} failed", _providerName, modelName);
             var clientTimedOut = !cancellationToken.IsCancellationRequested &&
                 ex is OperationCanceledException canceled &&
                 (candidateDeadline?.IsCancellationRequested == true || canceled.InnerException is TimeoutException);
             return new CloudModelResponse
             {
                 Success = false,
-                ErrorMessage = clientTimedOut ? ClientTimeoutError : ex.Message,
+                ErrorMessage = clientTimedOut ? ClientTimeoutError : request.ContainsScopedMemory ? "Provider-scoped call failed." : ex.Message,
                 Provider = _providerName,
                 Model = modelName
             };

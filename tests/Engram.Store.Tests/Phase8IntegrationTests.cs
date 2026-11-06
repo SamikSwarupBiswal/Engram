@@ -324,9 +324,9 @@ public class Phase8IntegrationTests : IDisposable
         // ...the dailySpent from audit is too small to trigger the limit.
         // Instead: test that per-call limit blocks expensive calls, and use a tight daily budget
         // with a high per-call limit to test daily accumulation.
-        pipeline = CreatePipeline(dailyBudget: 0.07m, perCallLimit: 1.00m, mockCost: 0.001m);
+        pipeline = CreatePipeline(dailyBudget: 0.0025m, perCallLimit: 1.00m, mockCost: 0.001m);
 
-        // Call 1: dailySpent=0, estimate~0.06, 0+0.06=0.06 < 0.07 => allowed
+        // Call 1: the generic estimate is about $0.00205, below the $0.0025 budget.
         var result1 = await pipeline.ExecuteAsync(new CloudCallRequest
         {
             Reason = "First call",
@@ -335,17 +335,18 @@ public class Phase8IntegrationTests : IDisposable
         });
         Assert.Equal(PipelineStatus.Completed, result1.Status);
 
-        // Call 2: dailySpent=0.001 (audit), estimate~0.06, 0.001+0.06=0.061 < 0.07 => allowed
+        // Call 2: the prior $0.001 audited cost plus the estimate exceeds the daily budget.
         var result2 = await pipeline.ExecuteAsync(new CloudCallRequest
         {
             Reason = "Second call",
             Complexity = TaskComplexity.Medium,
             Payload = "Query 2"
         });
-        Assert.Equal(PipelineStatus.Completed, result2.Status);
+        Assert.Equal(PipelineStatus.Blocked, result2.Status);
+        Assert.Contains("daily", result2.ErrorMessage!, StringComparison.OrdinalIgnoreCase);
 
         // Per-call limit test: set per-call limit lower than EstimateCost
-        var perCallPipeline = CreatePipeline(dailyBudget: 100.00m, perCallLimit: 0.01m, mockCost: 0.001m);
+        var perCallPipeline = CreatePipeline(dailyBudget: 100.00m, perCallLimit: 0.001m, mockCost: 0.001m);
         var blockedResult = await perCallPipeline.ExecuteAsync(new CloudCallRequest
         {
             Reason = "Expensive call exceeds per-call limit",
@@ -357,7 +358,7 @@ public class Phase8IntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task Per_Call_Limit_Blocks_Expensive_Calls()
+    public async Task FallbackProvider_IsResolvedAndPricedBeforeBudgetCheck()
     {
         var pipeline = CreatePipeline(perCallLimit: 0.005m, mockCost: 0.010m);
 
@@ -368,8 +369,7 @@ public class Phase8IntegrationTests : IDisposable
             Payload = "Complex analysis"
         });
 
-        Assert.Equal(PipelineStatus.Blocked, result.Status);
-        Assert.Contains("per-call", result.ErrorMessage!, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PipelineStatus.Completed, result.Status);
     }
 
     // ==================================================================

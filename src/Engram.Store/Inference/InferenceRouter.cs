@@ -134,6 +134,8 @@ return InferenceResult.Failed(
             Reason = "Chat completion",
             Complexity = complexity,
             Payload = string.Join("\n", messages.Select(m => $"{m.Role}: {m.Content}")),
+            Messages = messages.Select(message => new CloudModelMessage(message.Role, message.Content)
+                { MemoryProvider = message.MemoryProvider }).ToArray(),
             PrivacyClass = PrivacyClass.Internal,
             MaxTokens = maxTokens
         };
@@ -147,7 +149,9 @@ return InferenceResult.Failed(
             InputTokens = result.InputTokens,
             OutputTokens = result.OutputTokens,
             Model = result.Model,
-            Provider = "cloud",
+            Provider = result.Provider,
+            FromCache = result.FromCache,
+            DisclosureIdentity = result.DisclosureIdentity,
             ErrorMessage = result.ErrorMessage
         };
     }

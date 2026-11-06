@@ -26,6 +26,14 @@ public class CloudModelRequest
 
     /// <summary>Metadata tags for routing and caching.</summary>
     public Dictionary<string, string> Metadata { get; init; } = new();
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal bool ContainsScopedMemory { get; init; }
 }
 
-public sealed record CloudModelMessage(string Role, string Content);
+public sealed record CloudModelMessage(string Role, string Content)
+{
+    // Set only by server-owned retrieval, never by a serialized chat request.
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal string? MemoryProvider { get; init; }
+}

@@ -18,4 +18,8 @@ public interface ICloudModelProvider
 
     /// <summary>Specific model name for audit logging.</summary>
     string ModelName { get; }
+
+    /// <summary>Opaque identity of the actual disclosure destination and account.
+    /// Providers without a durable identity cannot receive remembered private context.</summary>
+    string? DisclosureIdentity => null;
 }
