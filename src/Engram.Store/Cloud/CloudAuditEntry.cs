@@ -42,6 +42,12 @@ public class CloudAuditEntry
     [JsonPropertyName("error_message")]
     public string? ErrorMessage { get; init; }
 
+    [JsonPropertyName("failure_category")]
+    public CloudFailureCategory? FailureCategory { get; init; }
+
+    [JsonPropertyName("http_status_code")]
+    public int? HttpStatusCode { get; init; }
+
     [JsonPropertyName("from_cache")]
     public bool FromCache { get; init; }
 

@@ -201,7 +201,8 @@ public class CloudCallPipeline
         // Step 8: Log to audit
         LogAuditEntry(callRequest, routing, provider, filterResult,
             response.InputTokens, response.OutputTokens, response.CostEstimate,
-            response.Success, response.ErrorMessage, response.Model, suppressPayload: hasScopedMemory);
+            response.Success, response.ErrorMessage, response.Model, suppressPayload: hasScopedMemory,
+            failureCategory: response.FailureCategory, httpStatusCode: response.HttpStatusCode);
 
         if (!response.Success)
         {
@@ -284,8 +285,11 @@ public class CloudCallPipeline
         bool success,
         string? errorMessage,
         string? responseModel = null,
-        bool suppressPayload = false)
+        bool suppressPayload = false,
+        CloudFailureCategory? failureCategory = null,
+        int? httpStatusCode = null)
     {
+        var knownFailure = !success && failureCategory is { } category && Enum.IsDefined(category);
         _auditLog.Log(new CloudAuditEntry
         {
             Reason = request.Reason,
@@ -299,6 +303,8 @@ public class CloudCallPipeline
             CostUsd = cost,
             Success = success,
             ErrorMessage = suppressPayload && errorMessage != null ? "Provider-scoped call failed; details omitted." : errorMessage,
+            FailureCategory = knownFailure ? failureCategory : null,
+            HttpStatusCode = knownFailure && httpStatusCode is >= 100 and <= 599 ? httpStatusCode : null,
             TaskComplexity = request.Complexity.ToString(),
             ComputeTarget = routing.Target.ToString()
         });

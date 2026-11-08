@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Engram.Store.Cloud;
 
 /// <summary>
@@ -29,6 +31,22 @@ public class CloudModelResponse
     /// <summary>Error message if failed.</summary>
     public string? ErrorMessage { get; init; }
 
+    /// <summary>Known local failure category; null when successful or unknown.</summary>
+    public CloudFailureCategory? FailureCategory { get; init; }
+
+    /// <summary>HTTP status observed on the failed call, when a response was received.</summary>
+    public int? HttpStatusCode { get; init; }
+
     /// <summary>Whether the response was served from cache.</summary>
     public bool FromCache { get; init; }
+}
+
+/// <summary>Bounded diagnostic categories that carry no provider response details.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CloudFailureCategory>))]
+public enum CloudFailureCategory
+{
+    Http,
+    Timeout,
+    Transport,
+    InvalidResponse
 }

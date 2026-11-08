@@ -101,6 +101,111 @@ public sealed class ProviderScopedMemoryTests : IDisposable
         Assert.DoesNotContain(logger.Messages, message => message.Contains(HistoricalText));
     }
 
+    [Theory]
+    [InlineData(401)]
+    [InlineData(429)]
+    public async Task ScopedHttpFailureAuditsOnlyActualStatusAndSafeCategory(int status)
+    {
+        const string secret = "synthetic-diagnostic-secret";
+        var logger = new RecordingLogger();
+        using var client = new HttpClient(new DiagnosticHandler((_, _) => Task.FromResult(
+            new HttpResponseMessage((System.Net.HttpStatusCode)status)
+            {
+                Content = new StringContent(HistoricalText + secret + " API error 503:"),
+                Headers = { { "X-Private", secret } }
+            })));
+        var provider = new OpenAICompatibleProvider(secret, "https://model.test/v1", "test-model",
+            "claude-sonnet", logger, client, maxTransientRetries: 0);
+
+        var result = await Pipeline(provider).ExecuteAsync(Request(provider.DisclosureIdentity!));
+
+        Assert.Equal(PipelineStatus.Failed, result.Status);
+        var audit = ReadSingleAudit();
+        Assert.Equal(CloudFailureCategory.Http, audit.FailureCategory);
+        Assert.Equal(status, audit.HttpStatusCode);
+        Assert.Equal("Provider-scoped call failed; details omitted.", audit.ErrorMessage);
+        var serialized = File.ReadAllText(Path.Combine(_root, "logs", "cloud-audit.jsonl"));
+        Assert.DoesNotContain(HistoricalText, serialized);
+        Assert.DoesNotContain(secret, serialized);
+        Assert.DoesNotContain("model.test", serialized);
+        Assert.DoesNotContain("X-Private", serialized);
+        Assert.DoesNotContain(logger.Messages, message => message.Contains(secret) || message.Contains(HistoricalText));
+    }
+
+    [Theory]
+    [InlineData("timeout", CloudFailureCategory.Timeout, null)]
+    [InlineData("transport", CloudFailureCategory.Transport, null)]
+    [InlineData("malformed", CloudFailureCategory.InvalidResponse, 200)]
+    public async Task ScopedLocalFailureAuditsSafeCategory(string failure, CloudFailureCategory category, int? status)
+    {
+        using var client = new HttpClient(new DiagnosticHandler((_, _) => failure switch
+        {
+            "timeout" => throw new TaskCanceledException(HistoricalText, new TimeoutException(HistoricalText)),
+            "transport" => throw new HttpRequestException(HistoricalText, null, System.Net.HttpStatusCode.Forbidden),
+            _ => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                { Content = new StringContent(HistoricalText) })
+        }));
+        var provider = new OpenAICompatibleProvider("synthetic-key", "https://model.test/v1", "test-model",
+            "claude-sonnet", httpClient: client, maxTransientRetries: 0);
+
+        var result = await Pipeline(provider).ExecuteAsync(Request(provider.DisclosureIdentity!));
+
+        Assert.Equal(PipelineStatus.Failed, result.Status);
+        var audit = ReadSingleAudit();
+        Assert.Equal(category, audit.FailureCategory);
+        Assert.Equal(status, audit.HttpStatusCode);
+        Assert.DoesNotContain(HistoricalText, File.ReadAllText(Path.Combine(_root, "logs", "cloud-audit.jsonl")));
+    }
+
+    [Theory]
+    [InlineData(null, null, false, null)]
+    [InlineData(null, 401, false, null)]
+    [InlineData((CloudFailureCategory)999, 401, false, null)]
+    [InlineData(CloudFailureCategory.Http, 99, false, CloudFailureCategory.Http)]
+    [InlineData(CloudFailureCategory.Http, 600, false, CloudFailureCategory.Http)]
+    [InlineData(CloudFailureCategory.Http, 401, true, null)]
+    public async Task AuditRejectsUnknownInvalidAndSuccessfulFailureMetadata(
+        CloudFailureCategory? category, int? status, bool success, CloudFailureCategory? expectedCategory)
+    {
+        var provider = new RecordingProvider("claude-sonnet", OriginalScope)
+        {
+            Response = new CloudModelResponse
+            {
+                Success = success, Content = "Ready", ErrorMessage = success ? null : HistoricalText,
+                FailureCategory = category, HttpStatusCode = status
+            }
+        };
+
+        await Pipeline(provider).ExecuteAsync(Request());
+
+        var audit = ReadSingleAudit();
+        Assert.Equal(expectedCategory, audit.FailureCategory);
+        Assert.Null(audit.HttpStatusCode);
+    }
+
+    [Fact]
+    public async Task UnknownProviderExceptionKeepsFailureMetadataEmpty()
+    {
+        var provider = new RecordingProvider("claude-sonnet", OriginalScope) { ThrowError = true };
+        await Pipeline(provider).ExecuteAsync(Request());
+        var audit = ReadSingleAudit();
+        Assert.Null(audit.FailureCategory);
+        Assert.Null(audit.HttpStatusCode);
+    }
+
+    private CloudAuditEntry ReadSingleAudit()
+    {
+        using var log = new CloudAuditLog(Path.Combine(_root, "logs"));
+        return Assert.Single(log.ReadAll());
+    }
+
+    private sealed class DiagnosticHandler(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            respond(request, cancellationToken);
+    }
+
     private sealed class EchoErrorHandler(bool throws) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -198,9 +303,11 @@ public sealed class ProviderScopedMemoryTests : IDisposable
         public List<CloudModelRequest> Requests { get; } = [];
         public bool EchoError { get; init; }
         public bool ThrowError { get; init; }
+        public CloudModelResponse? Response { get; init; }
         public Task<CloudModelResponse> SendAsync(CloudModelRequest request, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
+            if (Response != null) return Task.FromResult(Response);
             if (ThrowError) throw new IOException(HistoricalText);
             if (EchoError) return Task.FromResult(new CloudModelResponse { Success = false, ErrorMessage = HistoricalText });
             return Task.FromResult(new CloudModelResponse

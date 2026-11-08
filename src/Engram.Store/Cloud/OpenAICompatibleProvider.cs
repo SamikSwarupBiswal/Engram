@@ -148,6 +148,8 @@ public class OpenAICompatibleProvider : ICloudModelProvider
                 : timeout);
         }
         var modelToken = candidateDeadline?.Token ?? cancellationToken;
+        int? responseStatusCode = null;
+        var parsingResponse = false;
 
         try
         {
@@ -194,8 +196,10 @@ public class OpenAICompatibleProvider : ICloudModelProvider
             string responseBody = string.Empty;
             for (var attempt = 0; attempt <= _maxTransientRetries; attempt++)
             {
+                responseStatusCode = null;
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 using var response = await _http.PostAsync($"{_baseUrl}/chat/completions", content, modelToken);
+                responseStatusCode = (int)response.StatusCode;
                 responseBody = await response.Content.ReadAsStringAsync(modelToken);
                 if (response.IsSuccessStatusCode)
                     break;
@@ -209,6 +213,8 @@ public class OpenAICompatibleProvider : ICloudModelProvider
                     {
                         Success = false,
                         ErrorMessage = $"API error {(int)response.StatusCode}: {errorDetail}",
+                        FailureCategory = CloudFailureCategory.Http,
+                        HttpStatusCode = responseStatusCode,
                         Provider = _providerName,
                         Model = modelName
                     };
@@ -222,10 +228,12 @@ public class OpenAICompatibleProvider : ICloudModelProvider
             }
 
             modelToken.ThrowIfCancellationRequested();
+            parsingResponse = true;
             var result = JsonSerializer.Deserialize<OpenAIResponse>(responseBody, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
+            parsingResponse = false;
 
             var choice = result?.Choices?.FirstOrDefault();
             var responseText = choice?.Message?.Content ?? "";
@@ -241,6 +249,8 @@ public class OpenAICompatibleProvider : ICloudModelProvider
                     ErrorMessage = choice?.FinishReason?.Equals("length", StringComparison.OrdinalIgnoreCase) == true
                         ? "The model response exceeded its completion-token budget."
                         : "The model returned an empty response.",
+                    FailureCategory = CloudFailureCategory.InvalidResponse,
+                    HttpStatusCode = responseStatusCode,
                     Provider = _providerName,
                     Model = modelName,
                     InputTokens = inputTokens,
@@ -275,6 +285,11 @@ public class OpenAICompatibleProvider : ICloudModelProvider
             {
                 Success = false,
                 ErrorMessage = clientTimedOut ? ClientTimeoutError : request.ContainsScopedMemory ? "Provider-scoped call failed." : ex.Message,
+                FailureCategory = clientTimedOut ? CloudFailureCategory.Timeout
+                    : ex is HttpRequestException or IOException ? CloudFailureCategory.Transport
+                    : parsingResponse && ex is JsonException ? CloudFailureCategory.InvalidResponse
+                    : null,
+                HttpStatusCode = responseStatusCode,
                 Provider = _providerName,
                 Model = modelName
             };

@@ -206,4 +206,28 @@ public class CloudProviderTests : IDisposable
         provider.Dispose();
         provider.Dispose();
     }
+
+    [Fact]
+    public async Task OpenAI_SuccessHasNoFailureMetadata()
+    {
+        using var client = new HttpClient(new SuccessfulHandler());
+        var provider = new OpenAICompatibleProvider("synthetic-key", "https://model.test/v1", "configured-model",
+            httpClient: client);
+
+        var response = await provider.SendAsync(new CloudModelRequest { Payload = "test" });
+
+        Assert.True(response.Success);
+        Assert.Equal("actual-model", response.Model);
+        Assert.Null(response.FailureCategory);
+        Assert.Null(response.HttpStatusCode);
+    }
+
+    private sealed class SuccessfulHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"model":"actual-model","choices":[{"message":{"content":"Ready"}}]}""")
+            });
+    }
 }
