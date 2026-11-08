@@ -15,6 +15,7 @@ public class OpenAICompatibleProvider : ICloudModelProvider
 {
     private const string ClientTimeoutError = "The cloud model request timed out.";
     private static readonly TimeSpan FallbackCandidateTimeout = TimeSpan.FromSeconds(18);
+    private static readonly TimeSpan SuccessfulCandidateLifetime = TimeSpan.FromMinutes(5);
 
     private readonly HttpClient _http;
     private readonly ILogger<OpenAICompatibleProvider>? _logger;
@@ -24,7 +25,11 @@ public class OpenAICompatibleProvider : ICloudModelProvider
     private readonly string _providerName;
     private readonly int _maxTransientRetries;
     private readonly TimeSpan _baseRetryDelay;
+    private readonly TimeProvider _timeProvider;
+    private SuccessfulCandidate? _successfulCandidate;
     private bool _disposed;
+
+    private sealed record SuccessfulCandidate(string ModelName, long SucceededAt);
 
     public string ProviderName => _providerName;
     public string ModelName => _modelNames[0];
@@ -47,7 +52,8 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         HttpClient? httpClient = null,
         int maxTransientRetries = 2,
         TimeSpan? baseRetryDelay = null,
-        IEnumerable<string>? fallbackModelNames = null)
+        IEnumerable<string>? fallbackModelNames = null,
+        TimeProvider? timeProvider = null)
     {
         _apiKey = apiKey ?? "";
         _baseUrl = baseUrl?.TrimEnd('/') ?? "";
@@ -73,6 +79,7 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         _logger = logger;
         _maxTransientRetries = Math.Max(0, maxTransientRetries);
         _baseRetryDelay = baseRetryDelay ?? TimeSpan.FromMilliseconds(750);
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
         _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
 
@@ -86,11 +93,28 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         CancellationToken cancellationToken = default)
     {
         CloudModelResponse? lastResponse = null;
-        foreach (var modelName in _modelNames)
+        var preferred = Volatile.Read(ref _successfulCandidate);
+        if (preferred != null && _timeProvider.GetElapsedTime(preferred.SucceededAt) >= SuccessfulCandidateLifetime)
+        {
+            Interlocked.CompareExchange(ref _successfulCandidate, null, preferred);
+            preferred = null;
+        }
+        var candidates = preferred == null ? _modelNames
+            : new[] { preferred.ModelName }.Concat(_modelNames.Where(model =>
+                !string.Equals(model, preferred.ModelName, StringComparison.OrdinalIgnoreCase)));
+        foreach (var modelName in candidates)
         {
             lastResponse = await SendWithModelAsync(request, modelName, cancellationToken);
-            if (lastResponse.Success || cancellationToken.IsCancellationRequested || !IsModelFallbackEligible(lastResponse))
+            if (lastResponse.Success)
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                    Volatile.Write(ref _successfulCandidate, new(modelName, _timeProvider.GetTimestamp()));
                 return lastResponse;
+            }
+            if (cancellationToken.IsCancellationRequested || !IsModelFallbackEligible(lastResponse))
+                return lastResponse;
+            if (preferred != null && string.Equals(modelName, preferred.ModelName, StringComparison.OrdinalIgnoreCase))
+                Interlocked.CompareExchange(ref _successfulCandidate, null, preferred);
 
             _logger?.LogWarning(
                 "Transient failures exhausted for {Provider}/{Model}; trying the next dynamically discovered model.",

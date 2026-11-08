@@ -42,6 +42,214 @@ public sealed class CloudModelAttemptBudgetTests
         Assert.Equal("stalled", Assert.Single(handler.Models));
     }
 
+    [Fact]
+    public async Task RecentSuccessfulFallbackIsTriedFirstWithoutChangingConfiguredIdentity()
+    {
+        var handler = new SelectionHandler((model, _, _, _) => Task.FromResult(
+            model == "primary" ? Failure(HttpStatusCode.NotFound) : Success("resolved-working")));
+        using var client = new HttpClient(handler);
+        var provider = new OpenAICompatibleProvider("key", "https://model.test/v1", "primary",
+            httpClient: client, maxTransientRetries: 0, fallbackModelNames: ["working"]);
+        var identity = provider.DisclosureIdentity;
+
+        var first = await provider.SendAsync(new() { Payload = "first" });
+        var second = await provider.SendAsync(new() { Payload = "second" });
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.Equal(new[] { "primary", "working", "working" }, handler.Models);
+        Assert.Equal("resolved-working", second.Model);
+        Assert.Equal("primary", provider.ModelName);
+        Assert.Equal(identity, provider.DisclosureIdentity);
+    }
+
+    [Fact]
+    public async Task PreferredFailureReturnsToConfiguredOrderWithoutDuplicateCandidates()
+    {
+        var handler = new SelectionHandler((model, prompt, _, _) => Task.FromResult(prompt == "warm"
+            ? model == "primary" ? Failure(HttpStatusCode.NotFound) : Success()
+            : model == "backup" ? Success() : Failure(HttpStatusCode.ServiceUnavailable)));
+        using var client = new HttpClient(handler);
+        var provider = new OpenAICompatibleProvider("key", "https://model.test/v1", "primary",
+            httpClient: client, maxTransientRetries: 0, fallbackModelNames: ["working", "backup"]);
+
+        Assert.True((await provider.SendAsync(new() { Payload = "warm" })).Success);
+        var result = await provider.SendAsync(new() { Payload = "retry" });
+
+        Assert.True(result.Success);
+        Assert.Equal("backup", result.Model);
+        Assert.Equal(new[] { "primary", "working", "working", "primary", "backup" }, handler.Models);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task PreferredTerminalErrorDoesNotTryAnotherCandidate(HttpStatusCode status)
+    {
+        var handler = new SelectionHandler((model, prompt, _, _) => Task.FromResult(prompt == "warm"
+            ? model == "primary" ? Failure(HttpStatusCode.NotFound) : Success()
+            : Failure(status)));
+        using var client = new HttpClient(handler);
+        var provider = new OpenAICompatibleProvider("key", "https://model.test/v1", "primary",
+            httpClient: client, maxTransientRetries: 0, fallbackModelNames: ["working"]);
+
+        Assert.True((await provider.SendAsync(new() { Payload = "warm" })).Success);
+        var result = await provider.SendAsync(new() { Payload = "terminal" });
+
+        Assert.False(result.Success);
+        Assert.Equal("working", result.Model);
+        Assert.Equal(new[] { "primary", "working", "working" }, handler.Models);
+    }
+
+    [Fact]
+    public async Task PreferredCancellationDoesNotTryAnotherCandidate()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var handler = new SelectionHandler(async (model, prompt, _, ct) =>
+        {
+            if (prompt == "warm") return model == "primary" ? Failure(HttpStatusCode.NotFound) : Success();
+            cancellation.Cancel();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return Success();
+        });
+        using var client = new HttpClient(handler);
+        var provider = new OpenAICompatibleProvider("key", "https://model.test/v1", "primary",
+            httpClient: client, maxTransientRetries: 0, fallbackModelNames: ["working"]);
+
+        Assert.True((await provider.SendAsync(new() { Payload = "warm" })).Success);
+        var result = await provider.SendAsync(new() { Payload = "cancel" }, cancellation.Token);
+
+        Assert.False(result.Success);
+        Assert.Equal("working", result.Model);
+        Assert.Equal(new[] { "primary", "working", "working" }, handler.Models);
+    }
+
+    [Fact]
+    public async Task SuccessfulCandidateIsNotSharedBetweenProviderInstances()
+    {
+        var firstHandler = new SelectionHandler((model, _, _, _) => Task.FromResult(
+            model == "primary" ? Failure(HttpStatusCode.NotFound) : Success()));
+        var secondHandler = new SelectionHandler((_, _, _, _) => Task.FromResult(Success()));
+        using var firstClient = new HttpClient(firstHandler);
+        using var secondClient = new HttpClient(secondHandler);
+        var first = new OpenAICompatibleProvider("first-key", "https://model.test/v1", "primary",
+            httpClient: firstClient, maxTransientRetries: 0, fallbackModelNames: ["working"]);
+        var second = new OpenAICompatibleProvider("second-key", "https://model.test/v1", "primary",
+            httpClient: secondClient, maxTransientRetries: 0, fallbackModelNames: ["working"]);
+
+        Assert.True((await first.SendAsync(new() { Payload = "first" })).Success);
+        Assert.True((await second.SendAsync(new() { Payload = "second" })).Success);
+
+        Assert.Equal("primary", Assert.Single(secondHandler.Models));
+        Assert.NotEqual(first.DisclosureIdentity, second.DisclosureIdentity);
+    }
+
+    [Fact]
+    public async Task SuccessfulCandidateExpiresAndConfiguredPriorityIsRetried()
+    {
+        var clock = new ManualTimeProvider();
+        var handler = new SelectionHandler((model, prompt, _, _) => Task.FromResult(
+            prompt == "warm" && model == "primary" ? Failure(HttpStatusCode.NotFound) : Success()));
+        using var client = new HttpClient(handler);
+        var provider = new OpenAICompatibleProvider("key", "https://model.test/v1", "primary",
+            httpClient: client, maxTransientRetries: 0, fallbackModelNames: ["working"], timeProvider: clock);
+
+        Assert.True((await provider.SendAsync(new() { Payload = "warm" })).Success);
+        clock.Advance(TimeSpan.FromMinutes(5) - TimeSpan.FromTicks(1));
+        Assert.True((await provider.SendAsync(new() { Payload = "recent" })).Success);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var result = await provider.SendAsync(new() { Payload = "expired" });
+
+        Assert.True(result.Success);
+        Assert.Equal("primary", result.Model);
+        Assert.Equal(new[] { "primary", "working", "working", "primary" }, handler.Models);
+    }
+
+    [Fact]
+    public async Task OlderPreferredFailureCannotClearANewerSuccessfulPreference()
+    {
+        var oldStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseOld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new SelectionHandler(async (model, prompt, _, ct) =>
+        {
+            if (prompt == "warm") return model == "primary" ? Failure(HttpStatusCode.NotFound) : Success();
+            if (prompt == "older" && model == "working")
+            {
+                oldStarted.TrySetResult();
+                await releaseOld.Task.WaitAsync(ct);
+                return Failure(HttpStatusCode.ServiceUnavailable);
+            }
+            if (prompt == "older") return Failure(HttpStatusCode.Unauthorized);
+            if (prompt == "newer") return model == "backup" ? Success() : Failure(HttpStatusCode.ServiceUnavailable);
+            return Success();
+        });
+        using var client = new HttpClient(handler);
+        var provider = new OpenAICompatibleProvider("key", "https://model.test/v1", "primary",
+            httpClient: client, maxTransientRetries: 0, fallbackModelNames: ["working", "backup"]);
+        Assert.True((await provider.SendAsync(new() { Payload = "warm" })).Success);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var older = provider.SendAsync(new() { Payload = "older" }, deadline.Token);
+        await oldStarted.Task.WaitAsync(deadline.Token);
+        try
+        {
+            var newer = await provider.SendAsync(new() { Payload = "newer" }, deadline.Token);
+            Assert.True(newer.Success);
+            Assert.Equal("backup", newer.Model);
+        }
+        finally { releaseOld.TrySetResult(); }
+        Assert.False((await older).Success);
+        var result = await provider.SendAsync(new() { Payload = "after" }, deadline.Token);
+
+        Assert.True(result.Success);
+        Assert.Equal("backup", result.Model);
+        Assert.Equal("backup", handler.Models[^1]);
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private long _timestamp;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Interlocked.Read(ref _timestamp);
+        public void Advance(TimeSpan duration) => Interlocked.Add(ref _timestamp, duration.Ticks);
+    }
+
+    private static HttpResponseMessage Success(string? actualModel = null) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(JsonSerializer.Serialize(new
+        {
+            model = actualModel,
+            choices = new[] { new { message = new { content = "Ready" }, finish_reason = "stop" } }
+        }), Encoding.UTF8, "application/json")
+    };
+
+    private static HttpResponseMessage Failure(HttpStatusCode status) => new(status)
+    {
+        Content = new StringContent("Unavailable")
+    };
+
+    private sealed class SelectionHandler(
+        Func<string, string, int, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler
+    {
+        private readonly object _sync = new();
+        private readonly List<string> _models = new();
+        public string[] Models { get { lock (_sync) return _models.ToArray(); } }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            using var payload = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            var model = payload.RootElement.GetProperty("model").GetString()!;
+            var prompt = payload.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
+            int index;
+            lock (_sync)
+            {
+                _models.Add(model);
+                index = _models.Count;
+            }
+            return await respond(model, prompt, index, cancellationToken);
+        }
+    }
+
     private sealed class CandidateHandler(Action? onStall = null) : HttpMessageHandler
     {
         public List<string> Models { get; } = new();
