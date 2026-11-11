@@ -29,7 +29,7 @@ public sealed class InferenceLifecycleManager : IDisposable
     private static readonly Dictionary<InferenceState, HashSet<InferenceState>> LegalTransitions = new()
     {
         [InferenceState.Starting] = new()
-            { InferenceState.DetectingBackend, InferenceState.Error, InferenceState.Offline, InferenceState.SafeMode },
+            { InferenceState.DetectingBackend, InferenceState.Ready, InferenceState.Error, InferenceState.Offline, InferenceState.SafeMode },
         [InferenceState.DetectingBackend] = new()
             { InferenceState.BackendReady, InferenceState.Error, InferenceState.Offline, InferenceState.SafeMode },
         [InferenceState.BackendReady] = new()
@@ -89,6 +89,9 @@ public sealed class InferenceLifecycleManager : IDisposable
     // ── Background task tracking ──
     private Task? _initTask;
     private CancellationTokenSource _cts = new();
+    private bool _preferCloudOnly;
+    private string? _cloudProvider;
+    private bool _disableLocalPreload;
 
     public event Action<InferenceState>? StateChanged;
 
@@ -198,9 +201,15 @@ public sealed class InferenceLifecycleManager : IDisposable
     /// Start non-blocking background initialization.
     /// Returns immediately. Poll /health for state.
     /// </summary>
-    public void StartInitialization()
+    public void StartInitialization(
+        bool preferCloudOnly = false,
+        string? cloudProvider = null,
+        bool disableLocalPreload = false)
     {
         _log.Lifecycle("Starting background initialization");
+        _preferCloudOnly = preferCloudOnly;
+        _cloudProvider = string.IsNullOrWhiteSpace(cloudProvider) ? null : cloudProvider.Trim();
+        _disableLocalPreload = disableLocalPreload;
 
         if (Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "--safe-mode") ||
             Environment.GetEnvironmentVariable("ENGRAM_SAFE_MODE") == "true")
@@ -210,6 +219,40 @@ public sealed class InferenceLifecycleManager : IDisposable
             
             // Set degradation tracker to SafeModeActive
             DegradationTracker.Instance.SetDegradation("SafeModeActive", true, "Ontology or WAL consistency check failed");
+            return;
+        }
+
+        // A configured Turbo/cloud route can accept requests without the local
+        // model. Loading Phi-4 here consumes several gigabytes even when every
+        // completion is routed to Gemini. Keep it demand-loaded through the
+        // explicit model endpoint instead of creating startup resource pressure.
+        if (_preferCloudOnly)
+        {
+            lock (_lock)
+            {
+                _backend = "Cloud";
+                _modelName = _cloudProvider ?? "configured-cloud-provider";
+                _modelLoaded = false;
+                _progress = 100;
+                _readyTime = DateTime.UtcNow;
+                _metadata["startupMode"] = "cloud-only";
+                _metadata["localModelPreloaded"] = "false";
+                if (_cloudProvider != null)
+                    _metadata["cloudProvider"] = _cloudProvider;
+            }
+            TransitionTo(InferenceState.Ready, "cloud provider configured; local model remains unloaded");
+            return;
+        }
+
+        // Acceptance and constrained-runtime launches can prohibit a local
+        // preload independently of provider health. If cloud configuration is
+        // absent or invalid, fail closed without allocating the model; callers
+        // can still inspect /api/provider and /api/health safely.
+        if (_disableLocalPreload)
+        {
+            _metadata["startupMode"] = "local-preload-disabled";
+            _metadata["localModelPreloaded"] = "false";
+            SetError("Local model preload is disabled and no cloud provider is configured.");
             return;
         }
 
@@ -513,7 +556,7 @@ public sealed class InferenceLifecycleManager : IDisposable
         _log.Lifecycle($"Retry #{_retryCount} starting...");
         _cts.Cancel();
         _cts = new CancellationTokenSource();
-        StartInitialization();
+        StartInitialization(_preferCloudOnly, _cloudProvider, _disableLocalPreload);
     }
 
     // ══════════════════════════════════════════

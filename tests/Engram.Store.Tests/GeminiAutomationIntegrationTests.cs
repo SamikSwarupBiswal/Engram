@@ -4,11 +4,48 @@ using System.Text.Json;
 using Engram.Store;
 using Engram.Store.Cloud;
 using Engram.Store.Inference;
+using Microsoft.Extensions.Logging;
 
 namespace Engram.Store.Tests;
 
 public sealed class GeminiAutomationIntegrationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InFlightCompletionRetainsItsPipelineWhenProviderIsReconfigured(bool replace)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "engram-router-update-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            CloudCallPipeline Pipeline(string name, string result)
+            {
+                var config = new EngramConfig { DevelopmentCloudEnabled = true };
+                var audit = new CloudAuditLog(Path.Combine(root, name, "logs"));
+                return new CloudCallPipeline(new ModelRouter(new TierGuard(config)), new LocalFilter(),
+                    new TierGuard(config), new CloudRateLimiter(), new BudgetManager(BudgetConfig.FromConfig(config), audit),
+                    audit, new CleanCache(Path.Combine(root, name, "cache")),
+                    [new OpenAICompatibleProvider("fixture-key", "https://provider.test/v1", name, "gemini-flash",
+                        httpClient: new HttpClient(new JsonHandler("{\"choices\":[{\"message\":{\"content\":\"" + result + "\"},\"finish_reason\":\"stop\"}]}")))]);
+            }
+            var original = Pipeline("original-model", "ORIGINAL");
+            var replacement = replace ? Pipeline("replacement-model", "REPLACEMENT") : null;
+            var logger = new SwitchingLogger();
+            using var router = new InferenceRouter(new LocalInferenceEngine(new ModelManager(), new GpuDetector()), original, logger)
+            { PowerMode = PowerMode.Turbo };
+            logger.OnDebug = () => { logger.OnDebug = null; router.SetCloudPipeline(replacement); };
+
+            var response = await router.ChatCompletionAsync([new() { Role = "user", Content = "One response." }], 32);
+
+            Assert.True(response.Success);
+            Assert.Equal("ORIGINAL", response.Content);
+            Assert.Equal("original-model", response.Model);
+            Assert.Equal(replace, router.IsCloudConfigured);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Fact]
     public async Task ModelResolver_SelectsHighestStableFullFlashModelAtRuntime()
     {
@@ -115,6 +152,91 @@ public sealed class GeminiAutomationIntegrationTests
 
         Assert.False(response.Success);
         Assert.Contains("token budget", response.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task InferenceRouter_TransportsOptionalSchemaAndReportsModelAndCacheProvenance()
+    {
+        const string schema = """
+        { "type": "object", "properties": { "files": { "type": "array", "items": { "type": "integer" } } },
+          "required": ["files"], "additionalProperties": false }
+        """;
+        var handler = new SequenceHandler(
+            (HttpStatusCode.OK, """
+            { "choices": [{ "message": { "content": "ENGRAM_GEMINI_OK" }, "finish_reason": "stop" }],
+              "usage": { "prompt_tokens": 8, "completion_tokens": 4 } }
+            """),
+            (HttpStatusCode.NotFound, "{\"error\":\"model unavailable\"}"),
+            (HttpStatusCode.OK, """
+            { "model": "fallback-model-snapshot", "choices": [{ "message": { "content": "{\"files\":[1]}" }, "finish_reason": "stop" }],
+              "usage": { "prompt_tokens": 8, "completion_tokens": 8 } }
+            """));
+        var provider = new OpenAICompatibleProvider("key", "https://gemini.test/v1beta/openai",
+            "runtime-model", "gemini-flash", httpClient: new HttpClient(handler),
+            fallbackModelNames: new[] { "fallback-model" });
+        var tempDir = Path.Combine(Path.GetTempPath(), $"engram_gemini_router_{Guid.NewGuid():n}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var config = new EngramConfig { DevelopmentCloudEnabled = true };
+            var audit = new CloudAuditLog(Path.Combine(tempDir, "logs"));
+            var pipeline = new CloudCallPipeline(
+                new ModelRouter(new TierGuard(config)),
+                new LocalFilter(),
+                new TierGuard(config),
+                new CloudRateLimiter(),
+                new BudgetManager(BudgetConfig.FromConfig(config), audit),
+                audit,
+                new CleanCache(Path.Combine(tempDir, "cache")),
+                new[] { provider });
+            var local = new LocalInferenceEngine(new ModelManager(), new GpuDetector());
+            using var router = new InferenceRouter(local, pipeline) { PowerMode = PowerMode.Turbo };
+
+            var messages = new[] { new ChatMessage { Role = "user", Content = "Reply exactly." } };
+            var result = await router.ChatCompletionAsync(messages, 32);
+
+            Assert.True(result.Success);
+            Assert.Equal("ENGRAM_GEMINI_OK", result.Content);
+            Assert.Equal("gemini-flash", result.Provider);
+            Assert.Equal("runtime-model", result.Model);
+            Assert.False(result.FromCache);
+            using var regularRequest = JsonDocument.Parse(Assert.Single(handler.RequestBodies));
+            Assert.False(regularRequest.RootElement.TryGetProperty("response_format", out _));
+
+            var structured = await router.ChatCompletionAsync(messages, 32, responseJsonSchema: schema);
+
+            Assert.True(structured.Success);
+            Assert.False(structured.FromCache);
+            Assert.Equal("{\"files\":[1]}", structured.Content);
+            Assert.Equal("fallback-model-snapshot", structured.Model);
+            Assert.Equal(structured.Model, audit.ReadAll()[^1].Model);
+            Assert.Equal(3, handler.CallCount);
+            foreach (var body in handler.RequestBodies.Skip(1))
+            {
+                using var structuredRequest = JsonDocument.Parse(body);
+                var responseFormat = structuredRequest.RootElement.GetProperty("response_format");
+                Assert.Equal("json_schema", responseFormat.GetProperty("type").GetString());
+                var jsonSchema = responseFormat.GetProperty("json_schema");
+                Assert.True(jsonSchema.GetProperty("strict").GetBoolean());
+                var filesSchema = jsonSchema.GetProperty("schema").GetProperty("properties").GetProperty("files");
+                Assert.Equal("array", filesSchema.GetProperty("type").GetString());
+                Assert.Equal("integer", filesSchema.GetProperty("items").GetProperty("type").GetString());
+            }
+
+            var cached = await router.ChatCompletionAsync(messages, 32, responseJsonSchema: schema);
+
+            Assert.True(cached.Success);
+            Assert.True(cached.FromCache);
+            Assert.Equal(structured.Content, cached.Content);
+            Assert.Equal(structured.Provider, cached.Provider);
+            Assert.Equal(structured.Model, cached.Model);
+            Assert.Equal(3, handler.CallCount);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
     }
 
     [Fact]
@@ -226,6 +348,18 @@ public sealed class GeminiAutomationIntegrationTests
         Assert.True(result.Success);
         Assert.Equal("NEXT_MODEL_OK", result.Content);
         Assert.Equal("available-model", result.Model);
+    }
+
+    private sealed class SwitchingLogger : ILogger<InferenceRouter>
+    {
+        public Action? OnDebug { get; set; }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Debug) OnDebug?.Invoke();
+        }
     }
 
     private sealed class JsonHandler(string responseJson) : HttpMessageHandler

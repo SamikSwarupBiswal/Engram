@@ -21,6 +21,9 @@ public class EngramConfig
     /// <summary>Whether cloud features are enabled (requires Pro tier).</summary>
     public bool CloudEnabled { get; set; } = false;
 
+    /// <summary>Developer-only BYOK cloud override. Never enabled by the production tier flow.</summary>
+    public bool DevelopmentCloudEnabled { get; set; } = false;
+
     /// <summary>Daily cloud cost budget in USD.</summary>
     public decimal DailyBudgetUsd { get; set; } = 1.00m;
 

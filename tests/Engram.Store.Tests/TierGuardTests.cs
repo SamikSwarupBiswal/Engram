@@ -11,6 +11,28 @@ namespace Engram.Store.Tests;
 /// </summary>
 public class TierGuardTests
 {
+    [Theory]
+    [InlineData("https://localhost.attacker.example/v1")]
+    [InlineData("https://attacker.example/v1?host=127.0.0.1")]
+    [InlineData("https://localhost@attacker.example/v1")]
+    [InlineData("https://127.0.0.1.attacker.example/v1")]
+    [InlineData("http://0.0.0.0:8000/v1")]
+    public void RemoteEndpointCannotAcquireLocalTierExemption(string endpoint)
+    {
+        var config = new EngramConfig { CustomProviderBaseUrl = endpoint };
+        Assert.False(new TierGuard(config).CheckCloudAccess().IsAllowed);
+    }
+
+    [Theory]
+    [InlineData("http://localhost:11434/v1")]
+    [InlineData("http://127.0.0.1:8000/v1")]
+    [InlineData("http://[::1]:8000/v1")]
+    public void ActualLoopbackEndpointRetainsLocalTierExemption(string endpoint)
+    {
+        var config = new EngramConfig { CustomProviderBaseUrl = endpoint };
+        Assert.True(new TierGuard(config).CheckCloudAccess().IsAllowed);
+    }
+
     // --- Pro tier access ---
 
     [Fact]
@@ -38,6 +60,24 @@ public class TierGuardTests
         Assert.False(result.IsAllowed);
         Assert.NotNull(result.BlockReason);
         Assert.Contains("Pro tier", result.BlockReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Development_Byok_Explicitly_Allows_Cloud_Without_Changing_Tier()
+    {
+        var config = new EngramConfig
+        {
+            Tier = TierLevel.Free,
+            CloudEnabled = false,
+            DevelopmentCloudEnabled = true,
+            CustomProviderName = "gemini-flash",
+            CustomProviderBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai"
+        };
+
+        var result = new TierGuard(config).CheckCloudAccess();
+
+        Assert.True(result.IsAllowed);
+        Assert.Equal(TierLevel.Free, config.Tier);
     }
 
     [Fact]

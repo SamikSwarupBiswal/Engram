@@ -13,7 +13,7 @@ namespace Engram.Store.Inference;
 public class InferenceRouter : IDisposable
 {
     private readonly LocalInferenceEngine _localEngine;
-    private readonly CloudCallPipeline? _cloudPipeline;
+    private CloudCallPipeline? _cloudPipeline;
     private readonly ILogger<InferenceRouter>? _logger;
     private PowerMode _powerMode = PowerMode.Eco;
 
@@ -50,14 +50,29 @@ public class InferenceRouter : IDisposable
     /// </summary>
     public LocalInferenceEngine LocalEngine => _localEngine;
 
+    public bool IsCloudConfigured => Volatile.Read(ref _cloudPipeline) != null;
+
+    /// <summary>
+    /// Whether the router can currently satisfy a completion using either its
+    /// selected cloud route or the local fallback.
+    /// </summary>
+    public bool CanComplete => Volatile.Read(ref _cloudPipeline) != null || _localEngine.IsReady;
+
+    public void SetCloudPipeline(CloudCallPipeline? cloudPipeline)
+    {
+        Volatile.Write(ref _cloudPipeline, cloudPipeline);
+    }
+
     /// <summary>
     /// Route a chat completion request to the appropriate engine.
     /// </summary>
     public async Task<InferenceResult> ChatCompletionAsync(
         ChatMessage[] messages,
         int maxTokens = 1024,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? responseJsonSchema = null)
     {
+        var cloudPipeline = Volatile.Read(ref _cloudPipeline);
         // Try local first in Eco mode
         if (_powerMode == PowerMode.Eco)
         {
@@ -68,10 +83,10 @@ public class InferenceRouter : IDisposable
             }
 
             // Local not ready — try cloud fallback if available
-            if (_cloudPipeline != null)
+            if (cloudPipeline != null)
             {
                 _logger?.LogWarning("Local engine not ready, falling back to cloud");
-                return await RouteToCloud(messages, maxTokens, cancellationToken);
+                return await RouteToCloud(cloudPipeline, messages, maxTokens, cancellationToken, responseJsonSchema);
             }
 
             return InferenceResult.Failed(
@@ -81,10 +96,10 @@ public class InferenceRouter : IDisposable
         }
 
         // Turbo mode — use cloud
-        if (_cloudPipeline != null)
+        if (cloudPipeline != null)
         {
             _logger?.LogDebug("Routing to cloud engine (Turbo mode)");
-            return await RouteToCloud(messages, maxTokens, cancellationToken);
+            return await RouteToCloud(cloudPipeline, messages, maxTokens, cancellationToken, responseJsonSchema);
         }
 
         // Turbo mode but no cloud — fallback to local
@@ -122,13 +137,25 @@ return InferenceResult.Failed(
     }
 
     private async Task<InferenceResult> RouteToCloud(
+        CloudCallPipeline cloudPipeline,
         ChatMessage[] messages,
         int maxTokens,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? responseJsonSchema)
     {
         var lastMessage = messages.Length > 0 ? messages[^1].Content : "";
         var complexity = EstimateComplexity(lastMessage);
+        if (_powerMode == PowerMode.Turbo && complexity == TaskComplexity.Low)
+            complexity = TaskComplexity.Medium;
 
+        var isAutomationPlanner = messages.Any(message =>
+            message.Role.Equals("system", StringComparison.OrdinalIgnoreCase) &&
+            message.Content.Contains("desktop automation planner", StringComparison.OrdinalIgnoreCase));
+        var metadata = new Dictionary<string, string> { ["reasoning_effort"] = "low" };
+        if (isAutomationPlanner)
+            metadata["workload"] = "automation-planning";
+        if (responseJsonSchema != null)
+            metadata["response_json_schema"] = responseJsonSchema;
         var request = new CloudCallRequest
         {
             Reason = "Chat completion",
@@ -137,10 +164,11 @@ return InferenceResult.Failed(
             Messages = messages.Select(message => new CloudModelMessage(message.Role, message.Content)
                 { MemoryProvider = message.MemoryProvider }).ToArray(),
             PrivacyClass = PrivacyClass.Internal,
-            MaxTokens = maxTokens
+            MaxTokens = maxTokens,
+            Metadata = metadata
         };
 
-        var result = await _cloudPipeline!.ExecuteAsync(request, cancellationToken);
+        var result = await cloudPipeline.ExecuteAsync(request, cancellationToken);
 
         return new InferenceResult
         {

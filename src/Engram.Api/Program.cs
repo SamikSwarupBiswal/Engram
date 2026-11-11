@@ -9,6 +9,7 @@ using Engram.Store.Billing;
 using Engram.Store.Google;
 using Engram.Store.Agent;
 using Engram.Store.Automation;
+using Engram.Store.Cloud;
 using Engram.Store.Security;
 using Engram.Store.Perception;
 using System.Text.Json;
@@ -18,6 +19,29 @@ using Engram.Store.Metabolism;
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+var allowedFrontendOrigins = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+{
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "tauri://localhost",
+    "http://localhost:1420",
+    "http://127.0.0.1:1420"
+};
+
+var configuredOrigins = Environment.GetEnvironmentVariable("ENGRAM_ALLOWED_ORIGINS");
+if (!string.IsNullOrWhiteSpace(configuredOrigins))
+{
+    foreach (var origin in configuredOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        if (Uri.TryCreate(origin, UriKind.Absolute, out var parsed) &&
+            (parsed.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+             parsed.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
+        {
+            allowedFrontendOrigins.Add(parsed.GetLeftPart(UriPartial.Authority));
+        }
+    }
+}
 
 // OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -38,13 +62,36 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(allowedFrontendOrigins.Contains)
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
 });
 
 var app = builder.Build();
+
+// A local-only listener is still reachable from arbitrary browser origins.
+// Reject untrusted Origin headers before state-changing endpoints can run.
+app.Use(async (context, next) =>
+{
+    if (!Uri.TryCreate("http://" + context.Request.Host.ToUriComponent(), UriKind.Absolute, out var requestHost) ||
+        !TierGuard.IsLoopbackEndpoint(requestHost))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { error = "Host is not allowed." });
+        return;
+    }
+
+    var origin = context.Request.Headers.Origin.ToString();
+    if (!string.IsNullOrWhiteSpace(origin) && !allowedFrontendOrigins.Contains(origin))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { error = "Origin is not allowed." });
+        return;
+    }
+
+    await next();
+});
 
 app.UseCors();
 
@@ -69,7 +116,7 @@ app.Use(async (context, next) =>
 });
 
 // Initialize workspace
-var workspacePath = Path.Combine(
+var workspacePath = builder.Configuration["Engram:WorkspaceRoot"] ?? Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
     ".engram");
 var paths = new WorkspacePaths(workspacePath);
@@ -102,7 +149,98 @@ log.Boot($"Process ID: {Environment.ProcessId}");
 var gpuDetector = new GpuDetector();
 var modelManager = new ModelManager();
 var localEngine = new LocalInferenceEngine(modelManager, gpuDetector);
-var inferenceRouter = new InferenceRouter(localEngine);
+var runtimeConfigStore = new EngramConfigStore(paths);
+var runtimeConfig = runtimeConfigStore.Load();
+const string GeminiOpenAiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
+var developmentGeminiApiKey = Environment.GetEnvironmentVariable("ENGRAM_DEV_GEMINI_API_KEY")
+    ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+    ?? (runtimeConfig.DevelopmentCloudEnabled && SameProviderAccount("gemini-flash", GeminiOpenAiBaseUrl,
+        runtimeConfig.CustomProviderName, runtimeConfig.CustomProviderBaseUrl) ? runtimeConfig.CustomProviderApiKey : null);
+var developmentGeminiEnabled = runtimeConfig.DevelopmentCloudEnabled || !string.IsNullOrWhiteSpace(developmentGeminiApiKey);
+if (developmentGeminiEnabled)
+    runtimeConfig.DevelopmentCloudEnabled = true;
+var geminiModelResolver = new GeminiModelResolver();
+string? discoveredGeminiModel = null;
+IReadOnlyList<string> discoveredGeminiModels = Array.Empty<string>();
+if (developmentGeminiEnabled && !string.IsNullOrWhiteSpace(developmentGeminiApiKey))
+{
+    try
+    {
+        var configuredModel = Environment.GetEnvironmentVariable("ENGRAM_GEMINI_MODEL")
+            ?? (runtimeConfig.CustomProviderName?.StartsWith("gemini", StringComparison.OrdinalIgnoreCase) == true
+                ? runtimeConfig.CustomProviderModel
+                : null);
+        discoveredGeminiModels = await geminiModelResolver.ResolveCandidatesAsync(developmentGeminiApiKey, configuredModel);
+        discoveredGeminiModel = discoveredGeminiModels[0];
+        log.Boot($"Gemini planner model resolved to {discoveredGeminiModel} with {discoveredGeminiModels.Count - 1} dynamic fallback candidate(s)");
+    }
+    catch (Exception ex)
+    {
+        log.Error("BOOT", "Gemini planner model discovery failed", ex);
+    }
+}
+var cloudBaseUrl = developmentGeminiEnabled
+    ? GeminiOpenAiBaseUrl
+    : Environment.GetEnvironmentVariable("ENGRAM_CLOUD_BASE_URL") ?? runtimeConfig.CustomProviderBaseUrl;
+var cloudModel = developmentGeminiEnabled
+    ? discoveredGeminiModel
+    : Environment.GetEnvironmentVariable("ENGRAM_CLOUD_MODEL") ?? runtimeConfig.CustomProviderModel;
+var cloudProviderName = developmentGeminiEnabled
+    ? "gemini-flash"
+    : Environment.GetEnvironmentVariable("ENGRAM_CLOUD_PROVIDER") ?? runtimeConfig.CustomProviderName ?? "managed";
+var environmentCloudApiKey = Environment.GetEnvironmentVariable("ENGRAM_CLOUD_API_KEY");
+var sameStartupAccount = SameProviderAccount(cloudProviderName, cloudBaseUrl,
+    runtimeConfig.CustomProviderName, runtimeConfig.CustomProviderBaseUrl);
+var cloudApiKey = developmentGeminiEnabled ? developmentGeminiApiKey :
+    !string.IsNullOrWhiteSpace(environmentCloudApiKey) ? environmentCloudApiKey :
+    sameStartupAccount ? runtimeConfig.CustomProviderApiKey : null;
+// Environment overrides must not redirect a credential saved for another account.
+var startupCredentialScopeValid = developmentGeminiEnabled ? !string.IsNullOrWhiteSpace(developmentGeminiApiKey) :
+    sameStartupAccount || !string.IsNullOrWhiteSpace(environmentCloudApiKey) ||
+    (string.IsNullOrWhiteSpace(runtimeConfig.CustomProviderApiKey) &&
+     TryProviderEndpoint(cloudBaseUrl, out var localEndpoint) && TierGuard.IsLoopbackEndpoint(localEndpoint));
+var cloudTransientRetries = int.TryParse(
+    Environment.GetEnvironmentVariable("ENGRAM_CLOUD_MAX_TRANSIENT_RETRIES"), out var configuredTransientRetries)
+    ? Math.Clamp(configuredTransientRetries, 0, 5)
+    : 0;
+var cloudFallbackModelLimit = int.TryParse(
+    Environment.GetEnvironmentVariable("ENGRAM_CLOUD_MAX_FALLBACK_MODELS"), out var configuredFallbackModelLimit)
+    ? Math.Clamp(configuredFallbackModelLimit, 0, 12)
+    : 6;
+CloudCallPipeline? cloudPipeline = null;
+if (startupCredentialScopeValid && TryProviderEndpoint(cloudBaseUrl, out _) && !string.IsNullOrWhiteSpace(cloudModel))
+{
+    var cloudAudit = new CloudAuditLog(paths.Logs);
+    var effectiveCloudConfig = runtimeConfigStore.Load();
+    effectiveCloudConfig.CustomProviderBaseUrl = cloudBaseUrl;
+    effectiveCloudConfig.DevelopmentCloudEnabled = runtimeConfig.DevelopmentCloudEnabled;
+    var tierGuard = new TierGuard(effectiveCloudConfig);
+    var modelRouter = new ModelRouter(tierGuard);
+    var provider = new OpenAICompatibleProvider(
+        cloudApiKey ?? string.Empty,
+        cloudBaseUrl,
+        cloudModel,
+        cloudProviderName,
+        maxTransientRetries: cloudTransientRetries,
+        fallbackModelNames: developmentGeminiEnabled
+            ? discoveredGeminiModels.Skip(1).Take(cloudFallbackModelLimit)
+            : null);
+    cloudPipeline = new CloudCallPipeline(
+        modelRouter,
+        new LocalFilter(),
+        tierGuard,
+        new CloudRateLimiter(),
+        new BudgetManager(BudgetConfig.FromConfig(runtimeConfig), cloudAudit),
+        cloudAudit,
+        new CleanCache(Path.Combine(paths.Root, "cache")),
+        new[] { provider });
+}
+var inferenceRouter = new InferenceRouter(localEngine, cloudPipeline)
+{
+    PowerMode = developmentGeminiEnabled || (runtimeConfig.Tier == TierLevel.Pro && runtimeConfig.CloudEnabled)
+        ? PowerMode.Turbo
+        : PowerMode.Eco
+};
 
 // ── Backend probe + verdict persistence ──
 var probe = new BackendProbe();
@@ -1568,30 +1706,133 @@ app.MapGet("/api/tokens/pricing", () =>
 });
 
 // --- Provider Configuration ---
+var providerUpdateLock = new SemaphoreSlim(1, 1);
+var providerStateLock = new object();
 app.MapGet("/api/provider", () =>
 {
-    var config = new EngramConfigStore(paths).Load();
-    return Results.Ok(new
+    lock (providerStateLock)
     {
-        hasCustomProvider = !string.IsNullOrEmpty(config.CustomProviderApiKey) || !string.IsNullOrEmpty(config.CustomProviderBaseUrl),
-        providerName = config.CustomProviderName ?? "none",
-        baseUrl = config.CustomProviderBaseUrl ?? "",
-        model = config.CustomProviderModel ?? "",
-        hasApiKey = !string.IsNullOrEmpty(config.CustomProviderApiKey)
-    });
+        return Results.Ok(new
+        {
+            hasCustomProvider = inferenceRouter.IsCloudConfigured,
+            providerName = cloudProviderName,
+            baseUrl = cloudBaseUrl ?? string.Empty,
+            model = cloudModel ?? string.Empty,
+            hasApiKey = !string.IsNullOrWhiteSpace(cloudApiKey),
+            developmentMode = developmentGeminiEnabled,
+            powerMode = inferenceRouter.PowerMode.ToString(),
+            cloudConfigured = inferenceRouter.IsCloudConfigured
+        });
+    }
 });
 
-app.MapPost("/api/provider", (ProviderConfigRequest request) =>
+app.MapPost("/api/provider", async (ProviderConfigRequest request, CancellationToken ct) =>
 {
-    var store = new EngramConfigStore(paths);
-    var config = store.Load();
-    config.CustomProviderApiKey = request.ApiKey;
-    config.CustomProviderBaseUrl = request.BaseUrl;
-    config.CustomProviderModel = request.Model;
-    config.CustomProviderName = request.ProviderName;
-    store.Save(config);
-    return Results.Ok(new { saved = true });
+    await providerUpdateLock.WaitAsync(ct);
+    try
+    {
+        var proposedName = CanonicalProviderName(request.ProviderName);
+        var isGemini = proposedName == "gemini-flash";
+        var proposedBaseUrl = isGemini ? GeminiOpenAiBaseUrl : request.BaseUrl;
+        if (!TryProviderEndpoint(proposedBaseUrl, out var proposedEndpoint))
+            return Results.BadRequest(new { error = "Provide an absolute HTTP or HTTPS provider URL without credentials, query, or fragment." });
+
+        var sameAccountScope = SameProviderAccount(proposedName, proposedBaseUrl, cloudProviderName, cloudBaseUrl);
+        if (string.IsNullOrWhiteSpace(request.ApiKey) && !sameAccountScope &&
+            (!string.IsNullOrWhiteSpace(cloudApiKey) || !TierGuard.IsLoopbackEndpoint(proposedEndpoint)))
+            return Results.BadRequest(new { error = "Provide a fresh API key when changing the provider or its endpoint/account path. The previous key will not be reused." });
+
+        var proposedKey = string.IsNullOrWhiteSpace(request.ApiKey) ? sameAccountScope ? cloudApiKey : null : request.ApiKey;
+        var proposedModel = request.Model?.Trim();
+        IReadOnlyList<string> proposedGeminiModels = Array.Empty<string>();
+        if (isGemini)
+        {
+            proposedGeminiModels = await geminiModelResolver.ResolveCandidatesAsync(proposedKey ?? string.Empty, proposedModel, ct);
+            proposedModel = proposedGeminiModels[0];
+        }
+        if (string.IsNullOrWhiteSpace(proposedModel))
+            return Results.BadRequest(new { error = "Provide the model to use with this provider." });
+
+        // Prepare a separate configuration and pipeline. A rejected update cannot
+        // change the current credential scope, persisted settings or active route.
+        var updatedConfig = runtimeConfigStore.Load();
+        updatedConfig.CustomProviderApiKey = proposedKey;
+        updatedConfig.CustomProviderBaseUrl = proposedEndpoint.GetComponents(UriComponents.HttpRequestUrl, UriFormat.UriEscaped).TrimEnd('/');
+        updatedConfig.CustomProviderModel = proposedModel;
+        updatedConfig.CustomProviderName = proposedName;
+        updatedConfig.DevelopmentCloudEnabled = request.DevelopmentMode && isGemini;
+        var updatedAudit = new CloudAuditLog(paths.Logs);
+        var updatedTierGuard = new TierGuard(updatedConfig);
+        var updatedProvider = new OpenAICompatibleProvider(
+            proposedKey ?? string.Empty, updatedConfig.CustomProviderBaseUrl, proposedModel, proposedName,
+            maxTransientRetries: cloudTransientRetries,
+            fallbackModelNames: proposedGeminiModels.Skip(1).Take(cloudFallbackModelLimit));
+        var updatedPipeline = new CloudCallPipeline(
+            new ModelRouter(updatedTierGuard), new LocalFilter(), updatedTierGuard, new CloudRateLimiter(),
+            new BudgetManager(BudgetConfig.FromConfig(updatedConfig), updatedAudit), updatedAudit,
+            new CleanCache(Path.Combine(paths.Root, "cache")), new[] { updatedProvider });
+
+        lock (providerStateLock)
+        {
+            runtimeConfigStore.Save(updatedConfig);
+            runtimeConfig = updatedConfig;
+            cloudProviderName = proposedName;
+            cloudBaseUrl = updatedConfig.CustomProviderBaseUrl;
+            cloudModel = proposedModel;
+            cloudApiKey = proposedKey;
+            developmentGeminiEnabled = updatedConfig.DevelopmentCloudEnabled;
+            discoveredGeminiModels = proposedGeminiModels;
+            discoveredGeminiModel = isGemini ? proposedModel : null;
+            cloudPipeline = updatedPipeline;
+            inferenceRouter.SetCloudPipeline(updatedPipeline);
+            if (updatedConfig.DevelopmentCloudEnabled)
+                inferenceRouter.PowerMode = PowerMode.Turbo;
+        }
+
+        return Results.Ok(new
+        {
+            saved = true,
+            restartRequired = false,
+            developmentMode = updatedConfig.DevelopmentCloudEnabled,
+            mode = inferenceRouter.PowerMode.ToString().ToLowerInvariant(),
+            provider = proposedName,
+            model = proposedModel
+        });
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
+    {
+        return Results.BadRequest(new { error = "Provider settings could not be validated. Check the endpoint, model and API key." });
+    }
+    finally
+    {
+        providerUpdateLock.Release();
+    }
 });
+
+static string CanonicalProviderName(string? name) => name?.Trim().ToLowerInvariant() switch
+{
+    "gemini" or "gemini-flash" => "gemini-flash",
+    null or "" => "custom",
+    var provider => provider
+};
+
+static bool SameProviderAccount(string? name, string? endpoint, string? otherName, string? otherEndpoint) =>
+    CanonicalProviderName(name) == CanonicalProviderName(otherName) &&
+    TryProviderEndpoint(endpoint, out var first) && TryProviderEndpoint(otherEndpoint, out var second) &&
+    string.Equals(first.GetLeftPart(UriPartial.Authority), second.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase) &&
+    string.Equals(first.AbsolutePath.TrimEnd('/'), second.AbsolutePath.TrimEnd('/'), StringComparison.Ordinal);
+
+static bool TryProviderEndpoint(string? value, out Uri endpoint)
+{
+    if (Uri.TryCreate(value, UriKind.Absolute, out var parsed) && parsed.Scheme is "http" or "https" &&
+        string.IsNullOrEmpty(parsed.UserInfo) && string.IsNullOrEmpty(parsed.Query) && string.IsNullOrEmpty(parsed.Fragment))
+    {
+        endpoint = parsed;
+        return true;
+    }
+    endpoint = null!;
+    return false;
+}
 
 // --- CopilotKit Runtime (mock) ---
 app.MapPost("/v1/copilotkit", async (HttpContext context) =>
@@ -1991,10 +2232,22 @@ log.Api($"Listening on: {string.Join(", ", app.Urls)}");
 
 // Start non-blocking background initialization
 log.Lifecycle("Starting background initialization...");
-lifecycle.StartInitialization();
+var cloudOnlyStartup = inferenceRouter.PowerMode == PowerMode.Turbo && inferenceRouter.IsCloudConfigured;
+var disableLocalModelPreload = string.Equals(
+    Environment.GetEnvironmentVariable("ENGRAM_DISABLE_LOCAL_MODEL_PRELOAD"),
+    "true",
+    StringComparison.OrdinalIgnoreCase);
+lifecycle.StartInitialization(
+    cloudOnlyStartup,
+    cloudOnlyStartup ? $"{cloudProviderName}/{cloudModel}" : null,
+    disableLocalModelPreload);
 
 log.Api("=== ENGRAM API READY (accepting HTTP) ===");
-log.Api("Model initialization running in background — poll /api/health for state");
+log.Api(cloudOnlyStartup
+    ? "Cloud inference ready; local model intentionally not preloaded"
+    : disableLocalModelPreload
+        ? "Local model preload disabled; cloud provider is not ready"
+        : "Model initialization running in background — poll /api/health for state");
 
 app.Run();
 
@@ -2003,7 +2256,7 @@ record ChatRequest(ChatMessage[]? Messages, int MaxTokens = 1024);
 record ChatMessage(string Role, string Content);
 record ExperimentModeRequest(bool? FreshContext); // KV clearing is now mandatory
 record PowerModeRequest(string Mode);
-record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, string? ProviderName);
+record ProviderConfigRequest(string? ApiKey, string? BaseUrl, string? Model, string? ProviderName, bool DevelopmentMode = false);
 record TokenCheckRequest(string? Provider, int InputTokens, int OutputTokens);
 record TokenPackRequest(string? Size, long? Amount);
 record TierChangeRequest(string Tier);

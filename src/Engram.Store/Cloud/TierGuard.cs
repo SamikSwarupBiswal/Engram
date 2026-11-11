@@ -29,6 +29,9 @@ public class TierGuard
         if (IsLocalProvider())
             return TierGateResult.Allowed();
 
+        if (_config.DevelopmentCloudEnabled)
+            return TierGateResult.Allowed();
+
         if (!_config.CloudEnabled)
             return TierGateResult.Blocked("Cloud features are disabled in configuration.");
 
@@ -48,12 +51,15 @@ public class TierGuard
         if (string.IsNullOrWhiteSpace(baseUrl))
             return false;
 
-        var lower = baseUrl.ToLowerInvariant();
-        return lower.Contains("localhost") ||
-               lower.Contains("127.0.0.1") ||
-               lower.Contains("0.0.0.0") ||
-               lower.Contains("[::1]");
+        return Uri.TryCreate(baseUrl, UriKind.Absolute, out var endpoint) && IsLoopbackEndpoint(endpoint);
     }
+
+    public static bool IsLoopbackEndpoint(Uri endpoint) =>
+        endpoint.IsAbsoluteUri && endpoint.Scheme is "http" or "https" &&
+        string.IsNullOrEmpty(endpoint.UserInfo) &&
+        (endpoint.IdnHost.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+         System.Net.IPAddress.TryParse(endpoint.IdnHost.Trim('[', ']'), out var address) &&
+         System.Net.IPAddress.IsLoopback(address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address));
 }
 
 public class TierGateResult
