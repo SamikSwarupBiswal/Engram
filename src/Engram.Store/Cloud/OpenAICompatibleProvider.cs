@@ -81,7 +81,7 @@ public class OpenAICompatibleProvider : ICloudModelProvider
         _baseRetryDelay = baseRetryDelay ?? TimeSpan.FromMilliseconds(750);
         _timeProvider = timeProvider ?? TimeProvider.System;
 
-        _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
+        _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
         if (!string.IsNullOrEmpty(_apiKey))
             _http.DefaultRequestHeaders.Authorization =

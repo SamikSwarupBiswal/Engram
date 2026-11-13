@@ -9,6 +9,40 @@ namespace Engram.Store.Tests;
 public sealed class CloudModelAttemptBudgetTests
 {
     [Fact]
+    public async Task SingleProviderAllowsAValidResponseAfterTheFormerFortyFiveSecondCutoff()
+    {
+        var portReservation = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        portReservation.Start();
+        var port = ((IPEndPoint)portReservation.LocalEndpoint).Port;
+        portReservation.Stop();
+        using var listener = new HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        using var caller = new CancellationTokenSource(TimeSpan.FromSeconds(75));
+        var serve = Task.Run(async () =>
+        {
+            var context = await listener.GetContextAsync().WaitAsync(caller.Token);
+            await Task.Delay(TimeSpan.FromSeconds(46), caller.Token);
+            var bytes = Encoding.UTF8.GetBytes("""{"model":"slow-valid-model","choices":[{"message":{"content":"Valid plan"},"finish_reason":"stop"}]}""");
+            context.Response.ContentType = "application/json";
+            context.Response.ContentLength64 = bytes.Length;
+            try { await context.Response.OutputStream.WriteAsync(bytes, caller.Token); }
+            finally { context.Response.Close(); }
+        });
+        var provider = new OpenAICompatibleProvider("", $"http://127.0.0.1:{port}/v1", "slow-valid-model",
+            maxTransientRetries: 0);
+        try
+        {
+            var result = await provider.SendAsync(new() { Payload = "Synthetic timing test only." }, caller.Token);
+            await serve;
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.Equal("slow-valid-model", result.Model);
+            Assert.Equal("Valid plan", result.Content);
+        }
+        finally { provider.Dispose(); }
+    }
+
+    [Fact]
     public async Task FallbackBudgetIncludesSlowRequestAndRetryDelay()
     {
         using var caller = new CancellationTokenSource(TimeSpan.FromSeconds(5));
