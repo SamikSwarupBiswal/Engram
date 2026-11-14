@@ -177,11 +177,14 @@ public class ActionGraphTests
     public async Task ExecutePlanAsync_VerifierFails_TriggersRollbackAndThrows()
     {
         var runtime = new ActionRuntime(_executor, _permissionGate);
+        var transitions = new List<WorkflowState>();
+        runtime.StateMachine.OnTransition += (_, next) => transitions.Add(next);
         var plan = new ExecutionPlan();
 
         var step1 = new ExecutionStep
         {
             Id = "S1",
+            Error = "Prior verification note.",
             Action = new AutomationAction { Permission = ActionPermission.AutoApproved, Type = ActionType.Wait, Value = "10" }
         };
 
@@ -200,8 +203,12 @@ public class ActionGraphTests
         Assert.Contains("Verification failed for step 'S2'", exception.Message);
 
         Assert.Equal(StepStatus.Failed, step2.Status);
-        // S1 was completed but must be rolled back because S2 failed
-        Assert.Equal(StepStatus.RolledBack, step1.Status);
+        // Without a rollback handler, S1's completed effect cannot be claimed undone.
+        Assert.Equal(StepStatus.Completed, step1.Status);
+        Assert.Contains("Rollback unavailable", step1.Error);
+        Assert.Contains("Prior verification note.", step1.Error);
+        Assert.DoesNotContain(WorkflowState.RolledBack, transitions);
+        Assert.Equal(WorkflowState.FailedSafe, runtime.StateMachine.CurrentState);
     }
 
     // ─── Recovery Tests ───
@@ -274,7 +281,8 @@ public class ActionGraphTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.ExecutePlanAsync(plan, new ExecutionContext()));
 
-        Assert.Equal(StepStatus.RolledBack, step1.Status);
+        Assert.Equal(StepStatus.Completed, step1.Status);
+        Assert.Contains("Rollback unavailable", step1.Error);
         Assert.Equal(StepStatus.Failed, step2.Status);
     }
 
@@ -287,6 +295,11 @@ public class ActionGraphTests
         var plan = new ExecutionPlan();
 
         var rollbackOrder = new List<string>();
+        var rollbackEventCounts = new List<int>();
+        runtime.StateMachine.OnTransition += (_, next) =>
+        {
+            if (next == WorkflowState.RolledBack) rollbackEventCounts.Add(rollbackOrder.Count);
+        };
 
         var step1 = new ExecutionStep
         {
@@ -328,6 +341,7 @@ public class ActionGraphTests
         Assert.Equal(2, rollbackOrder.Count);
         Assert.Equal("S2", rollbackOrder[0]);
         Assert.Equal("S1", rollbackOrder[1]);
+        Assert.Equal(new[] { 2 }, rollbackEventCounts);
 
         Assert.Equal(StepStatus.RolledBack, step1.Status);
         Assert.Equal(StepStatus.RolledBack, step2.Status);
@@ -380,7 +394,8 @@ public class ActionGraphTests
         // S2 rollback failure must not prevent S1 rollback from being called
         Assert.True(step1RollbackCalled);
         Assert.Equal(StepStatus.RolledBack, step1.Status);
-        Assert.Equal(StepStatus.RolledBack, step2.Status);
+        Assert.Equal(StepStatus.Completed, step2.Status);
+        Assert.Contains("Rollback failed", step2.Error);
     }
 
     // ─── Permission Gate / Skipped Steps Tests ───
@@ -419,7 +434,8 @@ public class ActionGraphTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.ExecutePlanAsync(plan, new ExecutionContext()));
         Assert.Contains("action is not approved", exception.Message);
 
-        Assert.Equal(StepStatus.RolledBack, step1.Status); // S1 is rolled back because S2 failed permission
+        Assert.Equal(StepStatus.Completed, step1.Status);
+        Assert.Contains("Rollback unavailable", step1.Error);
         Assert.Equal(StepStatus.Failed, step2.Status);
         Assert.Equal(StepStatus.Skipped, step3.Status); // S3 never ran and is marked Skipped
     }

@@ -1082,10 +1082,11 @@ public class ActionRuntime : IDisposable
                              if (_stateMachine.CurrentState != WorkflowState.Suspended &&
                                  _stateMachine.CurrentState != WorkflowState.FailedSafe)
                              {
-                                 _stateMachine.TransitionTo(WorkflowState.RolledBack);
                                  try
                                  {
                                      await RollbackCompletedStepsAsync(completedSteps, context, linkedToken);
+                                     if (completedSteps.All(completed => completed.Status == StepStatus.RolledBack))
+                                         _stateMachine.TransitionTo(WorkflowState.RolledBack);
                                      _stateMachine.TransitionTo(WorkflowState.FailedSafe);
                                  }
                                  catch (Exception rollbackEx)
@@ -1151,7 +1152,6 @@ public class ActionRuntime : IDisposable
         for (int i = completedSteps.Count - 1; i >= 0; i--)
         {
             var step = completedSteps[i];
-            step.Status = StepStatus.RolledBack;
             
             var semantics = step.Semantics;
             if (semantics != null && semantics.IsCompensatable && semantics.CompensationAction != null)
@@ -1168,9 +1168,12 @@ public class ActionRuntime : IDisposable
                             PropagationLedger.UpdateStatus(r.PropagationId, "Compensated", "Compensation executed successfully.");
                         }
                     }
+                    step.Status = StepStatus.RolledBack;
                 }
                 catch (Exception ex)
                 {
+                    step.Error = (step.Error == null ? "" : step.Error + " ") +
+                        "Rollback failed; the completed action was not confirmed undone.";
                     _logger?.LogError(ex, "Compensation failed for step '{StepId}' during rollback/compensation.", step.Id);
                     if (PropagationLedger != null)
                     {
@@ -1189,11 +1192,19 @@ public class ActionRuntime : IDisposable
                 {
                     _logger?.LogInformation("Rolling back step '{StepId}'", step.Id);
                     await step.RollbackHandler.RollbackAsync(context, ct);
+                    step.Status = StepStatus.RolledBack;
                 }
                 catch (Exception ex)
                 {
+                    step.Error = (step.Error == null ? "" : step.Error + " ") +
+                        "Rollback failed; the completed action was not confirmed undone.";
                     _logger?.LogError(ex, "Failed to roll back step '{StepId}' during graph rollback.", step.Id);
                 }
+            }
+            else
+            {
+                step.Error = (step.Error == null ? "" : step.Error + " ") +
+                    "Rollback unavailable; the completed action was not undone.";
             }
         }
     }
