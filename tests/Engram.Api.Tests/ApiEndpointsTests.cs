@@ -9,7 +9,7 @@ namespace Engram.Api.Tests;
 /// Integration tests for all Engram API endpoints.
 /// Uses WebApplicationFactory to spin up the API in-memory.
 /// </summary>
-public class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+public class ApiEndpointsTests : IClassFixture<IsolatedEngramApiFactory>
 {
     private readonly HttpClient _client;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -17,7 +17,7 @@ public class ApiEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
         PropertyNameCaseInsensitive = true
     };
 
-    public ApiEndpointsTests(WebApplicationFactory<Program> factory)
+    public ApiEndpointsTests(IsolatedEngramApiFactory factory)
     {
         _client = factory.CreateClient();
     }

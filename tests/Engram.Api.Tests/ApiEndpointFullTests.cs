@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 
 namespace Engram.Api.Tests;
 
@@ -9,7 +11,7 @@ namespace Engram.Api.Tests;
 /// Comprehensive API endpoint tests for all Engram routes.
 /// Tests HTTP-level behavior: status codes, response format, error handling.
 /// </summary>
-public class ApiEndpointFullTests : IClassFixture<WebApplicationFactory<Program>>
+public class ApiEndpointFullTests : IClassFixture<IsolatedEngramApiFactory>
 {
     private readonly HttpClient _client;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -17,7 +19,7 @@ public class ApiEndpointFullTests : IClassFixture<WebApplicationFactory<Program>
         PropertyNameCaseInsensitive = true
     };
 
-    public ApiEndpointFullTests(WebApplicationFactory<Program> factory)
+    public ApiEndpointFullTests(IsolatedEngramApiFactory factory)
     {
         _client = factory.CreateClient();
     }
@@ -558,7 +560,7 @@ public class ApiEndpointFullTests : IClassFixture<WebApplicationFactory<Program>
     public async Task Cors_Preflight_ReturnsNoContent()
     {
         var request = new HttpRequestMessage(HttpMethod.Options, "/api/search");
-        request.Headers.Add("Origin", "http://localhost:3000");
+        request.Headers.Add("Origin", "http://localhost:1420");
         request.Headers.Add("Access-Control-Request-Method", "GET");
         var response = await _client.SendAsync(request);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -674,6 +676,25 @@ public class ApiEndpointFullTests : IClassFixture<WebApplicationFactory<Program>
         var response = await _client.PostAsJsonAsync("/api/automation/execute-plan", planPayload);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("/api/automation/status", response.Headers.Location?.OriginalString);
+    }
+}
+
+public sealed class IsolatedEngramApiFactory : WebApplicationFactory<Program>
+{
+    private readonly string _workspaceRoot = Path.Combine(Path.GetTempPath(), "engram-api-tests-" + Guid.NewGuid().ToString("N"));
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["Engram:WorkspaceRoot"] = _workspaceRoot }));
+
+    protected override void Dispose(bool disposing)
+    {
+        try { base.Dispose(disposing); }
+        finally
+        {
+            if (disposing && Directory.Exists(_workspaceRoot))
+                Directory.Delete(_workspaceRoot, recursive: true);
+        }
     }
 }
 
