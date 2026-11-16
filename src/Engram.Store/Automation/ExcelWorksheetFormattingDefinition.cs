@@ -27,6 +27,9 @@ public sealed class ExcelWorksheetFormattingDefinition
     public IReadOnlyList<string> CurrencyColumns { get; }
     public string CurrencyCode { get; }
 
+    internal static ExcelWorksheetFormattingDefinition LegacyDefault(int firstUsedRow) =>
+        new(firstUsedRow, true, true, true, ["Amount"], "USD");
+
     public static ExcelWorksheetFormattingDefinition Parse(JsonElement arguments)
     {
         if (arguments.ValueKind != JsonValueKind.Object)
