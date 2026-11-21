@@ -47,24 +47,31 @@ public class PerceptionDashboard : IDisposable
     /// <summary>
     /// Load perception configuration.
     /// </summary>
-    public PerceptionConfiguration LoadConfiguration()
+    public PerceptionConfiguration LoadConfiguration() => LoadConfiguration(forUpdate: false);
+
+    private PerceptionConfiguration LoadConfiguration(bool forUpdate)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         lock (_lock)
         {
-            if (!File.Exists(_configPath))
-                return PerceptionConfiguration.Default();
-
             try
             {
                 var json = File.ReadAllText(_configPath);
-                return JsonSerializer.Deserialize<PerceptionConfiguration>(json, JsonOptions)
-                       ?? PerceptionConfiguration.Default();
+                var config = JsonSerializer.Deserialize<PerceptionConfiguration>(json, JsonOptions);
+                if (config is null || config.ExcludedPaths?.All(path => path != null) != true ||
+                    config.BlacklistedApps?.All(app => app != null) != true ||
+                    config.AllowedApps?.All(app => app != null) != true)
+                    throw new JsonException("Invalid perception privacy configuration.");
+                return config;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
             {
-                _logger?.LogWarning(ex, "Failed to load perception configuration, using defaults");
                 return PerceptionConfiguration.Default();
+            }
+            catch (Exception ex) when (!forUpdate && ex is (JsonException or IOException or UnauthorizedAccessException))
+            {
+                _logger?.LogWarning(ex, "Perception disabled because its privacy configuration could not be read");
+                return new PerceptionConfiguration { IsEnabled = false, FileWatchingEnabled = false, OcrEnabled = false };
             }
         }
     }
@@ -143,7 +150,7 @@ public class PerceptionDashboard : IDisposable
     /// </summary>
     public void PausePerception()
     {
-        var config = LoadConfiguration();
+        var config = LoadConfiguration(forUpdate: true);
         config.IsPaused = true;
         SaveConfiguration(config);
         _logger?.LogInformation("Perception paused");
@@ -154,7 +161,7 @@ public class PerceptionDashboard : IDisposable
     /// </summary>
     public void ResumePerception()
     {
-        var config = LoadConfiguration();
+        var config = LoadConfiguration(forUpdate: true);
         config.IsPaused = false;
         SaveConfiguration(config);
         _logger?.LogInformation("Perception resumed");
@@ -165,7 +172,7 @@ public class PerceptionDashboard : IDisposable
     /// </summary>
     public void BlacklistApp(string processName)
     {
-        var config = LoadConfiguration();
+        var config = LoadConfiguration(forUpdate: true);
         if (!config.BlacklistedApps.Contains(processName, StringComparer.OrdinalIgnoreCase))
         {
             config.BlacklistedApps.Add(processName);
@@ -178,7 +185,7 @@ public class PerceptionDashboard : IDisposable
     /// </summary>
     public void UnblacklistApp(string processName)
     {
-        var config = LoadConfiguration();
+        var config = LoadConfiguration(forUpdate: true);
         config.BlacklistedApps.RemoveAll(a =>
             a.Equals(processName, StringComparison.OrdinalIgnoreCase));
         SaveConfiguration(config);
@@ -189,7 +196,7 @@ public class PerceptionDashboard : IDisposable
     /// </summary>
     public void ExcludePath(string path)
     {
-        var config = LoadConfiguration();
+        var config = LoadConfiguration(forUpdate: true);
         if (!config.ExcludedPaths.Contains(path, StringComparer.OrdinalIgnoreCase))
         {
             config.ExcludedPaths.Add(path);
@@ -202,7 +209,7 @@ public class PerceptionDashboard : IDisposable
     /// </summary>
     public void UnexcludePath(string path)
     {
-        var config = LoadConfiguration();
+        var config = LoadConfiguration(forUpdate: true);
         config.ExcludedPaths.RemoveAll(p =>
             p.Equals(path, StringComparison.OrdinalIgnoreCase));
         SaveConfiguration(config);

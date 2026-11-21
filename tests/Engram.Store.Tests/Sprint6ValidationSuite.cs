@@ -225,6 +225,39 @@ public class Sprint6ValidationSuite : IDisposable
         Assert.False(config.IsPaused);
     }
 
+    [Theory]
+    [InlineData("{")]
+    [InlineData("null")]
+    [InlineData("{\"excluded_paths\":null}")]
+    [InlineData("{\"blacklisted_apps\":[null]}")]
+    public void Dashboard_DamagedConsentStopsCaptureUntilRepaired(string damaged)
+    {
+        var root = Directory.CreateTempSubdirectory("engram-consent-");
+        try
+        {
+            var paths = new WorkspacePaths(root.FullName);
+            using var dashboard = new PerceptionDashboard(paths);
+            dashboard.PausePerception();
+            var file = Path.Combine(paths.Config, "perception_config.json");
+            var original = File.ReadAllText(file);
+            File.WriteAllText(file, damaged);
+
+            Assert.False(dashboard.IsPerceptionEnabled());
+            Assert.False(dashboard.IsAppAllowed("word"));
+            Assert.False(dashboard.IsPathAllowed(root.FullName));
+            Assert.False(dashboard.LoadConfiguration().FileWatchingEnabled);
+            Assert.False(dashboard.LoadConfiguration().OcrEnabled);
+            Assert.ThrowsAny<System.Text.Json.JsonException>(() => dashboard.ResumePerception());
+            Assert.Equal(damaged, File.ReadAllText(file));
+
+            File.WriteAllText(file, original);
+            Assert.True(dashboard.LoadConfiguration().IsPaused);
+            dashboard.ResumePerception();
+            Assert.True(dashboard.IsPerceptionEnabled());
+        }
+        finally { root.Delete(recursive: true); }
+    }
+
     [Fact]
     public void Dashboard_CanPausePerception()
     {
